@@ -667,7 +667,6 @@ int write_lambda_defs(nse_val_t prim, FILE *cf, int counter, env_t *env) {
     write_params(head(tail(prim)), cf);
     int temp = write_temp_expr(head(tail(tail(prim))), cf, new_env, 0);
     fprintf(cf, "  nse_val_t __result = __temp_%d;\n", temp);
-    fprintf(cf, "  add_ref(__result);\n");
     fprintf(cf, "  return __result;\n}\n");
     prim.value.cval->h = Symbol("'anon");
     prim.value.cval->t = Cons(Int(this), Nil);
@@ -753,7 +752,6 @@ void write_def(nse_val_t def, FILE *cf) {
       int temp = write_temp_expr(head(tail(tail(tail(def)))), cf, env, 0);
       fprintf(cf, "  nse_val_t __result = __temp_%d;\n", temp);
       env_delete_until(env, NULL);
-      // fprintf(cf, "  add_ref(__result);\n");
       fprintf(cf, "  printf(\"exit ");
       write_symbol(cf, name.value.sval);
       fprintf(cf, "\\n\");\n");
