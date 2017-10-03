@@ -36,7 +36,7 @@ nse_val_t Cons(nse_val_t h, nse_val_t t) {
   prim.value.cval->refs = 1;
   prim.value.cval->h = h;
   prim.value.cval->t = t;
-  printf("%zx[1]: cons\n", prim.value.cval);
+  printf("%zx[1]: alloc cons\n", prim.value.cval);
   add_ref(h);
   add_ref(t);
   return prim;
@@ -135,7 +135,7 @@ void del_ref(nse_val_t prim) {
   size_t *refs = NULL;
   switch (prim.type) {
     case  TYPE_CONS:
-      printf("%zx[%zx]: ref--\n", prim.value.cval, prim.value.cval->refs  - 1);
+      printf("%zx[%zx]: ref--\n", prim.value.cval, prim.value.cval->refs - 1);
       refs = &prim.value.cval->refs;
       break;
     case  TYPE_ARRAY:

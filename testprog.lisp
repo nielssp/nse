@@ -29,10 +29,10 @@
 
   (define even? (x) (= 0 (% x 2)))
 
-  (define f (x) (h x))
+  (define f (x) (t x))
   (define g (x) (cons (f x) (f x)))
 
-  (define main () (g (cons (cons 2 4) 1)))
+  (define main () (print (map (lambda (x) (+ x 2)) (cons 1 (cons 2 (cons 3 nil))))))
 
   (private
     (define my-list 'foo)

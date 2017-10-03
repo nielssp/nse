@@ -4,8 +4,8 @@
 
   (define nil? (x) (= x nil))
 
-  (define h (xs) (c-apply head xs))
-  (define t (xs) (c-apply tail xs))
+  (define h (xs) (c-apply add_ref (c-apply head xs)))
+  (define t (xs) (c-apply add_ref (c-apply tail xs)))
 
   (define length (xs)
     (if (nil? xs) 0 (+ 1 (length (t xs)))))

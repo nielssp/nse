@@ -487,7 +487,7 @@ int write_temp_expr(nse_val_t expr, FILE *cf, env_t *env, int counter) {
     fprintf(cf, "  nse_val_t __temp_%d = Closure(__anon_%d, ", ++counter, i);
     int size = 0;
     if (env == NULL) {
-      fprintf(cf, "NULL, 0)");
+      fprintf(cf, "NULL, 0);\n");
     } else {
       fprintf(cf, "(nse_val_t[]){");
       for (env_t *var = env; var != NULL; var = var->next, size++) {
@@ -520,14 +520,18 @@ int write_temp_expr(nse_val_t expr, FILE *cf, env_t *env, int counter) {
     fprintf(cf, ";\n");
   } else if (is_macro(expr, "if")) {
     int a = write_temp_expr(head(tail(expr)), cf, env, counter);
-    int b = write_temp_expr(head(tail(tail((expr)))), cf, env, a);
-    int c = write_temp_expr(head(tail(tail(tail((expr))))), cf, env, b);
-    counter = c + 1;
-    fprintf(cf, "  nse_val_t __temp_%d = is_true(", counter);
-    fprintf(cf, "__temp_%d) ? __temp_%d : __temp_%d;\n", a, b, c);
+    int b = a + 1;
+    fprintf(cf, "  nse_val_t __temp_%d = Undefined;\n", b);
+    fprintf(cf, "  if (is_true(__temp_%d)) {\n", a);
+    int c = write_temp_expr(head(tail(tail((expr)))), cf, env, b);
+    fprintf(cf, "  __temp_%d = __temp_%d;\n", b, c);
+    fprintf(cf, "  } else {\n");
+    int d = write_temp_expr(head(tail(tail(tail((expr))))), cf, env, c);
+    fprintf(cf, "  __temp_%d = __temp_%d;\n", b, d);
+    fprintf(cf, "  }\n");
     fprintf(cf, "  del_ref(__temp_%d);\n", a);
-    fprintf(cf, "  del_ref(__temp_%d);\n", b);
-    fprintf(cf, "  del_ref(__temp_%d);\n", c);
+    counter = d + 1;
+    fprintf(cf, "  nse_val_t __temp_%d = __temp_%d;\n", counter, b);
   } else if (is_macro(expr, "quote")) {
     fprintf(cf, "  nse_val_t __temp_%d = ", ++counter);
     write_quote(tail(expr), cf);
@@ -745,12 +749,18 @@ void write_def(nse_val_t def, FILE *cf) {
       fprintf(cf, "nse_val_t ");
       write_symbol(cf, name.value.sval);
       fprintf(cf, "(nse_val_t args) {\n");
+      fprintf(cf, "  printf(\"enter ");
+      write_symbol(cf, name.value.sval);
+      fprintf(cf, "\\n\");\n");
       write_params(head(tail(tail(def))), cf);
       env_t *env = env_push_params(NULL, head(tail(tail(def))));
       int temp = write_temp_expr(head(tail(tail(tail(def)))), cf, env, 0);
       fprintf(cf, "  nse_val_t __result = __temp_%d;\n", temp);
       env_delete_until(env, NULL);
-     // fprintf(cf, "  add_ref(__result);\n");
+      // fprintf(cf, "  add_ref(__result);\n");
+      fprintf(cf, "  printf(\"exit ");
+      write_symbol(cf, name.value.sval);
+      fprintf(cf, "\\n\");\n");
       fprintf(cf, "  return __result;\n}\n");
     }
   } else if (is_macro(def, "public")) {
