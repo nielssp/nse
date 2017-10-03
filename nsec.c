@@ -323,7 +323,7 @@ void write_quote(nse_val_t prim, FILE *cf) {
       fprintf(cf, "Nil");
       break;
     case TYPE_CONS:
-      fprintf(cf, "Cons(");
+      fprintf(cf, "QCons(");
       write_quote(prim.value.cval->h, cf);
       fprintf(cf, ", ");
       write_quote(prim.value.cval->t, cf);
@@ -352,7 +352,7 @@ void write_quote(nse_val_t prim, FILE *cf) {
       fprintf(cf, "Int(%d)", prim.value.ival);
       break;
     case TYPE_QUOTE:
-      fprintf(cf, "Quote(");
+      fprintf(cf, "QQuote(");
       write_quote(prim.value.qval->quoted, cf);
       fprintf(cf, ")");
       break;
@@ -533,9 +533,9 @@ int write_temp_expr(nse_val_t expr, FILE *cf, env_t *env, int counter) {
     counter = d + 1;
     fprintf(cf, "  nse_val_t __temp_%d = __temp_%d;\n", counter, b);
   } else if (is_macro(expr, "quote")) {
-    fprintf(cf, "  nse_val_t __temp_%d = ", ++counter);
+    fprintf(cf, "  nse_val_t __temp_%d = add_ref(", ++counter);
     write_quote(tail(expr), cf);
-    fprintf(cf, ";\n");
+    fprintf(cf, ");\n");
   } else if (is_macro(expr, "list")) {
     nse_val_t args = tail(expr);
     size_t argc = list_length(args);
@@ -552,11 +552,7 @@ int write_temp_expr(nse_val_t expr, FILE *cf, env_t *env, int counter) {
         fprintf(cf, "  nse_val_t __temp_%d = Cons(__temp_%d, Nil);\n", counter, argv[i]);
       } else {
         fprintf(cf, "  nse_val_t __temp_%d = Cons(__temp_%d, __temp_%d);\n", counter, argv[i], counter - 1);
-      }
-    }
-    for (i = 0; i < argc; i++) {
-      if (i > 1) {
-        fprintf(cf, "  del_ref(__temp_%d);\n", counter - i);
+        fprintf(cf, "  del_ref(__temp_%d);\n", counter - 1);
       }
       fprintf(cf, "  del_ref(__temp_%d);\n", argv[i]);
     }
@@ -605,9 +601,9 @@ int write_temp_expr(nse_val_t expr, FILE *cf, env_t *env, int counter) {
         fprintf(cf, ");\n");
         return counter;
       case TYPE_QUOTE:
-        fprintf(cf, "  nse_val_t __temp_%d = ", ++counter);
+        fprintf(cf, "  nse_val_t __temp_%d = add_ref(", ++counter);
         write_quote(expr.value.qval->quoted, cf);
-        fprintf(cf, ";\n");
+        fprintf(cf, ");\n");
         return counter;
       case TYPE_ARRAY:
       case TYPE_FUNC:

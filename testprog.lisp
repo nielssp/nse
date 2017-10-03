@@ -32,7 +32,7 @@
   (define f (x) (t x))
   (define g (x) (cons (f x) (f x)))
 
-  (define main () (print (map (lambda (x) (+ x 2)) (cons 1 (cons 2 (cons 3 nil))))))
+  (define main () (print (map (lambda (x) (+ x 2)) '(1 2 3 4))))
 
   (private
     (define my-list 'foo)

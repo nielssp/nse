@@ -42,6 +42,12 @@ nse_val_t Cons(nse_val_t h, nse_val_t t) {
   return prim;
 }
 
+nse_val_t QCons(nse_val_t h, nse_val_t t) {
+  nse_val_t cons = Cons(h, t);
+  cons.value.cval->refs = 0;
+  return cons;
+}
+
 nse_val_t Array(size_t size) {
   nse_val_t prim;
   prim.type = TYPE_ARRAY;
@@ -69,6 +75,12 @@ nse_val_t Quote(nse_val_t p) {
   printf("%zx[1]: quote\n", prim.value.qval);
   add_ref(p);
   return prim;
+}
+
+nse_val_t QQuote(nse_val_t p) {
+  nse_val_t quote = Quote(p);
+  quote.value.qval->refs = 0;
+  return quote;
 }
 
 nse_val_t Int(int i) {

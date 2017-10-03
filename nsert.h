@@ -60,8 +60,10 @@ struct quote {
 extern nse_val_t Undefined;
 extern nse_val_t Nil;
 nse_val_t Cons(nse_val_t h, nse_val_t t);
+nse_val_t QCons(nse_val_t h, nse_val_t t);
 nse_val_t Array(size_t size);
 nse_val_t Quote(nse_val_t p);
+nse_val_t QQuote(nse_val_t p);
 nse_val_t Int(int i);
 nse_val_t Symbol(const char *s);
 nse_val_t Func(nse_val_t f(nse_val_t));
