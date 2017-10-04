@@ -494,8 +494,9 @@ int write_temp_expr(nse_val_t expr, FILE *cf, env_t *env, int counter) {
         if (size > 0) {
           fprintf(cf, ", ");
         }
-        fprintf(cf, "__var_");
+        fprintf(cf, "add_ref(__var_");
         write_symbol(cf, var->name);
+        fprintf(cf, ")");
       }
       fprintf(cf, "}, %d);\n", size);
     }
@@ -687,30 +688,33 @@ int write_lambda_defs(nse_val_t prim, FILE *cf, int counter, env_t *env) {
   }
 }
 
-void write_init(nse_val_t def, FILE *cf) {
+int write_init(nse_val_t def, FILE *cf, counter) {
   if (is_macro(def, "define")) {
     nse_val_t name = head(tail(def));
-    fprintf(cf, "  __var_");
-    write_symbol(cf, name.value.sval);
-    fprintf(cf, " = ");
     if (tail(tail(tail(def))).type == TYPE_CONS) {
+      fprintf(cf, "  __var_");
+      write_symbol(cf, name.value.sval);
+      fprintf(cf, " = ");
       fprintf(cf, "FUNC(");
       write_symbol(cf, name.value.sval);
       fprintf(cf, ")");
     } else {
-      write_expr(head(tail(tail(def))), cf, NULL, 0);
+      counter = write_temp_expr(head(tail(tail(def))), cf, NULL, counter);
+      fprintf(cf, "  __var_");
+      write_symbol(cf, name.value.sval);
+      fprintf(cf, " = __temp_%d", counter);
     }
     fprintf(cf, ";\n");
   } else if (is_macro(def, "public")) {
     nse_val_t next = tail(def);
     while (next.type == TYPE_CONS) {
-      write_init(head(next), cf);
+      counter = write_init(head(next), cf, counter);
       next = tail(next);
     }
   } else if (is_macro(def, "private")) {
     nse_val_t next = tail(def);
     while (next.type == TYPE_CONS) {
-      write_init(head(next), cf);
+      counter = write_init(head(next), cf, counter);
       next = tail(next);
     }
   } else if (is_macro(def, "import")) {
@@ -723,6 +727,7 @@ void write_init(nse_val_t def, FILE *cf) {
     nse_print(def);
     printf("\n");
   }
+  return counter;
 }
 
 void write_inits(nse_val_t module, FILE *cf) {
@@ -731,8 +736,9 @@ void write_inits(nse_val_t module, FILE *cf) {
     return;
   }
   nse_val_t next = tail(module);
+  int counter = 0;
   while (next.type == TYPE_CONS) {
-    write_init(head(next), cf);
+    counter = write_init(head(next), cf, counter);
     next = tail(next);
   }
 }
