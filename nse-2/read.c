@@ -1,3 +1,6 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <ctype.h>
 
 #include "nsert.h"
 
@@ -18,6 +21,8 @@ typedef struct stack {
   size_t line;
   size_t column;
 } Stack;
+
+Syntax *parse_list(Stack *input);
 
 Stack *open_stack_file(FILE *file) {
   Stack *s = malloc(sizeof(Stack));
@@ -114,7 +119,6 @@ void skip(Stack *input) {
 }
 
 Syntax *start_pos(Syntax *syntax, Stack *input) {
-  // TODO: should be peek position
   syntax->start_line = input->line;
   syntax->start_column = input->column;
   syntax->end_line = input->line;
@@ -128,10 +132,10 @@ Syntax *end_pos(Syntax *syntax, Stack *input) {
   return syntax;
 }
 
-NseVal parse_int(Stack *input) {
-  int value = 0;
+Syntax *parse_int(Stack *input) {
+  int64_t value = 0;
   int sign = 1;
-  Syntax *syntax = start_pos(create_syntax(undefined));
+  Syntax *syntax = start_pos(create_syntax(undefined), input);
   if (peek(input) == '-') {
     sign = -1;
     pop(input);
@@ -139,7 +143,88 @@ NseVal parse_int(Stack *input) {
   while (isdigit(peek(input))) {
     value = value * 10 + pop(input) - '0';
   }
-  syntax->quoted = INT(sign * value);
-  end_pos(synta);
-  return syntax;
+  syntax->quoted = I64(sign * value);
+  return end_pos(syntax, input);
+}
+
+Syntax *parse_symbol(Stack *input) {
+  size_t l = 0;
+  size_t size = 10;
+  char *buffer = malloc(size);
+  int c = peek(input);
+  Syntax *syntax = start_pos(create_syntax(undefined), input);
+  while (c != EOF && !iswhite(c) && c != '(' && c != ')') {
+    buffer[l++] = (char)c;
+    pop(input);
+    c = peek(input);
+    if (l >= size) {
+      size += 10;
+      buffer = realloc(buffer, size);
+    }
+  }
+  buffer[l] = '\0';
+  syntax->quoted = SYMBOL(create_symbol(buffer));
+  free(buffer);
+  return end_pos(syntax, input);
+}
+
+Syntax *parse_prim(Stack *input) {
+  char c;
+  skip(input);
+  c = peek(input);
+  if (c == EOF) {
+    printf("error: %s:%zu:%zu: end of input\n", input->file_name, input->line, input->column);
+    return NULL;
+  }
+  if (c == '.') {
+    printf("error: %s:%zu:%zu: unexpected '.'\n", input->file_name, input->line, input->column);
+    pop(input);
+    return NULL;
+  }
+  if (c == '\'') {
+    Syntax *syntax = start_pos(create_syntax(undefined), input);
+    pop(input);
+    syntax->quoted = QUOTE(create_quote(SYNTAX(parse_prim(input))));
+    return end_pos(syntax, input);
+  }
+  if (c == '(') {
+    Syntax *syntax = start_pos(create_syntax(undefined), input);
+    pop(input);
+    Syntax *list = parse_list(input);
+    syntax->quoted = list->quoted;
+    del_ref(SYNTAX(list));
+    if (peek(input) != ')') {
+      printf("error: %s:%zu:%zu: missing ')'\n", input->file_name, input->line, input->column);
+    } else {
+      pop(input);
+    }
+    return end_pos(syntax, input);
+  }
+  if (isdigit(c)) {
+    return parse_int(input);
+  }
+  if (c == '-' && isdigit(peekn(2, input))) {
+    return parse_int(input);
+  }
+  return parse_symbol(input);
+}
+
+Syntax *parse_list(Stack *input) {
+  Syntax *syntax = start_pos(create_syntax(undefined), input);
+  char c;
+  skip(input);
+  c = peek(input);
+  if (c == EOF || c == ')') {
+    syntax->quoted = nil;
+  } else {
+    Syntax *head = parse_prim(input);
+    skip(input);
+    if (peek(input) == '.') {
+      pop(input);
+      syntax->quoted = CONS(create_cons(SYNTAX(head), SYNTAX(parse_prim(input))));
+    } else {
+      syntax->quoted = CONS(create_cons(SYNTAX(head), SYNTAX(parse_list(input))));
+    }
+  }
+  return end_pos(syntax, input);
 }

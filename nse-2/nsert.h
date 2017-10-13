@@ -1,7 +1,7 @@
 #ifndef NSERT_H
 #define NSERT_H
 
-#include <stdlib.h>
+#include <stdint.h>
 
 #define TYPE_UNDEFINED 0
 #define TYPE_NIL 1
@@ -14,21 +14,30 @@
 #define TYPE_FUNC 8
 #define TYPE_CLOSURE 9
 
-#define I64(i) ((NseVal) { .type = TYPE_I64, .cons = (i) })
+#define I64(i) ((NseVal) { .type = TYPE_I64, .i64 = (i) })
 #define CONS(c) ((NseVal) { .type = TYPE_CONS, .cons = (c) })
+#define SYNTAX(c) ((NseVal) { .type = TYPE_SYNTAX, .syntax = (c) })
+#define CLOSURE(c) ((NseVal) { .type = TYPE_CLOSURE, .closure = (c) })
+#define SYMBOL(s) ((NseVal) { .type = TYPE_SYMBOL, .symbol = (s) })
 #define QUOTE(q) ((NseVal) { .type = TYPE_QUOTE, .quote = (q) })
 #define FUNC(f) ((NseVal) { .type = TYPE_FUNC, .func = (f) })
 
-typedef struct NseVal NseVal;
+#define TRUE (SYMBOL(create_symbol("t")))
+#define FALSE (SYMBOL(create_symbol("f")))
+
+typedef struct nse_val NseVal;
 typedef struct cons Cons;
 typedef struct closure Closure;
 typedef struct quote Quote;
+typedef struct syntax Syntax;
+typedef char Symbol;
 
-struct NseVal {
+struct nse_val {
   uint8_t type;
   union {
     int64_t i64;
     Cons *cons;
+    Syntax *syntax;
     Quote *quote;
     Quote *type_quote;
     char *symbol;
@@ -39,8 +48,8 @@ struct NseVal {
 
 struct cons {
   size_t refs;
-  NseVal *h;
-  NseVal *t;
+  NseVal head;
+  NseVal tail;
 };
 
 struct closure {
@@ -54,9 +63,6 @@ struct quote {
   NseVal quoted;
 };
 
-struct pos {
-};
-
 struct syntax {
   size_t refs;
   size_t start_line;
@@ -67,21 +73,16 @@ struct syntax {
   NseVal quoted;
 };
 
-extern NseVal Undefined;
-extern NseVal Nil;
-cons *cons(NseVal h, NseVal t);
-NseVal QCons(NseVal h, NseVal t);
-NseVal Quote(NseVal p);
-NseVal QQuote(NseVal p);
-NseVal symbol(const char *s);
-closure *closure(NseVal f(cons *, NseVal[]), NseVal env[], size_t env_size);
+extern NseVal undefined;
+extern NseVal nil;
+Cons *create_cons(NseVal h, NseVal t);
+Quote *create_quote(NseVal quoted);
+Syntax *create_syntax(NseVal quoted);
+Symbol *create_symbol(const char *s);
+Closure *create_closure(NseVal f(Cons *, NseVal[]), NseVal env[], size_t env_size);
 
 NseVal add_ref(NseVal p);
 void del_ref(NseVal p);
-
-Cons *cast_cons(NseVal val);
-Closure *cast_closure(NseVal val);
-int cast_i64(NseVal in, int64_t *out);
 
 NseVal head(NseVal cons);
 NseVal tail(NseVal cons);
@@ -93,10 +94,6 @@ NseVal nse_apply(NseVal func, NseVal args);
 NseVal nse_and(NseVal a, NseVal b);
 NseVal nse_equals(NseVal a, NseVal b);
 
-NseVal read(const char *s);
-NseVal eval(NseVal value);
-NseVal macroexpand(NseVal value);
-NseVal macroexpand1(NseVal value);
 NseVal print(NseVal value);
 
 #endif

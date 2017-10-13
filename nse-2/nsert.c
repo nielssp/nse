@@ -15,151 +15,111 @@ size_t symmap_hash(const void *p) {
 int symmap_equals(const void *a, const void *b) {
   return strcmp(a, b) == 0;
 }
-DEFINE_HASH_MAP(symmap, char *, nse_val_t *)
+DEFINE_HASH_MAP(symmap, char *, char *)
 
 hash_map *symbols = NULL;
 
-void delete_all(nse_val_t prim);
-void delete(nse_val_t prim);
-nse_val_t parse_list(char **input);
+void delete_all(NseVal value);
+void delete(NseVal value);
+NseVal parse_list(char **input);
 
-nse_val_t Undefined = { .type = TYPE_UNDEFINED };
-nse_val_t Nil = { .type = TYPE_NIL };
+NseVal undefined = { .type = TYPE_UNDEFINED };
+NseVal nil = { .type = TYPE_NIL };
 
-nse_val_t Cons(nse_val_t h, nse_val_t t) {
-  nse_val_t prim;
-  prim.type = TYPE_CONS;
-  prim.value.cval = malloc(sizeof(cons_t));
-  if (!prim.value.cval) {
-    return Undefined;
+Cons *create_cons(NseVal h, NseVal t) {
+  Cons *cons = malloc(sizeof(Cons));
+  if (!cons) {
+    return NULL;
   }
-  prim.value.cval->refs = 1;
-  prim.value.cval->h = h;
-  prim.value.cval->t = t;
-  printf("%zx[1]: alloc cons\n", prim.value.cval);
+  cons->refs = 1;
+  cons->head = h;
+  cons->tail = t;
   add_ref(h);
   add_ref(t);
-  return prim;
-}
-
-nse_val_t QCons(nse_val_t h, nse_val_t t) {
-  nse_val_t cons = Cons(h, t);
-  cons.value.cval->refs = 0;
   return cons;
 }
 
-nse_val_t Array(size_t size) {
-  nse_val_t prim;
-  prim.type = TYPE_ARRAY;
-  prim.value.aval = malloc(sizeof(array_t) + size * sizeof(nse_val_t));
-  if (!prim.value.aval) {
-    return Undefined;
+Quote *create_quote(NseVal quoted) {
+  Quote *quote = malloc(sizeof(Quote));
+  if (!quote) {
+    return NULL;
   }
-  prim.value.aval->refs = 1;
-  prim.value.aval->size = size;
-  for (int i = 0; i < size; i++) {
-    prim.value.aval->array[i] = Undefined;
-  }
-  return prim;
-}
-
-nse_val_t Quote(nse_val_t p) {
-  nse_val_t prim;
-  prim.type = TYPE_QUOTE;
-  prim.value.qval = malloc(sizeof(quote_t));
-  if (!prim.value.qval) {
-    return Undefined;
-  }
-  prim.value.qval->refs = 1;
-  prim.value.qval->quoted = p;
-  printf("%zx[1]: quote\n", prim.value.qval);
-  add_ref(p);
-  return prim;
-}
-
-nse_val_t QQuote(nse_val_t p) {
-  nse_val_t quote = Quote(p);
-  quote.value.qval->refs = 0;
+  quote->refs = 1;
+  quote->quoted = quoted;
+  add_ref(quoted);
   return quote;
 }
 
-nse_val_t Int(int i) {
-  return (nse_val_t) { .type = TYPE_INT, .value.ival = i };
+Syntax *create_syntax(NseVal quoted) {
+  Syntax *syntax = malloc(sizeof(Syntax));
+  if (!syntax) {
+    return NULL;
+  }
+  syntax->refs = 1;
+  syntax->quoted = quoted;
+  add_ref(quoted);
+  return syntax;
 }
 
-nse_val_t Symbol(const char *s) {
+Symbol *create_symbol(const char *s) {
   if (symbols == NULL) {
     symbols = hash_map_new();
   } else {
-    nse_val_t *value = symmap_lookup(symbols, s);
+    Symbol *value = symmap_lookup(symbols, s);
     if (value != NULL) {
-      return *value;
+      return value;
     }
   }
   size_t len = strlen(s);
   char *copy = (char *)malloc(len + 1);
   memcpy(copy, s, len);
   copy[len] = '\0';
-  nse_val_t *sym = malloc(sizeof(nse_val_t));
-  sym->type = TYPE_SYMBOL;
-  sym->value.sval = copy;
-  symmap_add(symbols, copy, sym);
-  return *sym;
+  symmap_add(symbols, copy, copy);
+  return copy;
 }
 
-nse_val_t Func(nse_val_t f(nse_val_t)) {
-  return (nse_val_t) { .type = TYPE_FUNC, .value.fval = f };
-}
-
-nse_val_t Closure(nse_val_t f(nse_val_t, nse_val_t[]), nse_val_t env[], size_t env_size) {
-  closure_t *clos = malloc(sizeof(closure_t) + env_size * sizeof(nse_val_t));
-  clos->refs = 1;
-  clos->f = f;
+Closure *crate_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_size) {
+  Closure *closure = malloc(sizeof(Closure) + env_size * sizeof(NseVal));
+  closure->refs = 1;
+  closure->f = f;
   if (env_size > 0) {
-    memcpy(clos->env, env, env_size * sizeof(nse_val_t));
+    memcpy(closure->env, env, env_size * sizeof(NseVal));
   }
-  printf("%zx[1]: closure\n", clos);
-  return (nse_val_t) { .type = TYPE_CLOSURE, .value.clval = clos };
+  return closure;
 }
 
-nse_val_t add_ref(nse_val_t prim) {
-  switch (prim.type) {
+NseVal add_ref(NseVal value) {
+  switch (value.type) {
     case  TYPE_CONS:
-      printf("%zx[%zx]: ref++\n", prim.value.cval, prim.value.cval->refs + 1);
-      prim.value.cval->refs++;
-      break;
-    case  TYPE_ARRAY:
-      prim.value.aval->refs++;
+      value.cons->refs++;
       break;
     case  TYPE_CLOSURE:
-      printf("%zx[%zx]: ref++\n", prim.value.clval, prim.value.clval->refs + 1);
-      prim.value.clval->refs++;
+      value.closure->refs++;
       break;
     case  TYPE_QUOTE:
-      printf("%zx[%zx]: ref++\n", prim.value.qval, prim.value.qval->refs + 1);
-      prim.value.qval->refs++;
+      value.quote->refs++;
+      break;
+    case  TYPE_SYNTAX:
+      value.syntax->refs++;
       break;
   }
-  return prim;
+  return value;
 }
 
-void del_ref(nse_val_t prim) {
+void del_ref(NseVal value) {
   size_t *refs = NULL;
-  switch (prim.type) {
+  switch (value.type) {
     case  TYPE_CONS:
-      printf("%zx[%zx]: ref--\n", prim.value.cval, prim.value.cval->refs - 1);
-      refs = &prim.value.cval->refs;
-      break;
-    case  TYPE_ARRAY:
-      refs = &prim.value.aval->refs;
+      refs = &value.cons->refs;
       break;
     case  TYPE_CLOSURE:
-      printf("%zx[%zx]: ref--\n", prim.value.clval, prim.value.clval->refs - 1);
-      refs = &prim.value.clval->refs;
+      refs = &value.closure->refs;
       break;
     case  TYPE_QUOTE:
-      printf("%zx[%zx]: ref--\n", prim.value.qval, prim.value.qval->refs - 1);
-      refs = &prim.value.qval->refs;
+      refs = &value.quote->refs;
+      break;
+    case  TYPE_SYNTAX:
+      refs = &value.syntax->refs;
       break;
     default:
       return;
@@ -169,178 +129,166 @@ void del_ref(nse_val_t prim) {
     (*refs)--;
   }
   if (*refs == 0) {
-    delete_all(prim);
+    delete_all(value);
   }
 }
 
-void delete_all(nse_val_t prim) {
-  if (prim.type == TYPE_CONS) {
-    del_ref(prim.value.cval->h);
-    del_ref(prim.value.cval->t);
+void delete_all(NseVal value) {
+  if (value.type == TYPE_CONS) {
+    del_ref(value.cons->head);
+    del_ref(value.cons->tail);
   }
-  if (prim.type == TYPE_ARRAY) {
-    for (int i = 0; i < prim.value.aval->size; i++) {
-      del_ref(prim.value.aval->array[i]);
-    }
+  if (value.type == TYPE_QUOTE) {
+    del_ref(value.quote->quoted);
   }
-  if (prim.type == TYPE_QUOTE) {
-    del_ref(prim.value.qval->quoted);
+  if (value.type == TYPE_SYNTAX) {
+    del_ref(value.syntax->quoted);
   }
-  delete(prim);
+  delete(value);
 }
 
-void delete(nse_val_t prim) {
-  switch (prim.type) {
+void delete(NseVal value) {
+  switch (value.type) {
     case TYPE_CONS:
-      printf("%zx[%zx]: free cons\n", prim.value.cval, prim.value.cval->refs);
-      free(prim.value.cval);
-      return;
-    case TYPE_ARRAY:
-      free(prim.value.aval->array);
-      free(prim.value.aval);
+      free(value.cons);
       return;
     case TYPE_SYMBOL:
-      free(prim.value.sval);
+      free(value.symbol);
       return;
     case TYPE_QUOTE:
-      printf("%zx[%zx]: free quote\n", prim.value.qval, prim.value.qval->refs);
-      free(prim.value.qval);
+      free(value.quote);
+      return;
+    case TYPE_SYNTAX:
+      free(value.syntax);
       return;
     case TYPE_CLOSURE:
-      printf("%zx[%zx]: free closure\n", prim.value.clval, prim.value.clval->refs);
-      free(prim.value.clval);
+      free(value.closure);
       return;
     default:
       return;
   }
 }
 
-nse_val_t head(nse_val_t cons) {
-  nse_val_t result = Undefined;
-  if (cons.type == TYPE_CONS) {
-    result = cons.value.cval->h;
+NseVal head(NseVal value) {
+  NseVal result = undefined;
+  if (value.type == TYPE_CONS) {
+    result = value.cons->head;
+  } else {
+    // TODO: type error
   }
   return result;
 }
 
-nse_val_t tail(nse_val_t cons) {
-  nse_val_t result = Undefined;
-  if (cons.type == TYPE_CONS) {
-    result = cons.value.cval->t;
+NseVal tail(NseVal value) {
+  NseVal result = undefined;
+  if (value.type == TYPE_CONS) {
+    result = value.cons->tail;
   }
   return result;
 }
 
-int is_symbol(nse_val_t v, const char *sym) {
+int is_symbol(NseVal v, const char *sym) {
   int result = 0;
   if (v.type == TYPE_SYMBOL) {
-    result = strcmp(v.value.sval, sym) == 0;
+    result = strcmp(v.symbol, sym) == 0;
   }
   return result;
 }
 
-int is_true(nse_val_t b) {
+int is_true(NseVal b) {
   return is_symbol(b, "t");
 }
 
-size_t list_length(nse_val_t cons) {
+size_t list_length(NseVal value) {
   size_t count = 0;
-  while (cons.type == TYPE_CONS) {
+  while (value.type == TYPE_CONS) {
     count++;
-    cons = cons.value.cval->t;
+    value = value.cons->tail;
   }
   return count;
 }
 
-nse_val_t nse_apply(nse_val_t func, nse_val_t args) {
-  nse_val_t result = Undefined;
+NseVal nse_apply(NseVal func, NseVal args) {
+  NseVal result = undefined;
   if (func.type == TYPE_FUNC) {
-    result = func.value.fval(args);
+    result = func.func(args);
   } else if (func.type == TYPE_CLOSURE) {
-    result = func.value.clval->f(args, func.value.clval->env);
+    result = func.closure->f(args, func.closure->env);
   }
   return result;
 }
 
-nse_val_t nse_and(nse_val_t a, nse_val_t b) {
+NseVal nse_and(NseVal a, NseVal b) {
   if (is_true(a) && is_true(b)) {
-    return Symbol("t");
+    return TRUE;
   }
-  return Symbol("f");
+  return FALSE;
 }
 
-nse_val_t nse_equals(nse_val_t a, nse_val_t b) {
+NseVal nse_equals(NseVal a, NseVal b) {
   if (a.type == TYPE_UNDEFINED || b.type == TYPE_UNDEFINED) {
-    return Undefined;
+    return undefined;
   }
   if (a.type != b.type) {
-    return Symbol("f");
+    return FALSE;
   }
   switch (a.type) {
     case TYPE_NIL:
-      return Symbol("t");
+      return b.type == TYPE_NIL ? TRUE : FALSE;
     case TYPE_CONS:
       return nse_and(nse_equals(head(a), head(b)), nse_equals(tail(a), tail(b)));
-    case TYPE_ARRAY:
-      if (a.value.aval->size != b.value.aval->size) {
-        return Symbol("f");
-      }
-      for (int i = 0; i < a.value.aval->size; i++) {
-        if (!is_true(nse_equals(a.value.aval->array[i], b.value.aval->array[i]))) {
-          return Symbol("f");
-        }
-      }
-      return Symbol("t");
     case TYPE_SYMBOL:
-      if (a.value.sval == b.value.sval) {
-        return Symbol("t");
+      if (a.symbol == b.symbol) {
+        return TRUE;
       }
-      return Symbol("f");
+      return FALSE;
     case TYPE_QUOTE:
-      return nse_equals(a.value.qval->quoted, b.value.qval->quoted);
-    case TYPE_INT:
-      if (a.value.ival == b.value.ival) {
-        return Symbol("t");
+      return nse_equals(a.quote->quoted, b.quote->quoted);
+    case TYPE_SYNTAX:
+      return nse_equals(a.syntax->quoted, b.syntax->quoted);
+    case TYPE_I64:
+      if (a.i64 == b.i64) {
+        return TRUE;
       }
-      return Symbol("f");
+      return FALSE;
     default:
-      return Symbol("f");
+      return FALSE;
   }
 }
 
-void print_cons(cons_t *cons) {
-    nse_print(cons->h);
-    if (cons->t.type == TYPE_CONS) {
+void print_cons(Cons *cons) {
+    print(cons->head);
+    if (cons->tail.type == TYPE_CONS) {
       printf(" ");
-      print_cons(cons->t.value.cval);
-    } else if (cons->t.type != TYPE_NIL) {
+      print_cons(cons->tail.cons);
+    } else if (cons->tail.type != TYPE_NIL) {
       printf(" . ");
-      nse_print(cons->t);
+      print(cons->tail);
     }
 }
 
-nse_val_t nse_print(nse_val_t prim) {
-  switch (prim.type) {
+NseVal print(NseVal value) {
+  switch (value.type) {
     case TYPE_NIL:
       printf("()");
       break;
     case TYPE_CONS:
       printf("(");
-      print_cons(prim.value.cval);
+      print_cons(value.cons);
       printf(")");
       break;
     case TYPE_SYMBOL:
-      printf("%s", prim.value.sval);
+      printf("%s", value.symbol);
       break;
-    case TYPE_INT:
-      printf("%d", prim.value.ival);
+    case TYPE_I64:
+      printf("%ld", value.i64);
       break;
     case TYPE_QUOTE:
       printf("'");
-      nse_print(prim.value.qval->quoted);
+      print(value.quote->quoted);
       break;
     default:
-      printf("print error: undefined type %d\n", prim.type);
+      printf("print error: undefined type %d\n", value.type);
   }
-  return Nil;
+  return nil;
 }
