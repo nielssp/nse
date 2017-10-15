@@ -82,8 +82,10 @@ NseVal eval_list(NseVal list, Scope *scope) {
     return nil;
   } else if (list.type == TYPE_CONS) {
     NseVal head = eval(list.cons->head, scope);
-    NseVal tail = eval(list.cons->tail, scope);
+    NseVal tail = eval_list(list.cons->tail, scope);
     Cons *cons = create_cons(head, tail);
+    del_ref(head);
+    del_ref(tail);
     return CONS(cons);
   }
   raise_error("invalid list");
@@ -112,7 +114,10 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
   }
   NseVal function = eval(operator, scope);
   NseVal arg_list = eval_list(args, scope);
-  return nse_apply(function, arg_list);
+  NseVal result = nse_apply(function, arg_list);
+  del_ref(function);
+  del_ref(arg_list);
+  return result;
 }
 
 NseVal eval(NseVal code, Scope *scope) {

@@ -218,14 +218,18 @@ Syntax *parse_list(Stack *input) {
   if (c == EOF || c == ')') {
     syntax->quoted = nil;
   } else {
-    Syntax *head = parse_prim(input);
+    NseVal head = SYNTAX(parse_prim(input));
+    NseVal tail;
     skip(input);
     if (peek(input) == '.') {
       pop(input);
-      syntax->quoted = CONS(create_cons(SYNTAX(head), SYNTAX(parse_prim(input))));
+      tail = SYNTAX(parse_prim(input));
     } else {
-      syntax->quoted = CONS(create_cons(SYNTAX(head), SYNTAX(parse_list(input))));
+      tail = SYNTAX(parse_list(input));
     }
+    syntax->quoted = CONS(create_cons(head, tail));
+    del_ref(head);
+    del_ref(tail);
   }
   return end_pos(syntax, input);
 }
