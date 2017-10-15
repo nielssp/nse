@@ -3,13 +3,14 @@
 #include <ctype.h>
 
 #include "nsert.h"
+#include "read.h"
 
 #define MAX_LOOKAHEAD 2
 
 #define STACK_FILE 1
 #define STACK_STRING 2
 
-typedef struct stack {
+struct stack {
   char type;
   union {
     FILE *file;
@@ -20,7 +21,7 @@ typedef struct stack {
   char la_buffer[MAX_LOOKAHEAD];
   size_t line;
   size_t column;
-} Stack;
+};
 
 Syntax *parse_list(Stack *input);
 
@@ -119,6 +120,7 @@ void skip(Stack *input) {
 }
 
 Syntax *start_pos(Syntax *syntax, Stack *input) {
+  syntax->file = input->file_name;
   syntax->start_line = input->line;
   syntax->start_column = input->column;
   syntax->end_line = input->line;
@@ -192,7 +194,6 @@ Syntax *parse_prim(Stack *input) {
     pop(input);
     Syntax *list = parse_list(input);
     syntax->quoted = list->quoted;
-    del_ref(SYNTAX(list));
     if (peek(input) != ')') {
       printf("error: %s:%zu:%zu: missing ')'\n", input->file_name, input->line, input->column);
     } else {
@@ -228,3 +229,4 @@ Syntax *parse_list(Stack *input) {
   }
   return end_pos(syntax, input);
 }
+

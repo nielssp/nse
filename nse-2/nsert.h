@@ -1,6 +1,7 @@
 #ifndef NSERT_H
 #define NSERT_H
 
+#include <stdlib.h>
 #include <stdint.h>
 
 #define TYPE_UNDEFINED 0
@@ -80,6 +81,13 @@ Quote *create_quote(NseVal quoted);
 Syntax *create_syntax(NseVal quoted);
 Symbol *create_symbol(const char *s);
 Closure *create_closure(NseVal f(Cons *, NseVal[]), NseVal env[], size_t env_size);
+
+char *to_symbol(NseVal v);
+
+extern Syntax *error_form;
+extern char *error_string;
+void set_debug_form(Syntax *syntax);
+void raise_error(const char *format, ...);
 
 NseVal add_ref(NseVal p);
 void del_ref(NseVal p);
