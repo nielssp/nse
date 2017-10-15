@@ -32,6 +32,25 @@ NseVal sum(NseVal args) {
   return I64(acc);
 }
 
+NseVal equals(NseVal args) {
+  NseVal previous = undefined;
+  while (args.type == TYPE_CONS) {
+    NseVal h = head(args);
+    if (previous.type != TYPE_UNDEFINED) {
+      NseVal result = nse_equals(previous, h);
+      if (!is_true(result)) {
+        return FALSE;
+      }
+    }
+    previous = h;
+    args = tail(args);
+  }
+  if (!RESULT_OK(previous)) {
+    raise_error("too few arguments");
+  }
+  return TRUE;
+}
+
 int main(int argc, char *argv[]) {
   int opt;
   int option_index;
@@ -60,6 +79,7 @@ int main(int argc, char *argv[]) {
   }
   Scope *scope = create_scope();
   scope_define(scope, "+", FUNC(sum));
+  scope_define(scope, "=", FUNC(equals));
   while (1) {
     char *input = readline("> ");
     if (input == NULL) {
@@ -76,10 +96,9 @@ int main(int argc, char *argv[]) {
     free(input);
     close_stack(stack);
     NseVal result = eval(code, scope);
-    printf("refs: %d\n", code.syntax->refs);
     del_ref(code);
     if (result.type == TYPE_UNDEFINED) {
-      printf("error: %s\n", error_string);
+      printf("error: %s: ", error_string);
       if (error_form != NULL) {
         print(error_form->quoted);
       }

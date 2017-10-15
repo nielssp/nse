@@ -194,6 +194,7 @@ Syntax *parse_prim(Stack *input) {
     pop(input);
     Syntax *list = parse_list(input);
     syntax->quoted = list->quoted;
+    free(list);
     if (peek(input) != ')') {
       printf("error: %s:%zu:%zu: missing ')'\n", input->file_name, input->line, input->column);
     } else {

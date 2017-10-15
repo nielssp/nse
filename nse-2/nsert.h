@@ -5,15 +5,15 @@
 #include <stdint.h>
 
 #define TYPE_UNDEFINED 0
-#define TYPE_NIL 1
-#define TYPE_CONS 2
-#define TYPE_I64 3
-#define TYPE_SYMBOL 4
-#define TYPE_QUOTE 5
+#define TYPE_NIL 'n'
+#define TYPE_CONS '.'
+#define TYPE_I64 'i'
+#define TYPE_SYMBOL 's'
+#define TYPE_QUOTE '\''
 #define TYPE_TYPE_QUOTE 6
-#define TYPE_SYNTAX 7
-#define TYPE_FUNC 8
-#define TYPE_CLOSURE 9
+#define TYPE_SYNTAX 'x'
+#define TYPE_FUNC 'f'
+#define TYPE_CLOSURE 'c'
 
 #define I64(i) ((NseVal) { .type = TYPE_I64, .i64 = (i) })
 #define CONS(c) ((NseVal) { .type = TYPE_CONS, .cons = (c) })
@@ -25,6 +25,8 @@
 
 #define TRUE (SYMBOL(create_symbol("t")))
 #define FALSE (SYMBOL(create_symbol("f")))
+
+#define RESULT_OK(value) ((value).type != TYPE_UNDEFINED)
 
 typedef struct nse_val NseVal;
 typedef struct cons Cons;

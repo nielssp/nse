@@ -55,9 +55,8 @@ NseVal scope_get(Scope *scope, const char *name) {
 }
 
 void scope_define(Scope *scope, const char *name, NseVal value) {
-  NseVal *existing = name_space_lookup(scope->names, name);
+  NseVal *existing = name_space_remove(scope->names, name);
   if (existing) {
-    // redefining...
     del_ref(*existing);
     free(existing);
   }
@@ -81,12 +80,20 @@ NseVal eval_list(NseVal list, Scope *scope) {
   } else if (list.type == TYPE_NIL) {
     return nil;
   } else if (list.type == TYPE_CONS) {
+    NseVal result = undefined;
     NseVal head = eval(list.cons->head, scope);
-    NseVal tail = eval_list(list.cons->tail, scope);
-    Cons *cons = create_cons(head, tail);
-    del_ref(head);
-    del_ref(tail);
-    return CONS(cons);
+    if (RESULT_OK(head)) {
+      NseVal tail = eval_list(list.cons->tail, scope);
+      if (RESULT_OK(tail)) {
+        Cons *cons = create_cons(head, tail);
+        if (cons != NULL) {
+          result = CONS(cons);
+        }
+        del_ref(tail);
+      }
+      del_ref(head);
+    }
+    return result;
   }
   raise_error("invalid list");
   return undefined;
@@ -96,27 +103,37 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
   NseVal operator = cons->head;
   NseVal args = cons->tail;
   if (is_symbol(operator, "if")) {
+    NseVal result = undefined;
     NseVal condition = eval(head(args), scope);
-    NseVal result;
-    if (is_true(condition)) {
-      result = eval(head(tail(args)), scope);
-    } else {
-      result = eval(head(tail(tail(args))), scope);
+    if (RESULT_OK(condition)) {
+      if (is_true(condition)) {
+        result = eval(head(tail(args)), scope);
+      } else {
+        result = eval(head(tail(tail(args))), scope);
+      }
+      del_ref(condition);
     }
-    del_ref(condition);
     return result;
   } else if (is_symbol(operator, "let")) {
   } else if (is_symbol(operator, "def")) {
     char *name = to_symbol(head(args));
     NseVal value = eval(head(tail(args)), scope);
-    scope_define(scope, name, value);
-    return SYMBOL(name);
+    if (RESULT_OK(value)) {
+      scope_define(scope, name, value);
+      return SYMBOL(name);
+    }
+    return undefined;
   }
+  NseVal result = undefined;
   NseVal function = eval(operator, scope);
-  NseVal arg_list = eval_list(args, scope);
-  NseVal result = nse_apply(function, arg_list);
-  del_ref(function);
-  del_ref(arg_list);
+  if (RESULT_OK(function)) {
+    NseVal arg_list = eval_list(args, scope);
+    if (RESULT_OK(arg_list)) {
+      result = nse_apply(function, arg_list);
+      del_ref(arg_list);
+    }
+    del_ref(function);
+  }
   return result;
 }
 

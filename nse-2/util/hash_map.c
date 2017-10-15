@@ -183,6 +183,7 @@ int hash_map_add_generic(HashMap *map, const void *key, void *value,
     do {
       if (hash_code == hash_code_func(existing->entry.key)) {
         if (equals_func(key, existing->entry.key)) {
+          delete_bucket(bucket);
           return 0;
         }
       }
@@ -220,9 +221,11 @@ HashMapEntry hash_map_remove_generic_entry(HashMap *map, const void *key,
           else {
             map->buckets[hash] = NULL;
           }
+          HashMapEntry entry = bucket->entry;
+          delete_bucket(bucket);
           map->size--;
           autoresize_hash_map(map, hash_code_func);
-          return bucket->entry;
+          return entry;
         }
       }
       bucket = bucket->next;
