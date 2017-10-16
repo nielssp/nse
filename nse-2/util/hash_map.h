@@ -5,14 +5,21 @@
 
 #define DECLARE_HASH_MAP(name, type_name, key_type, value_type)\
   typedef struct name type_name;\
+  typedef struct name ## _entry type_name ## Entry;\
+  typedef struct name ## _iterator type_name ## Iterator;\
   type_name create ## name();\
   void delete ## name(type_name map);\
   int name ## _add(type_name map, const key_type key, value_type value);\
   value_type name ## _remove(type_name map, const key_type key);\
   value_type name ## _lookup(type_name map, const key_type key);\
-  HashMapEntry name ## _remove_entry(type_name map, const key_type key);\
-  HashMapEntry name ## _lookup_entry(type_name map, const key_type key);\
-  HashMapIterator *create_ ## name ## _iterator(type_name map);
+  type_name ## Entry name ## _remove_entry(type_name map, const key_type key);\
+  type_name ## Entry name ## _lookup_entry(type_name map, const key_type key);\
+  type_name ## Iterator create_ ## name ## _iterator(type_name map);\
+  void delete_ ## name ## _iterator(type_name ## Iterator iterator);\
+  type_name ## Entry name ## _next(type_name ## Iterator iterator);\
+  const key_type name ## _next_key(type_name ## Iterator iterator);\
+  value_type name ## _next_value(type_name ## Iterator iterator);
+
 
 #define DECLARE_HASH_SET(name, type_name, value_type)\
   typedef struct name type_name;\
@@ -30,6 +37,13 @@
   struct name {\
     HashMap *map;\
   };\
+  struct name ## _entry {\
+    const key_type key;\
+    value_type value;\
+  };\
+  struct name ## _iterator {\
+    HashMapIterator *iterator;\
+  };\
   type_name create_ ## name() {\
     return (type_name){.map = create_hash_map()};\
   }\
@@ -45,14 +59,29 @@
   value_type name ## _lookup(type_name map, const key_type key) {\
     return (value_type)hash_map_lookup_generic(map.map, key, hash_func, equals_func);\
   }\
-  HashMapEntry name ## _remove_entry(type_name map, const key_type key) {\
-    return hash_map_remove_generic_entry(map.map, key, hash_func, equals_func);\
+  type_name ## Entry name ## _remove_entry(type_name map, const key_type key) {\
+    HashMapEntry entry = hash_map_remove_generic_entry(map.map, key, hash_func, equals_func);\
+    return (type_name ## Entry){.key = (const key_type)entry.key, .value = (value_type)entry.value};\
   }\
-  HashMapEntry name ## _lookup_entry(type_name map, const key_type key) {\
-    return hash_map_lookup_generic_entry(map.map, key, hash_func, equals_func);\
+  type_name ## Entry name ## _lookup_entry(type_name map, const key_type key) {\
+    HashMapEntry entry = hash_map_lookup_generic_entry(map.map, key, hash_func, equals_func);\
+    return (type_name ## Entry){.key = (const key_type)entry.key, .value = (value_type)entry.value};\
   }\
-  HashMapIterator *create_ ## name ## _iterator(type_name map) {\
-    return create_hash_map_iterator(map.map);\
+  type_name ## Iterator create_ ## name ## _iterator(type_name map) {\
+    return (type_name ## Iterator){.iterator = create_hash_map_iterator(map.map)};\
+  }\
+  void delete_ ## name ## _iterator(type_name ## Iterator iterator) {\
+    delete_hash_map_iterator(iterator.iterator);\
+  }\
+  type_name ## Entry name ## _next(type_name ## Iterator iterator) {\
+    HashMapEntry entry  = next_entry(iterator.iterator);\
+    return (type_name ## Entry){.key = (const key_type)entry.key, .value = (value_type)entry.value};\
+  }\
+  const key_type name ## _next_key(type_name ## Iterator iterator) {\
+    return (key_type)next_entry(iterator.iterator).key;\
+  }\
+  value_type name ## _next_value(type_name ## Iterator iterator) {\
+    return (value_type)next_entry(iterator.iterator).value;\
   }
 
 #define DEFINE_HASH_SET(name, type_name, value_type, hash_func, equals_func)\
@@ -89,6 +118,7 @@
 
 #define DEFINE_PRIVATE_HASH_MAP(name, type_name, key_type, value_type, hash_func, equals_func)\
   typedef struct name type_name;\
+  typedef struct name ## _entry type_name ## Entry;\
   typedef struct name ## _iterator type_name ## Iterator;\
   DEFINE_HASH_MAP(name, type_name, key_type, value_type, hash_func, equals_func)
 
