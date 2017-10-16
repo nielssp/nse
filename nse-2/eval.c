@@ -183,7 +183,7 @@ NseVal eval_anon(NseVal args, NseVal env[]) {
   NseVal body = head(tail(definition));
   Scope *current_scope = scope;
   assign_parameters(&current_scope, formal, args);
-  NseVal result = eval(body, scope);
+  NseVal result = eval(body, current_scope);
   scope_pop_until(current_scope, scope);
   return result;
 }
