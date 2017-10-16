@@ -77,9 +77,10 @@ int main(int argc, char *argv[]) {
     puts("not implemented");
     return 1;
   }
-  Scope *scope = create_scope(NULL);
-  scope_define(scope, "+", FUNC(sum));
-  scope_define(scope, "=", FUNC(equals));
+  Module *system = create_module("system");
+  module_define(system, "+", FUNC(sum));
+  module_define(system, "=", FUNC(equals));
+  Scope *scope = use_module(system);
   while (1) {
     char *input = readline("> ");
     if (input == NULL) {
@@ -108,6 +109,7 @@ int main(int argc, char *argv[]) {
     }
     printf("\n");
   }
-  delete_scope(scope);
+  scope_pop(scope);
+  delete_module(system);
   return 0;
 }

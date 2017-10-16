@@ -4,13 +4,16 @@
 #include "util/hash_map.h"
 #include "nsert.h"
 
-DECLARE_HASH_MAP(name_space, NameSpace, char *, NseVal *)
+DECLARE_HASH_MAP(namespace, Namespace, char *, NseVal *)
 
+typedef struct module Module;
 typedef struct scope Scope;
-Scope *create_scope();
-void delete_scope(Scope *scope);
+Scope *scope_push(Scope *scope, const char *name, NseVal value);
+Scope *scope_pop(Scope *scope);
 NseVal scope_get(Scope *scope, const char *name);
-void scope_define(Scope *scope, const char *name, NseVal value);
+Module *create_module(const char *name);
+Scope *use_module(Module *module);
+void module_define(Module *module, const char *name, NseVal value);
 
 NseVal eval(NseVal code, Scope *scope);
 
