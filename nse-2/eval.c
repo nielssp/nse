@@ -157,32 +157,30 @@ NseVal eval_list(NseVal list, Scope *scope) {
   return undefined;
 }
 
-void assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
+int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
   switch (formal.type) {
     case TYPE_SYNTAX:
-      assign_parameters(scope, formal.syntax->quoted, actual);
-      break;
+      return assign_parameters(scope, formal.syntax->quoted, actual);
     case TYPE_SYMBOL:
       *scope = scope_push(*scope, formal.symbol, actual);
-      break;
+      return 1;
     case TYPE_CONS:
-      assign_parameters(scope, head(formal), head(actual));
-      assign_parameters(scope, tail(formal), tail(actual));
-      break;
+      return assign_parameters(scope, head(formal), head(actual))
+        && assign_parameters(scope, tail(formal), tail(actual));
     case TYPE_NIL:
       // ok
-      break;
+      return 1;
     default:
       // not ok
-      break;
+      return 0;
   }
 }
 
 NseVal eval_anon(NseVal args, NseVal env[]) {
   NseVal definition = env[0];
   Scope *scope = env[1].reference->pointer;
-  NseVal formal = head(tail(definition));
-  NseVal body = head(tail(tail(definition)));
+  NseVal formal = head(definition);
+  NseVal body = head(tail(definition));
   Scope *current_scope = scope;
   assign_parameters(&current_scope, formal, args);
   NseVal result = eval(body, scope);
