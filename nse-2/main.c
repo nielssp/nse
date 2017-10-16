@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     puts("not implemented");
     return 1;
   }
-  Scope *scope = create_scope();
+  Scope *scope = create_scope(NULL);
   scope_define(scope, "+", FUNC(sum));
   scope_define(scope, "=", FUNC(equals));
   while (1) {

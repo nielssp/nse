@@ -263,15 +263,18 @@ void *hash_map_lookup_generic(HashMap *map, const void *key,
   return hash_map_lookup_generic_entry(map, key, hash_code_func, equals_func).value;
 }
 
-size_t dictionary_hash(const void *p) {
-  const char *s = (const char *)p;
-  return (size_t)s[0];
+size_t string_hash(const void *p) {
+  const char *key = (const char *)p;
+  size_t hash = 0;
+  while (*key) {
+    hash ^= *(key++);
+  }
+  return hash;
+}
+int string_equals(const void *a, const void *b) {
+  return strcmp(a, b) == 0;
 }
 
-int dictionary_equals(const void *a, const void *b) {
-  const char *s1 = (const char *)a;
-  const char *s2 = (const char *)b;
-  return strcmp(s1, s2) == 0;
-}
+DEFINE_HASH_MAP(dictionary, Dictionary, char *, char *, string_hash, string_equals)
 
-DEFINE_HASH_MAP(dictionary, Dictionary, char *, char *)
+DEFINE_HASH_SET(string_set, StringSet, char *, string_hash, string_equals)

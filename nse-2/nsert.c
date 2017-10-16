@@ -5,19 +5,7 @@
 #include "nsert.h"
 #include "util/hash_map.h"
 
-size_t symmap_hash(const void *p) {
-  const char *key = (const char *)p;
-  size_t hash = 0;
-  while (*key) {
-    hash ^= *(key++);
-  }
-  return hash;
-}
-int symmap_equals(const void *a, const void *b) {
-  return strcmp(a, b) == 0;
-}
-typedef struct symmap SymMap;
-DEFINE_HASH_MAP(symmap, SymMap, char *, char *)
+DEFINE_PRIVATE_HASH_MAP(symmap, SymMap, char *, char *, string_hash, string_equals)
 
 SymMap symbols;
 
@@ -133,17 +121,32 @@ Symbol *create_symbol(const char *s) {
   return copy;
 }
 
-Closure *crate_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_size) {
+Closure *create_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_size) {
   Closure *closure = malloc(sizeof(Closure) + env_size * sizeof(NseVal));
   if (!closure) {
     raise_error("closure: could not allocate %z bytes of memory", sizeof(Closure) + env_size * sizeof(NseVal));
   }
   closure->refs = 1;
   closure->f = f;
+  closure->env_size = env_size;
   if (env_size > 0) {
     memcpy(closure->env, env, env_size * sizeof(NseVal));
+    for (size_t i = 0; i < env_size; i++) {
+      add_ref(env[i]);
+    }
   }
   return closure;
+}
+
+Reference *create_reference(void *pointer, void destructor(void *)) {
+  Reference *reference = malloc(sizeof(Reference));
+  if (!reference) {
+    raise_error("reference: could not allocate %z bytes of memory", sizeof(Reference));
+  }
+  reference->refs = 1;
+  reference->pointer = pointer;
+  reference->destructor = destructor;
+  return reference;
 }
 
 NseVal add_ref(NseVal value) {
@@ -159,6 +162,9 @@ NseVal add_ref(NseVal value) {
       break;
     case  TYPE_SYNTAX:
       value.syntax->refs++;
+      break;
+    case  TYPE_REFERENCE:
+      value.reference->refs++;
       break;
   }
   return value;
@@ -179,6 +185,9 @@ void del_ref(NseVal value) {
     case  TYPE_SYNTAX:
       refs = &value.syntax->refs;
       break;
+    case  TYPE_REFERENCE:
+      refs = &value.reference->refs;
+      break;
     default:
       return;
   }
@@ -198,6 +207,11 @@ void delete_all(NseVal value) {
   }
   if (value.type == TYPE_QUOTE) {
     del_ref(value.quote->quoted);
+  }
+  if (value.type == TYPE_CLOSURE) {
+    for (size_t i = 0; i < value.closure->env_size; i++) {
+      del_ref(value.closure->env[i]);
+    }
   }
   if (value.type == TYPE_SYNTAX) {
     del_ref(value.syntax->quoted);
@@ -221,6 +235,10 @@ void delete(NseVal value) {
       return;
     case TYPE_CLOSURE:
       free(value.closure);
+      return;
+    case TYPE_REFERENCE:
+      value.reference->destructor(value.reference->pointer);
+      free(value.reference);
       return;
     default:
       return;
@@ -374,6 +392,12 @@ NseVal print(NseVal value) {
       break;
     case TYPE_SYNTAX:
       print(value.syntax->quoted);
+      break;
+    case TYPE_FUNC:
+      printf("#<function>");
+      break;
+    case TYPE_CLOSURE:
+      printf("#<lambda>");
       break;
     default:
       raise_error("undefined type: %d", value.type);

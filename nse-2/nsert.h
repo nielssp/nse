@@ -14,6 +14,7 @@
 #define TYPE_SYNTAX 'x'
 #define TYPE_FUNC 'f'
 #define TYPE_CLOSURE 'c'
+#define TYPE_REFERENCE 'r'
 
 #define I64(i) ((NseVal) { .type = TYPE_I64, .i64 = (i) })
 #define CONS(c) ((NseVal) { .type = TYPE_CONS, .cons = (c) })
@@ -22,6 +23,7 @@
 #define SYMBOL(s) ((NseVal) { .type = TYPE_SYMBOL, .symbol = (s) })
 #define QUOTE(q) ((NseVal) { .type = TYPE_QUOTE, .quote = (q) })
 #define FUNC(f) ((NseVal) { .type = TYPE_FUNC, .func = (f) })
+#define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
 
 #define TRUE (SYMBOL(create_symbol("t")))
 #define FALSE (SYMBOL(create_symbol("f")))
@@ -33,6 +35,7 @@ typedef struct cons Cons;
 typedef struct closure Closure;
 typedef struct quote Quote;
 typedef struct syntax Syntax;
+typedef struct reference Reference;
 typedef char Symbol;
 
 struct nse_val {
@@ -46,6 +49,7 @@ struct nse_val {
     char *symbol;
     NseVal (*func)(NseVal);
     Closure *closure;
+    Reference *reference;
   };
 };
 
@@ -58,12 +62,19 @@ struct cons {
 struct closure {
   size_t refs;
   NseVal (*f)(NseVal, NseVal[]);
+  size_t env_size;
   NseVal env[];
 };
 
 struct quote {
   size_t refs;
   NseVal quoted;
+};
+
+struct reference {
+  size_t refs;
+  void *pointer;
+  void (*destructor)(void *);
 };
 
 struct syntax {
@@ -82,7 +93,8 @@ Cons *create_cons(NseVal h, NseVal t);
 Quote *create_quote(NseVal quoted);
 Syntax *create_syntax(NseVal quoted);
 Symbol *create_symbol(const char *s);
-Closure *create_closure(NseVal f(Cons *, NseVal[]), NseVal env[], size_t env_size);
+Closure *create_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_size);
+Reference *create_reference(void *pointer, void destructor(void *));
 
 char *to_symbol(NseVal v);
 

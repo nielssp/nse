@@ -4,42 +4,43 @@
 
 #include "eval.h"
 
-size_t name_space_hash(const void *p) {
-  const char *key = (const char *)p;
-  size_t hash = 0;
-  while (*key) {
-    hash ^= *(key++);
-  }
-  return hash;
-}
-int name_space_equals(const void *a, const void *b) {
-  return strcmp(a, b) == 0;
-}
-DEFINE_HASH_MAP(name_space, NameSpace, char *, NseVal *)
+DEFINE_HASH_MAP(name_space, NameSpace, char *, NseVal *, string_hash, string_equals)
 
 struct scope {
+  size_t refs;
   NameSpace names;
   Scope *parent;
 };
 
-Scope *create_scope() {
+Scope *create_scope(Scope *parent) {
   Scope *scope = malloc(sizeof(Scope));
   scope->names = create_name_space();
-  scope->parent = NULL;
+  scope->parent = parent;
+  scope->refs = 1;
+  if (parent) {
+    parent->refs++;
+  }
   return scope;
 }
 
 void delete_scope(Scope *scope) {
-  HashMapIterator *it = create_name_space_iterator(scope->names);
-  for (HashMapEntry entry = next_entry(it); entry.key; entry = next_entry(it)) {
-    if (entry.value) {
-      del_ref(*(NseVal *)entry.value);
-      free(entry.value);
+  if (scope->refs > 1) {
+    scope->refs--;
+  } else {
+    HashMapIterator *it = create_name_space_iterator(scope->names);
+    for (HashMapEntry entry = next_entry(it); entry.key; entry = next_entry(it)) {
+      if (entry.value) {
+        del_ref(*(NseVal *)entry.value);
+        free(entry.value);
+      }
     }
+    delete_hash_map_iterator(it);
+    delete_name_space(scope->names);
+    if (scope->parent) {
+      delete_scope(scope->parent);
+    }
+    free(scope);
   }
-  delete_hash_map_iterator(it);
-  delete_name_space(scope->names);
-  free(scope);
 }
 
 NseVal scope_get(Scope *scope, const char *name) {
@@ -99,6 +100,37 @@ NseVal eval_list(NseVal list, Scope *scope) {
   return undefined;
 }
 
+void assign_parameters(Scope *scope, NseVal formal, NseVal actual) {
+  switch (formal.type) {
+    case TYPE_SYNTAX:
+      assign_parameters(scope, formal.syntax->quoted, actual);
+      break;
+    case TYPE_SYMBOL:
+      scope_define(scope, formal.symbol, actual);
+      break;
+    case TYPE_CONS:
+      assign_parameters(scope, head(formal), head(actual));
+      assign_parameters(scope, tail(formal), tail(actual));
+      break;
+    case TYPE_NIL:
+      // ok
+      break;
+    default:
+      // not ok
+      break;
+  }
+}
+
+NseVal eval_anon(NseVal args, NseVal env[]) {
+  NseVal definition = env[0];
+  Scope *scope = env[1].reference->pointer;
+  NseVal formal = head(tail(definition));
+  NseVal body = head(tail(tail(definition)));
+  assign_parameters(scope, formal, args);
+  NseVal result = eval(body, scope);
+  return result;
+}
+
 NseVal eval_cons(Cons *cons, Scope *scope) {
   NseVal operator = cons->head;
   NseVal args = cons->tail;
@@ -115,6 +147,13 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
     }
     return result;
   } else if (is_symbol(operator, "let")) {
+  } else if (is_symbol(operator, "fn")) {
+    Scope *fn_scope = create_scope(scope);
+    NseVal scope_ref = REFERENCE(create_reference(fn_scope, delete_scope));
+    NseVal env[] = {args, scope_ref};
+    NseVal result = CLOSURE(create_closure(eval_anon, env, 2));
+    del_ref(scope_ref);
+    return result;
   } else if (is_symbol(operator, "def")) {
     char *name = to_symbol(head(args));
     NseVal value = eval(head(tail(args)), scope);
