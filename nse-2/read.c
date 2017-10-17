@@ -186,7 +186,9 @@ Syntax *parse_prim(Stack *input) {
   if (c == '\'') {
     Syntax *syntax = start_pos(create_syntax(undefined), input);
     pop(input);
-    syntax->quoted = QUOTE(create_quote(SYNTAX(parse_prim(input))));
+    NseVal quoted = SYNTAX(parse_prim(input));
+    syntax->quoted = QUOTE(create_quote(quoted));
+    del_ref(quoted);
     return end_pos(syntax, input);
   }
   if (c == '(') {

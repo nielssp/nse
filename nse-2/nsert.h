@@ -38,6 +38,8 @@ typedef struct syntax Syntax;
 typedef struct reference Reference;
 typedef char Symbol;
 
+typedef void (* Destructor)(void *);
+
 struct nse_val {
   uint8_t type;
   union {
@@ -74,14 +76,12 @@ struct quote {
 struct reference {
   size_t refs;
   void *pointer;
-  void (*destructor)(void *);
+  Destructor destructor;
 };
 
 struct syntax {
   size_t refs;
-  size_t start_line;
-  size_t start_column;
-  size_t end_line;
+  size_t start_line; size_t start_column; size_t end_line;
   size_t end_column;
   const char *file;
   NseVal quoted;
@@ -108,15 +108,26 @@ void raise_error(const char *format, ...);
 NseVal add_ref(NseVal p);
 void del_ref(NseVal p);
 
+
 NseVal head(NseVal cons);
 NseVal tail(NseVal cons);
-size_t list_length(NseVal cons);
+size_t list_length(NseVal list);
 
-int is_symbol(NseVal v, const char *sym);
+int is_cons(NseVal v);
+int is_nil(NseVal v);
+int is_list(NseVal v);
+int is_i64(NseVal v);
+int is_function(NseVal v);
+int is_symbol(NseVal v);
 int is_true(NseVal b);
+
+int match_symbol(NseVal v, const char *sym);
+
 NseVal nse_apply(NseVal func, NseVal args);
 NseVal nse_and(NseVal a, NseVal b);
 NseVal nse_equals(NseVal a, NseVal b);
+
+NseVal syntax_to_datum(NseVal v);
 
 NseVal print(NseVal value);
 NseVal printr(NseVal value);

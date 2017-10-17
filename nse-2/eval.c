@@ -161,14 +161,17 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
       *scope = scope_push(*scope, formal.symbol, actual);
       return 1;
     case TYPE_CONS:
-      if (actual.type != TYPE_CONS) {
+      if (!is_cons(actual)) {
         raise_error("too few parameters for function");
         return 0;
       }
       return assign_parameters(scope, head(formal), head(actual))
         && assign_parameters(scope, tail(formal), tail(actual));
     case TYPE_NIL:
-      // ok
+      if (!is_nil(actual)) {
+        raise_error("too many parameters for function");
+        return 0;
+      }
       return 1;
     default:
       // not ok
@@ -193,7 +196,7 @@ NseVal eval_anon(NseVal args, NseVal env[]) {
 NseVal eval_cons(Cons *cons, Scope *scope) {
   NseVal operator = cons->head;
   NseVal args = cons->tail;
-  if (is_symbol(operator, "if")) {
+  if (match_symbol(operator, "if")) {
     NseVal result = undefined;
     NseVal condition = eval(head(args), scope);
     if (RESULT_OK(condition)) {
@@ -205,15 +208,15 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       del_ref(condition);
     }
     return result;
-  } else if (is_symbol(operator, "let")) {
-  } else if (is_symbol(operator, "fn")) {
+  } else if (match_symbol(operator, "let")) {
+  } else if (match_symbol(operator, "fn")) {
     Scope *fn_scope = copy_scope(scope);
-    NseVal scope_ref = REFERENCE(create_reference(fn_scope, delete_scope));
+    NseVal scope_ref = REFERENCE(create_reference(fn_scope, (Destructor) delete_scope));
     NseVal env[] = {args, scope_ref};
     NseVal result = CLOSURE(create_closure(eval_anon, env, 2));
     del_ref(scope_ref);
     return result;
-  } else if (is_symbol(operator, "def")) {
+  } else if (match_symbol(operator, "def")) {
     char *name = to_symbol(head(args));
     NseVal value = eval(head(tail(args)), scope);
     if (RESULT_OK(value)) {
@@ -243,7 +246,7 @@ NseVal eval(NseVal code, Scope *scope) {
     case TYPE_I64:
       return code;
     case TYPE_QUOTE:
-      return code.quote->quoted;
+      return syntax_to_datum(code.quote->quoted);
     case TYPE_SYMBOL:
       return add_ref(scope_get(scope, code.symbol));
     case TYPE_SYNTAX: {

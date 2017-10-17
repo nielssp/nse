@@ -292,6 +292,60 @@ NseVal tail(NseVal value) {
   return result;
 }
 
+int is_cons(NseVal v) {
+  if (v.type == TYPE_CONS) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_cons(v.syntax->quoted);
+  }
+  return 0;
+}
+
+int is_nil(NseVal v) {
+  if (v.type == TYPE_NIL) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_nil(v.syntax->quoted);
+  }
+  return 0;
+}
+
+int is_list(NseVal v) {
+  if (v.type == TYPE_CONS || v.type == TYPE_NIL) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_list(v.syntax->quoted);
+  }
+  return 0;
+}
+
+int is_i64(NseVal v) {
+  if (v.type == TYPE_I64) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_i64(v.syntax->quoted);
+  }
+  return 0;
+}
+
+int is_function(NseVal v) {
+  if (v.type == TYPE_FUNC || v.type == TYPE_CLOSURE) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_function(v.syntax->quoted);
+  }
+  return 0;
+}
+
+int is_symbol(NseVal v) {
+  if (v.type == TYPE_SYMBOL) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_symbol(v.syntax->quoted);
+  }
+  return 0;
+}
+
 char *to_symbol(NseVal v) {
   if (v.type == TYPE_SYMBOL) {
     return v.symbol;
@@ -301,18 +355,18 @@ char *to_symbol(NseVal v) {
   return NULL;
 }
 
-int is_symbol(NseVal v, const char *sym) {
+int match_symbol(NseVal v, const char *sym) {
   int result = 0;
   if (v.type == TYPE_SYMBOL) {
     result = strcmp(v.symbol, sym) == 0;
   } else if (v.type == TYPE_SYNTAX) {
-    result = is_symbol(v.syntax->quoted, sym);
+    result = match_symbol(v.syntax->quoted, sym);
   }
   return result;
 }
 
 int is_true(NseVal b) {
-  return is_symbol(b, "t");
+  return match_symbol(b, "t");
 }
 
 size_t list_length(NseVal value) {
@@ -374,6 +428,31 @@ NseVal nse_equals(NseVal a, NseVal b) {
   }
 }
 
+NseVal syntax_to_datum(NseVal v) {
+  switch (v.type) {
+    case  TYPE_SYNTAX:
+      return syntax_to_datum(v.syntax->quoted);
+    case  TYPE_CONS: {
+      NseVal head = syntax_to_datum(v.cons->head);
+      NseVal tail = syntax_to_datum(v.cons->tail);
+      NseVal cons = CONS(create_cons(head, tail));
+      del_ref(head);
+      del_ref(tail);
+      return cons;
+    }
+    case TYPE_QUOTE: {
+      NseVal quoted = syntax_to_datum(v.quote->quoted);
+      NseVal quote = QUOTE(create_quote(quoted));
+      del_ref(quoted);
+      return quote;
+    }
+    case  TYPE_CLOSURE:
+    case  TYPE_REFERENCE:
+    default:
+      return v;
+  }
+}
+
 void print_cons(Cons *cons);
 
 void print_cons_tail(NseVal tail) {
@@ -414,7 +493,9 @@ NseVal print(NseVal value) {
       print(value.quote->quoted);
       break;
     case TYPE_SYNTAX:
+      printf("#<syntax ");
       print(value.syntax->quoted);
+      printf(">");
       break;
     case TYPE_FUNC:
       printf("#<function>");
@@ -469,8 +550,8 @@ NseVal printr(NseVal value) {
       printr(value.quote->quoted);
       break;
     case TYPE_SYNTAX:
-      printf("$[%zd]", value.syntax->refs);
-      print(value.syntax->quoted);
+      printf("#'[%zd]", value.syntax->refs);
+      printr(value.syntax->quoted);
       break;
     case TYPE_FUNC:
       printf("#<function>");
