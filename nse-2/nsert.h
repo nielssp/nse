@@ -101,6 +101,8 @@ char *to_symbol(NseVal v);
 extern Syntax *error_form;
 extern char *error_string;
 void set_debug_form(Syntax *syntax);
+Syntax *push_debug_form(Syntax *syntax);
+NseVal pop_debug_form(NseVal result, Syntax *previous);
 void raise_error(const char *format, ...);
 
 NseVal add_ref(NseVal p);
@@ -117,5 +119,6 @@ NseVal nse_and(NseVal a, NseVal b);
 NseVal nse_equals(NseVal a, NseVal b);
 
 NseVal print(NseVal value);
+NseVal printr(NseVal value);
 
 #endif

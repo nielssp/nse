@@ -26,6 +26,29 @@ void set_debug_form(Syntax *syntax) {
   }
 }
 
+Syntax *push_debug_form(Syntax *syntax) {
+  Syntax *previous = error_form;
+  error_form = syntax;
+  if (error_form) {
+    add_ref(SYNTAX(error_form));
+  }
+  return previous;
+}
+
+NseVal pop_debug_form(NseVal result, Syntax *previous) {
+  if (RESULT_OK(result)) {
+    if (previous) {
+      del_ref(SYNTAX(previous));
+    }
+    return result;
+  }
+  if (error_form) {
+    del_ref(SYNTAX(error_form));
+  }
+  error_form = previous;
+  return undefined;
+}
+
 void raise_error(const char *format, ...) {
   va_list va;
   char *old = error_string;
@@ -66,7 +89,7 @@ NseVal nil = { .type = TYPE_NIL };
 Cons *create_cons(NseVal h, NseVal t) {
   Cons *cons = malloc(sizeof(Cons));
   if (!cons) {
-    raise_error("cons: could not allocate %z bytes of memory", sizeof(Cons));
+    raise_error("cons: could not allocate %zd bytes of memory", sizeof(Cons));
     return NULL;
   }
   cons->refs = 1;
@@ -80,7 +103,7 @@ Cons *create_cons(NseVal h, NseVal t) {
 Quote *create_quote(NseVal quoted) {
   Quote *quote = malloc(sizeof(Quote));
   if (!quote) {
-    raise_error("quote: could not allocate %z bytes of memory", sizeof(Quote));
+    raise_error("quote: could not allocate %zd bytes of memory", sizeof(Quote));
     return NULL;
   }
   quote->refs = 1;
@@ -92,7 +115,7 @@ Quote *create_quote(NseVal quoted) {
 Syntax *create_syntax(NseVal quoted) {
   Syntax *syntax = malloc(sizeof(Syntax));
   if (!syntax) {
-    raise_error("syntax: could not allocate %z bytes of memory", sizeof(Syntax));
+    raise_error("syntax: could not allocate %zd bytes of memory", sizeof(Syntax));
     return NULL;
   }
   syntax->refs = 1;
@@ -113,7 +136,7 @@ Symbol *create_symbol(const char *s) {
   size_t len = strlen(s);
   char *copy = malloc(len + 1);
   if (!copy) {
-    raise_error("symbol: could not allocate %z bytes of memory", len + 1);
+    raise_error("symbol: could not allocate %zd bytes of memory", len + 1);
   }
   memcpy(copy, s, len);
   copy[len] = '\0';
@@ -124,7 +147,7 @@ Symbol *create_symbol(const char *s) {
 Closure *create_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_size) {
   Closure *closure = malloc(sizeof(Closure) + env_size * sizeof(NseVal));
   if (!closure) {
-    raise_error("closure: could not allocate %z bytes of memory", sizeof(Closure) + env_size * sizeof(NseVal));
+    raise_error("closure: could not allocate %zd bytes of memory", sizeof(Closure) + env_size * sizeof(NseVal));
   }
   closure->refs = 1;
   closure->f = f;
@@ -141,7 +164,7 @@ Closure *create_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_siz
 Reference *create_reference(void *pointer, void destructor(void *)) {
   Reference *reference = malloc(sizeof(Reference));
   if (!reference) {
-    raise_error("reference: could not allocate %z bytes of memory", sizeof(Reference));
+    raise_error("reference: could not allocate %zd bytes of memory", sizeof(Reference));
   }
   reference->refs = 1;
   reference->pointer = pointer;
@@ -398,6 +421,62 @@ NseVal print(NseVal value) {
       break;
     case TYPE_CLOSURE:
       printf("#<lambda>");
+      break;
+    default:
+      raise_error("undefined type: %d", value.type);
+      return undefined;
+  }
+  return nil;
+}
+
+void printr_cons(Cons *cons);
+
+void printr_cons_tail(NseVal tail) {
+  if (tail.type == TYPE_SYNTAX) {
+    printr_cons_tail(tail.syntax->quoted);
+  } else if (tail.type == TYPE_CONS) {
+    printf(" ");
+    printr_cons(tail.cons);
+  } else if (tail.type != TYPE_NIL) {
+    printf(" . ");
+    printr(tail);
+  }
+}
+
+void printr_cons(Cons *cons) {
+  printr(cons->head);
+  printr_cons_tail(cons->tail);
+}
+
+NseVal printr(NseVal value) {
+  switch (value.type) {
+    case TYPE_NIL:
+      printf("()");
+      break;
+    case TYPE_CONS:
+      printf("(");
+      printr_cons(value.cons);
+      printf(")[%zd]", value.cons->refs);
+      break;
+    case TYPE_SYMBOL:
+      printf("%s", value.symbol);
+      break;
+    case TYPE_I64:
+      printf("%ld", value.i64);
+      break;
+    case TYPE_QUOTE:
+      printf("'[%zd]", value.quote->refs);
+      printr(value.quote->quoted);
+      break;
+    case TYPE_SYNTAX:
+      printf("$[%zd]", value.syntax->refs);
+      print(value.syntax->quoted);
+      break;
+    case TYPE_FUNC:
+      printf("#<function>");
+      break;
+    case TYPE_CLOSURE:
+      printf("#<lambda>[%zd]", value.closure->refs);
       break;
     default:
       raise_error("undefined type: %d", value.type);

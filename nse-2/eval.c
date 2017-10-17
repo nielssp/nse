@@ -121,20 +121,13 @@ void module_define(Module *module, const char *name, NseVal value) {
   NseVal *copy = malloc(sizeof(NseVal));
   memcpy(copy, &value, sizeof(NseVal));
   namespace_add(module->internal, name, copy);
+  add_ref(value);
 }
 
 NseVal eval_list(NseVal list, Scope *scope) {
   if (list.type == TYPE_SYNTAX) {
-    Syntax *previous = error_form;
-    if (previous) add_ref(SYNTAX(previous));
-    set_debug_form(list.syntax);
-    NseVal result = eval_list(list.syntax->quoted, scope);
-    if (result.type == TYPE_UNDEFINED) {
-      return undefined;
-    }
-    set_debug_form(previous);
-    if (previous) del_ref(SYNTAX(previous));
-    return result;
+    Syntax *previous = push_debug_form(list.syntax);
+    return pop_debug_form(eval_list(list.syntax->quoted, scope), previous);
   } else if (list.type == TYPE_NIL) {
     return nil;
   } else if (list.type == TYPE_CONS) {
@@ -153,18 +146,25 @@ NseVal eval_list(NseVal list, Scope *scope) {
     }
     return result;
   }
-  raise_error("invalid list");
-  return undefined;
+  return eval(list, scope);
 }
 
 int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
   switch (formal.type) {
     case TYPE_SYNTAX:
-      return assign_parameters(scope, formal.syntax->quoted, actual);
+      if (assign_parameters(scope, formal.syntax->quoted, actual)) {
+        return 1;
+      } else {
+        return 0;
+      }
     case TYPE_SYMBOL:
       *scope = scope_push(*scope, formal.symbol, actual);
       return 1;
     case TYPE_CONS:
+      if (actual.type != TYPE_CONS) {
+        raise_error("too few parameters for function");
+        return 0;
+      }
       return assign_parameters(scope, head(formal), head(actual))
         && assign_parameters(scope, tail(formal), tail(actual));
     case TYPE_NIL:
@@ -182,8 +182,10 @@ NseVal eval_anon(NseVal args, NseVal env[]) {
   NseVal formal = head(definition);
   NseVal body = head(tail(definition));
   Scope *current_scope = scope;
-  assign_parameters(&current_scope, formal, args);
-  NseVal result = eval(body, current_scope);
+  NseVal result = undefined;
+  if (assign_parameters(&current_scope, formal, args)) {
+    result = eval(body, current_scope);
+  }
   scope_pop_until(current_scope, scope);
   return result;
 }
@@ -216,6 +218,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
     NseVal value = eval(head(tail(args)), scope);
     if (RESULT_OK(value)) {
       module_define(scope->module, name, value);
+      del_ref(value);
       return SYMBOL(name);
     }
     return undefined;
@@ -242,18 +245,10 @@ NseVal eval(NseVal code, Scope *scope) {
     case TYPE_QUOTE:
       return code.quote->quoted;
     case TYPE_SYMBOL:
-      return scope_get(scope, code.symbol);
+      return add_ref(scope_get(scope, code.symbol));
     case TYPE_SYNTAX: {
-      Syntax *previous = error_form;
-      if (previous) add_ref(SYNTAX(previous));
-      set_debug_form(code.syntax);
-      NseVal result = eval(code.syntax->quoted, scope);
-      if (result.type == TYPE_UNDEFINED) {
-        return undefined;
-      }
-      set_debug_form(previous);
-      if (previous) del_ref(SYNTAX(previous));
-      return result;
+      Syntax *previous = push_debug_form(code.syntax);
+      return pop_debug_form(eval(code.syntax->quoted, scope), previous);
     }
     default:
       return undefined;
