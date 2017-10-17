@@ -51,6 +51,21 @@ NseVal equals(NseVal args) {
   return TRUE;
 }
 
+int paren_start(int count, int key) {
+  rl_insert_text("()");
+  rl_point--;
+  return 0;
+}
+
+int paren_end(int count, int key) {
+  if (rl_point < rl_end && rl_line_buffer[rl_point] == ')') {
+    rl_point++;
+  } else {
+    rl_insert_text(")");
+  }
+  return 0;
+}
+
 int main(int argc, char *argv[]) {
   int opt;
   int option_index;
@@ -81,8 +96,13 @@ int main(int argc, char *argv[]) {
   module_define(system, "+", FUNC(sum));
   module_define(system, "=", FUNC(equals));
   Scope *scope = use_module(system);
+
+  rl_bind_key('\t', rl_insert); // TODO: autocomplete
+  rl_bind_key('(', paren_start);
+  rl_bind_key(')', paren_end);
+
   while (1) {
-    char *input = readline("> ");
+    char *input = readline("\001\033[1;32m\002>\001\033[0m\002 ");
     if (input == NULL) {
       // ^D
       printf("\nBye.\n");
