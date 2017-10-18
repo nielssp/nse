@@ -19,6 +19,8 @@ const struct option long_options[] = {
   {0, 0, 0, 0}
 };
 
+Scope *current_scope = NULL;
+
 void describe_option(const char *short_option, const char *long_option, const char *description) {
   printf("  -%-14s --%-18s %s\n", short_option, long_option, description);
 }
@@ -49,6 +51,33 @@ NseVal equals(NseVal args) {
     raise_error("too few arguments");
   }
   return TRUE;
+}
+
+NseVal load(NseVal args) {
+  NseVal name = head(args);
+  if (RESULT_OK(name)) {
+    if (is_symbol(name)) {
+      FILE *f = fopen(name.symbol, "r");
+      if (f) {
+        Stack *stack = open_stack_file(f, name.symbol);
+        Syntax *code = parse_prim(stack);
+        close_stack(stack);
+        if (code != NULL) {
+          NseVal result = eval(SYNTAX(code), current_scope);
+          del_ref(SYNTAX(code));
+          if (RESULT_OK(result)) {
+            del_ref(result);
+            return name;
+          }
+        }
+      } else {
+        raise_error("could not open file: %s: %s\n", name.symbol, strerror(errno));
+      }
+    } else {
+      raise_error("must be called with a symbol");
+    }
+  }
+  return undefined;
 }
 
 int paren_start(int count, int key) {
@@ -93,9 +122,10 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   Module *system = create_module("system");
+  module_define(system, "load", FUNC(load));
   module_define(system, "+", FUNC(sum));
   module_define(system, "=", FUNC(equals));
-  Scope *scope = use_module(system);
+  current_scope = use_module(system);
 
   rl_bind_key('\t', rl_insert); // TODO: autocomplete
   rl_bind_key('(', paren_start);
@@ -112,24 +142,28 @@ int main(int argc, char *argv[]) {
       continue;
     }
     add_history(input);
-    Stack *stack = open_stack_string(input);
+    Stack *stack = open_stack_string(input, "(user)");
     NseVal code = SYNTAX(parse_prim(stack));
     free(input);
     close_stack(stack);
-    NseVal result = eval(code, scope);
-    del_ref(code);
-    if (result.type == TYPE_UNDEFINED) {
-      printf("error: %s: ", error_string);
-      if (error_form != NULL) {
-        print(error_form->quoted);
+    if (RESULT_OK(code)) {
+      NseVal result = eval(code, current_scope);
+      del_ref(code);
+      if (RESULT_OK(result)) {
+        print(result);
+        del_ref(result);
+      } else {
+        printf("error: %s: ", error_string);
+        if (error_form != NULL) {
+          print(error_form->quoted);
+        }
       }
     } else {
-      print(result);
-      del_ref(result);
+      printf("error: %s: ", error_string);
     }
     printf("\n");
   }
-  scope_pop(scope);
+  scope_pop(current_scope);
   delete_module(system);
   return 0;
 }

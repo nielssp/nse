@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#define TYPE_UNDEFINED 0
+#define TYPE_UNDEFINED '0'
 #define TYPE_NIL 'n'
 #define TYPE_CONS '.'
 #define TYPE_I64 'i'
@@ -17,13 +17,14 @@
 #define TYPE_REFERENCE 'r'
 
 #define I64(i) ((NseVal) { .type = TYPE_I64, .i64 = (i) })
-#define CONS(c) ((NseVal) { .type = TYPE_CONS, .cons = (c) })
-#define SYNTAX(c) ((NseVal) { .type = TYPE_SYNTAX, .syntax = (c) })
-#define CLOSURE(c) ((NseVal) { .type = TYPE_CLOSURE, .closure = (c) })
-#define SYMBOL(s) ((NseVal) { .type = TYPE_SYMBOL, .symbol = (s) })
-#define QUOTE(q) ((NseVal) { .type = TYPE_QUOTE, .quote = (q) })
 #define FUNC(f) ((NseVal) { .type = TYPE_FUNC, .func = (f) })
-#define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
+
+#define CONS(c) ((NseVal) { .type = c ? TYPE_CONS : TYPE_UNDEFINED, .cons = (c) })
+#define SYNTAX(c) ((NseVal) { .type = ((c) ? TYPE_SYNTAX : TYPE_UNDEFINED), .syntax = (c) })
+#define CLOSURE(c) ((NseVal) { .type = c ? TYPE_CLOSURE : TYPE_UNDEFINED, .closure = (c) })
+#define SYMBOL(s) ((NseVal) { .type = s ? TYPE_SYMBOL : TYPE_UNDEFINED, .symbol = (s) })
+#define QUOTE(q) ((NseVal) { .type = q ? TYPE_QUOTE : TYPE_UNDEFINED, .quote = (q) })
+#define REFERENCE(r) ((NseVal) { .type = r ? TYPE_REFERENCE : TYPE_UNDEFINED, .reference = (r) })
 
 #define TRUE (SYMBOL(create_symbol("t")))
 #define FALSE (SYMBOL(create_symbol("f")))

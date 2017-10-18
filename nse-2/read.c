@@ -25,25 +25,25 @@ struct stack {
 
 Syntax *parse_list(Stack *input);
 
-Stack *open_stack_file(FILE *file) {
+Stack *open_stack_file(FILE *file, const char *file_name) {
   Stack *s = malloc(sizeof(Stack));
   s->type = STACK_FILE;
   s->file = file;
   s->la = 0;
   s->line = 1;
   s->column = 1;
-  s->file_name = NULL;
+  s->file_name = file_name;
   return s;
 }
 
-Stack *open_stack_string(const char *string) {
+Stack *open_stack_string(const char *string, const char *file_name) {
   Stack *s = malloc(sizeof(Stack));
   s->type = STACK_STRING;
   s->string = string;
   s->la = 0;
   s->line = 1;
   s->column = 1;
-  s->file_name = NULL;
+  s->file_name = file_name;
   return s;
 }
 
@@ -120,17 +120,21 @@ void skip(Stack *input) {
 }
 
 Syntax *start_pos(Syntax *syntax, Stack *input) {
-  syntax->file = input->file_name;
-  syntax->start_line = input->line;
-  syntax->start_column = input->column;
-  syntax->end_line = input->line;
-  syntax->end_column = input->column;
+  if (syntax) {
+    syntax->file = input->file_name;
+    syntax->start_line = input->line;
+    syntax->start_column = input->column;
+    syntax->end_line = input->line;
+    syntax->end_column = input->column;
+  }
   return syntax;
 }
 
 Syntax *end_pos(Syntax *syntax, Stack *input) {
-  syntax->end_line = input->line;
-  syntax->end_column = input->column;
+  if (syntax) {
+    syntax->end_line = input->line;
+    syntax->end_column = input->column;
+  }
   return syntax;
 }
 
@@ -138,6 +142,9 @@ Syntax *parse_int(Stack *input) {
   int64_t value = 0;
   int sign = 1;
   Syntax *syntax = start_pos(create_syntax(undefined), input);
+  if (!syntax) {
+    return NULL;
+  }
   if (peek(input) == '-') {
     sign = -1;
     pop(input);
@@ -153,19 +160,38 @@ Syntax *parse_symbol(Stack *input) {
   size_t l = 0;
   size_t size = 10;
   char *buffer = malloc(size);
+  if (!buffer) {
+    raise_error("out of memory");
+    return NULL;
+  }
   int c = peek(input);
   Syntax *syntax = start_pos(create_syntax(undefined), input);
-  while (c != EOF && !iswhite(c) && c != '(' && c != ')') {
-    buffer[l++] = (char)c;
-    pop(input);
-    c = peek(input);
-    if (l >= size) {
-      size += 10;
-      buffer = realloc(buffer, size);
+  if (syntax) {
+    while (c != EOF && !iswhite(c) && c != '(' && c != ')') {
+      buffer[l++] = (char)c;
+      pop(input);
+      c = peek(input);
+      if (l >= size) {
+        size += 10;
+        char *new_buffer = realloc(buffer, size);
+        if (new_buffer) {
+          buffer = new_buffer;
+        } else {
+          raise_error("out of memory");
+          free(buffer);
+          free(syntax);
+          return NULL;
+          break;
+        }
+      }
+    }
+    buffer[l] = '\0';
+    syntax->quoted = SYMBOL(create_symbol(buffer));
+    if (!RESULT_OK(syntax->quoted)) {
+      free(syntax);
+      syntax = NULL;
     }
   }
-  buffer[l] = '\0';
-  syntax->quoted = SYMBOL(create_symbol(buffer));
   free(buffer);
   return end_pos(syntax, input);
 }
@@ -175,34 +201,48 @@ Syntax *parse_prim(Stack *input) {
   skip(input);
   c = peek(input);
   if (c == EOF) {
-    printf("error: %s:%zu:%zu: end of input\n", input->file_name, input->line, input->column);
+    raise_error("%s:%zu:%zu: end of input\n", input->file_name, input->line, input->column);
     return NULL;
   }
   if (c == '.') {
-    printf("error: %s:%zu:%zu: unexpected '.'\n", input->file_name, input->line, input->column);
+    raise_error("%s:%zu:%zu: unexpected '.'\n", input->file_name, input->line, input->column);
     pop(input);
     return NULL;
   }
   if (c == '\'') {
     Syntax *syntax = start_pos(create_syntax(undefined), input);
-    pop(input);
-    NseVal quoted = SYNTAX(parse_prim(input));
-    syntax->quoted = QUOTE(create_quote(quoted));
-    del_ref(quoted);
-    return end_pos(syntax, input);
+    if (syntax) {
+      pop(input);
+      NseVal quoted = SYNTAX(parse_prim(input));
+      if (RESULT_OK(quoted)) {
+        syntax->quoted = QUOTE(create_quote(quoted));
+        del_ref(quoted);
+        if (RESULT_OK(syntax->quoted)) {
+          return end_pos(syntax, input);
+        }
+      }
+      free(syntax);
+    }
+    return NULL;
   }
   if (c == '(') {
     Syntax *syntax = start_pos(create_syntax(undefined), input);
-    pop(input);
-    Syntax *list = parse_list(input);
-    syntax->quoted = list->quoted;
-    free(list);
-    if (peek(input) != ')') {
-      printf("error: %s:%zu:%zu: missing ')'\n", input->file_name, input->line, input->column);
-    } else {
+    if (syntax) {
       pop(input);
+      Syntax *list = parse_list(input);
+      if (list){
+        syntax->quoted = list->quoted;
+        free(list);
+        if (peek(input) == ')') {
+          pop(input);
+          return end_pos(syntax, input);
+        }
+        raise_error("%s:%zu:%zu: missing ')'\n", input->file_name, input->line, input->column);
+        del_ref(syntax->quoted);
+      }
+      free(syntax);
     }
-    return end_pos(syntax, input);
+    return NULL;
   }
   if (isdigit(c)) {
     return parse_int(input);
@@ -215,25 +255,39 @@ Syntax *parse_prim(Stack *input) {
 
 Syntax *parse_list(Stack *input) {
   Syntax *syntax = start_pos(create_syntax(undefined), input);
+  if (!syntax) {
+    return NULL;
+  }
   char c;
   skip(input);
   c = peek(input);
   if (c == EOF || c == ')') {
     syntax->quoted = nil;
+    return end_pos(syntax, input);
   } else {
     NseVal head = SYNTAX(parse_prim(input));
-    NseVal tail;
-    skip(input);
-    if (peek(input) == '.') {
-      pop(input);
-      tail = SYNTAX(parse_prim(input));
-    } else {
-      tail = SYNTAX(parse_list(input));
+    if (RESULT_OK(head)) {
+      NseVal tail;
+      skip(input);
+      if (peek(input) == '.') {
+        pop(input);
+        tail = SYNTAX(parse_prim(input));
+      } else {
+        tail = SYNTAX(parse_list(input));
+      }
+      if (RESULT_OK(tail)) {
+        syntax->quoted = CONS(create_cons(head, tail));
+        del_ref(head);
+        del_ref(tail);
+        if (RESULT_OK(syntax->quoted)) {
+          return end_pos(syntax, input);
+        }
+        del_ref(tail);
+      }
+      del_ref(head);
     }
-    syntax->quoted = CONS(create_cons(head, tail));
-    del_ref(head);
-    del_ref(tail);
+    free(syntax);
+    return NULL;
   }
-  return end_pos(syntax, input);
 }
 

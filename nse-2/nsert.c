@@ -137,6 +137,7 @@ Symbol *create_symbol(const char *s) {
   char *copy = malloc(len + 1);
   if (!copy) {
     raise_error("symbol: could not allocate %zd bytes of memory", len + 1);
+    return NULL;
   }
   memcpy(copy, s, len);
   copy[len] = '\0';

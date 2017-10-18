@@ -12,6 +12,7 @@ Scope *scope_push(Scope *scope, const char *name, NseVal value);
 Scope *scope_pop(Scope *scope);
 NseVal scope_get(Scope *scope, const char *name);
 Module *create_module(const char *name);
+void delete_module(Module *module);
 Scope *use_module(Module *module);
 void module_define(Module *module, const char *name, NseVal value);
 

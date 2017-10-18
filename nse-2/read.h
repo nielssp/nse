@@ -7,8 +7,8 @@
 
 typedef struct stack Stack;
 
-Stack *open_stack_file(FILE *file);
-Stack *open_stack_string(const char *string);
+Stack *open_stack_file(FILE *file, const char *file_name);
+Stack *open_stack_string(const char *string, const char *file_name);
 void close_stack(Stack *s);
 
 Syntax *parse_prim(Stack *input);

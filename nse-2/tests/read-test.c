@@ -3,7 +3,7 @@
 #include "read.c"
 
 Syntax *parse_int_string(const char *string) {
-  Stack *stack = open_stack_string(string);
+  Stack *stack = open_stack_string(string, "test");
   Syntax *result = parse_int(stack);
   close_stack(stack);
   return result;
