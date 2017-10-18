@@ -19,12 +19,12 @@
 #define I64(i) ((NseVal) { .type = TYPE_I64, .i64 = (i) })
 #define FUNC(f) ((NseVal) { .type = TYPE_FUNC, .func = (f) })
 
-#define CONS(c) ((NseVal) { .type = c ? TYPE_CONS : TYPE_UNDEFINED, .cons = (c) })
-#define SYNTAX(c) ((NseVal) { .type = ((c) ? TYPE_SYNTAX : TYPE_UNDEFINED), .syntax = (c) })
-#define CLOSURE(c) ((NseVal) { .type = c ? TYPE_CLOSURE : TYPE_UNDEFINED, .closure = (c) })
-#define SYMBOL(s) ((NseVal) { .type = s ? TYPE_SYMBOL : TYPE_UNDEFINED, .symbol = (s) })
-#define QUOTE(q) ((NseVal) { .type = q ? TYPE_QUOTE : TYPE_UNDEFINED, .quote = (q) })
-#define REFERENCE(r) ((NseVal) { .type = r ? TYPE_REFERENCE : TYPE_UNDEFINED, .reference = (r) })
+#define CONS(c) ((NseVal) { .type = TYPE_CONS, .cons = (c) })
+#define SYNTAX(c) ((NseVal) { .type = TYPE_SYNTAX, .syntax = (c) })
+#define CLOSURE(c) ((NseVal) { .type = TYPE_CLOSURE, .closure = (c) })
+#define SYMBOL(s) ((NseVal) { .type = TYPE_SYMBOL, .symbol = (s) })
+#define QUOTE(q) ((NseVal) { .type = TYPE_QUOTE, .quote = (q) })
+#define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
 
 #define TRUE (SYMBOL(create_symbol("t")))
 #define FALSE (SYMBOL(create_symbol("f")))
@@ -96,6 +96,8 @@ Syntax *create_syntax(NseVal quoted);
 Symbol *create_symbol(const char *s);
 Closure *create_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_size);
 Reference *create_reference(void *pointer, void destructor(void *));
+
+NseVal check_alloc(NseVal v);
 
 char *to_symbol(NseVal v);
 

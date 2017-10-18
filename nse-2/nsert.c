@@ -82,6 +82,13 @@ void raise_error(const char *format, ...) {
   }
 }
 
+void clear_error() {
+  if (error_string) {
+    free(error_string);
+    error_string = NULL;
+  }
+}
+
 
 NseVal undefined = { .type = TYPE_UNDEFINED };
 NseVal nil = { .type = TYPE_NIL };
@@ -127,6 +134,10 @@ Syntax *create_syntax(NseVal quoted) {
 Symbol *create_symbol(const char *s) {
   if (symbols.map == NULL) {
     symbols = create_symmap();
+    if (!symbols.map) {
+      raise_error("symbol: could not allocate symbol map");
+      return NULL;
+    }
   } else {
     Symbol *value = symmap_lookup(symbols, s);
     if (value != NULL) {
@@ -173,21 +184,37 @@ Reference *create_reference(void *pointer, void destructor(void *)) {
   return reference;
 }
 
+NseVal check_alloc(NseVal v) {
+  switch (v.type) {
+    case TYPE_CONS:
+    case TYPE_CLOSURE:
+    case TYPE_QUOTE:
+    case TYPE_SYNTAX:
+    case TYPE_REFERENCE:
+    case TYPE_SYMBOL:
+      if ((void *)v.cons == NULL) {
+        return undefined;
+      }
+    default:
+      return v;
+  }
+}
+
 NseVal add_ref(NseVal value) {
   switch (value.type) {
-    case  TYPE_CONS:
+    case TYPE_CONS:
       value.cons->refs++;
       break;
-    case  TYPE_CLOSURE:
+    case TYPE_CLOSURE:
       value.closure->refs++;
       break;
-    case  TYPE_QUOTE:
+    case TYPE_QUOTE:
       value.quote->refs++;
       break;
-    case  TYPE_SYNTAX:
+    case TYPE_SYNTAX:
       value.syntax->refs++;
       break;
-    case  TYPE_REFERENCE:
+    case TYPE_REFERENCE:
       value.reference->refs++;
       break;
   }
@@ -434,18 +461,28 @@ NseVal syntax_to_datum(NseVal v) {
     case  TYPE_SYNTAX:
       return syntax_to_datum(v.syntax->quoted);
     case  TYPE_CONS: {
+      NseVal cons = undefined;
       NseVal head = syntax_to_datum(v.cons->head);
-      NseVal tail = syntax_to_datum(v.cons->tail);
-      NseVal cons = CONS(create_cons(head, tail));
-      del_ref(head);
-      del_ref(tail);
-      return cons;
+      if (RESULT_OK(head)) {
+        NseVal tail = syntax_to_datum(v.cons->tail);
+        if (RESULT_OK(tail)) {
+          cons = check_alloc(CONS(create_cons(head, tail)));
+          del_ref(tail);
+        }
+        del_ref(head);
+      }
+      return undefined;
     }
     case TYPE_QUOTE: {
       NseVal quoted = syntax_to_datum(v.quote->quoted);
-      NseVal quote = QUOTE(create_quote(quoted));
-      del_ref(quoted);
-      return quote;
+      if (RESULT_OK(quoted)) {
+        NseVal quote = check_alloc(QUOTE(create_quote(quoted)));
+        if (RESULT_OK(quote)) {
+          return quote;
+        }
+        del_ref(quoted);
+      }
+      return undefined;
     }
     case  TYPE_CLOSURE:
     case  TYPE_REFERENCE:

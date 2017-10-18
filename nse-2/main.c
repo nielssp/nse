@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
     }
     add_history(input);
     Stack *stack = open_stack_string(input, "(user)");
-    NseVal code = SYNTAX(parse_prim(stack));
+    NseVal code = check_alloc(SYNTAX(parse_prim(stack)));
     free(input);
     close_stack(stack);
     if (RESULT_OK(code)) {

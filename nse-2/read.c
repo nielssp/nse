@@ -186,7 +186,7 @@ Syntax *parse_symbol(Stack *input) {
       }
     }
     buffer[l] = '\0';
-    syntax->quoted = SYMBOL(create_symbol(buffer));
+    syntax->quoted = check_alloc(SYMBOL(create_symbol(buffer)));
     if (!RESULT_OK(syntax->quoted)) {
       free(syntax);
       syntax = NULL;
@@ -215,7 +215,7 @@ Syntax *parse_prim(Stack *input) {
       pop(input);
       NseVal quoted = SYNTAX(parse_prim(input));
       if (RESULT_OK(quoted)) {
-        syntax->quoted = QUOTE(create_quote(quoted));
+        syntax->quoted = check_alloc(QUOTE(create_quote(quoted)));
         del_ref(quoted);
         if (RESULT_OK(syntax->quoted)) {
           return end_pos(syntax, input);
@@ -276,7 +276,7 @@ Syntax *parse_list(Stack *input) {
         tail = SYNTAX(parse_list(input));
       }
       if (RESULT_OK(tail)) {
-        syntax->quoted = CONS(create_cons(head, tail));
+        syntax->quoted = check_alloc(CONS(create_cons(head, tail)));
         del_ref(head);
         del_ref(tail);
         if (RESULT_OK(syntax->quoted)) {

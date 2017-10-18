@@ -211,10 +211,13 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
   } else if (match_symbol(operator, "let")) {
   } else if (match_symbol(operator, "fn")) {
     Scope *fn_scope = copy_scope(scope);
-    NseVal scope_ref = REFERENCE(create_reference(fn_scope, (Destructor) delete_scope));
-    NseVal env[] = {args, scope_ref};
-    NseVal result = CLOSURE(create_closure(eval_anon, env, 2));
-    del_ref(scope_ref);
+    NseVal result = undefined;
+    NseVal scope_ref = check_alloc(REFERENCE(create_reference(fn_scope, (Destructor) delete_scope)));
+    if (RESULT_OK(scope_ref)) {
+      NseVal env[] = {args, scope_ref};
+      result = check_alloc(CLOSURE(create_closure(eval_anon, env, 2)));
+      del_ref(scope_ref);
+    }
     return result;
   } else if (match_symbol(operator, "def")) {
     char *name = to_symbol(head(args));
