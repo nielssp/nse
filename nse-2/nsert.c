@@ -471,7 +471,7 @@ NseVal syntax_to_datum(NseVal v) {
         }
         del_ref(head);
       }
-      return undefined;
+      return cons;
     }
     case TYPE_QUOTE: {
       NseVal quoted = syntax_to_datum(v.quote->quoted);

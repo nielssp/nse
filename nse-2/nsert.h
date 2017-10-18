@@ -107,6 +107,7 @@ void set_debug_form(Syntax *syntax);
 Syntax *push_debug_form(Syntax *syntax);
 NseVal pop_debug_form(NseVal result, Syntax *previous);
 void raise_error(const char *format, ...);
+void clear_error();
 
 NseVal add_ref(NseVal p);
 void del_ref(NseVal p);

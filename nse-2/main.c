@@ -60,16 +60,25 @@ NseVal load(NseVal args) {
       FILE *f = fopen(name.symbol, "r");
       if (f) {
         Stack *stack = open_stack_file(f, name.symbol);
-        Syntax *code = parse_prim(stack);
-        close_stack(stack);
-        if (code != NULL) {
-          NseVal result = eval(SYNTAX(code), current_scope);
-          del_ref(SYNTAX(code));
-          if (RESULT_OK(result)) {
-            del_ref(result);
-            return name;
+        while (1) {
+          Syntax *code = parse_prim(stack);
+          if (code != NULL) {
+            NseVal result = eval(SYNTAX(code), current_scope);
+            del_ref(SYNTAX(code));
+            if (RESULT_OK(result)) {
+              del_ref(result);
+            } else {
+              name = undefined;
+              break;
+            }
+          } else {
+            // TODO: check type of error
+            clear_error();
+            break;
           }
         }
+        close_stack(stack);
+        return name;
       } else {
         raise_error("could not open file: %s: %s\n", name.symbol, strerror(errno));
       }
@@ -155,7 +164,9 @@ int main(int argc, char *argv[]) {
       } else {
         printf("error: %s: ", error_string);
         if (error_form != NULL) {
-          print(error_form->quoted);
+          NseVal datum = syntax_to_datum(error_form->quoted);
+          print(datum);
+          del_ref(datum);
         }
       }
     } else {
