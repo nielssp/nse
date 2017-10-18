@@ -80,7 +80,7 @@ NseVal load(NseVal args) {
         close_stack(stack);
         return name;
       } else {
-        raise_error("could not open file: %s: %s\n", name.symbol, strerror(errno));
+        raise_error("could not open file: %s: %s", name.symbol, strerror(errno));
       }
     } else {
       raise_error("must be called with a symbol");
@@ -162,11 +162,13 @@ int main(int argc, char *argv[]) {
         print(result);
         del_ref(result);
       } else {
-        printf("error: %s: ", error_string);
+        printf("error: %s", error_string);
         if (error_form != NULL) {
           NseVal datum = syntax_to_datum(error_form->quoted);
+          printf(": ");
           print(datum);
           del_ref(datum);
+          printf("\nIn %s on line %zd column %zd", error_form->file, error_form->start_line, error_form->start_column);
         }
       }
     } else {

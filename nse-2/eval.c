@@ -82,7 +82,7 @@ NseVal scope_get(Scope *scope, const char *name) {
       return *value;
     }
   }
-  raise_error("undefined name: %s", name);
+  raise_error("undefined name");
   return undefined;
 }
 

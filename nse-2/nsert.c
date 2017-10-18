@@ -36,7 +36,7 @@ Syntax *push_debug_form(Syntax *syntax) {
 }
 
 NseVal pop_debug_form(NseVal result, Syntax *previous) {
-  if (RESULT_OK(result)) {
+  if (!RESULT_OK(result)) {
     if (previous) {
       del_ref(SYNTAX(previous));
     }
@@ -46,7 +46,7 @@ NseVal pop_debug_form(NseVal result, Syntax *previous) {
     del_ref(SYNTAX(error_form));
   }
   error_form = previous;
-  return undefined;
+  return result;
 }
 
 void raise_error(const char *format, ...) {
@@ -474,15 +474,13 @@ NseVal syntax_to_datum(NseVal v) {
       return cons;
     }
     case TYPE_QUOTE: {
+      NseVal quote = undefined;
       NseVal quoted = syntax_to_datum(v.quote->quoted);
       if (RESULT_OK(quoted)) {
-        NseVal quote = check_alloc(QUOTE(create_quote(quoted)));
-        if (RESULT_OK(quote)) {
-          return quote;
-        }
+        quote = check_alloc(QUOTE(create_quote(quoted)));
         del_ref(quoted);
       }
-      return undefined;
+      return quote;
     }
     case  TYPE_CLOSURE:
     case  TYPE_REFERENCE:

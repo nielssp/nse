@@ -82,7 +82,9 @@ struct reference {
 
 struct syntax {
   size_t refs;
-  size_t start_line; size_t start_column; size_t end_line;
+  size_t start_line;
+  size_t start_column;
+  size_t end_line;
   size_t end_column;
   const char *file;
   NseVal quoted;

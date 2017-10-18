@@ -201,11 +201,11 @@ Syntax *parse_prim(Stack *input) {
   skip(input);
   c = peek(input);
   if (c == EOF) {
-    raise_error("%s:%zu:%zu: end of input\n", input->file_name, input->line, input->column);
+    raise_error("%s:%zu:%zu: end of input", input->file_name, input->line, input->column);
     return NULL;
   }
   if (c == '.') {
-    raise_error("%s:%zu:%zu: unexpected '.'\n", input->file_name, input->line, input->column);
+    raise_error("%s:%zu:%zu: unexpected '.'", input->file_name, input->line, input->column);
     pop(input);
     return NULL;
   }
@@ -237,7 +237,7 @@ Syntax *parse_prim(Stack *input) {
           pop(input);
           return end_pos(syntax, input);
         }
-        raise_error("%s:%zu:%zu: missing ')'\n", input->file_name, input->line, input->column);
+        raise_error("%s:%zu:%zu: missing ')'", input->file_name, input->line, input->column);
         del_ref(syntax->quoted);
       }
       free(syntax);
