@@ -27,8 +27,18 @@ void describe_option(const char *short_option, const char *long_option, const ch
 
 NseVal sum(NseVal args) {
   int64_t acc = 0;
-  while (args.type == TYPE_CONS) {
+  while (is_cons(args)) {
     acc += head(args).i64;
+    args = tail(args);
+  }
+  return I64(acc);
+}
+
+NseVal subtract(NseVal args) {
+  int64_t acc = head(args).i64;
+  args = tail(args);
+  while (is_cons(args)) {
+    acc -= head(args).i64;
     args = tail(args);
   }
   return I64(acc);
@@ -133,6 +143,7 @@ int main(int argc, char *argv[]) {
   Module *system = create_module("system");
   module_define(system, "load", FUNC(load));
   module_define(system, "+", FUNC(sum));
+  module_define(system, "-", FUNC(subtract));
   module_define(system, "=", FUNC(equals));
   current_scope = use_module(system);
 
