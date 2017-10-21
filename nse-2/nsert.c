@@ -126,6 +126,11 @@ Syntax *create_syntax(NseVal quoted) {
     return NULL;
   }
   syntax->refs = 1;
+  syntax->start_line = 0;
+  syntax->start_column = 0;
+  syntax->end_line = 0;
+  syntax->end_column = 0;
+  syntax->file = NULL;
   syntax->quoted = quoted;
   add_ref(quoted);
   return syntax;
@@ -182,6 +187,18 @@ Reference *create_reference(void *pointer, void destructor(void *)) {
   reference->pointer = pointer;
   reference->destructor = destructor;
   return reference;
+}
+
+Syntax *copy_syntax(Syntax *syntax, NseVal quoted) {
+  Syntax *copy = create_syntax(quoted);
+  if (copy) {
+    copy->start_line = syntax->start_line;
+    copy->start_column = syntax->start_column;
+    copy->end_line = syntax->end_line;
+    copy->end_column = syntax->end_column;
+    copy->file = syntax->file;
+  }
+  return copy;
 }
 
 NseVal check_alloc(NseVal v) {
@@ -393,6 +410,20 @@ int match_symbol(NseVal v, const char *sym) {
   return result;
 }
 
+int is_special_form(NseVal v) {
+  int result = 0;
+  if (v.type == TYPE_SYMBOL) {
+    result |= strcmp(v.symbol, SPECIAL_IF) == 0;
+    result |= strcmp(v.symbol, SPECIAL_LAMBDA) == 0;
+    result |= strcmp(v.symbol, SPECIAL_LET) == 0;
+    result |= strcmp(v.symbol, SPECIAL_DEFINE) == 0;
+    result |= strcmp(v.symbol, SPECIAL_DEFINE_MACRO) == 0;
+  } else if (v.type == TYPE_SYNTAX) {
+    result = is_special_form(v.syntax->quoted);
+  }
+  return result;
+}
+
 int is_true(NseVal b) {
   return match_symbol(b, "t");
 }
@@ -429,6 +460,12 @@ NseVal nse_equals(NseVal a, NseVal b) {
   if (a.type == TYPE_UNDEFINED || b.type == TYPE_UNDEFINED) {
     return undefined;
   }
+  if (a.type == TYPE_SYNTAX) {
+    return nse_equals(a.syntax->quoted, b);
+  }
+  if (b.type == TYPE_SYNTAX) {
+    return nse_equals(a, b.syntax->quoted);
+  }
   if (a.type != b.type) {
     return FALSE;
   }
@@ -444,8 +481,6 @@ NseVal nse_equals(NseVal a, NseVal b) {
       return FALSE;
     case TYPE_QUOTE:
       return nse_equals(a.quote->quoted, b.quote->quoted);
-    case TYPE_SYNTAX:
-      return nse_equals(a.syntax->quoted, b.syntax->quoted);
     case TYPE_I64:
       if (a.i64 == b.i64) {
         return TRUE;

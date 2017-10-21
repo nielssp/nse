@@ -9,6 +9,7 @@ DEFINE_HASH_MAP(namespace, Namespace, char *, NseVal *, string_hash, string_equa
 struct module {
   const char *name;
   Namespace internal;
+  Namespace internal_macros;
 };
 
 struct scope {
@@ -90,11 +91,12 @@ Module *create_module(const char *name) {
   Module *module = malloc(sizeof(Module));
   module->name = name;
   module->internal = create_namespace();
+  module->internal_macros = create_namespace();
   return module;
 }
 
-void delete_module(Module *module) {
-  NamespaceIterator it = create_namespace_iterator(module->internal);
+void delete_names(Namespace namespace) {
+  NamespaceIterator it = create_namespace_iterator(namespace);
   for (NamespaceEntry entry = namespace_next(it); entry.key; entry = namespace_next(it)) {
     if (entry.value) {
       del_ref(*entry.value);
@@ -102,7 +104,12 @@ void delete_module(Module *module) {
     }
   }
   delete_namespace_iterator(it);
-  delete_namespace(module->internal);
+  delete_namespace(namespace);
+}
+
+void delete_module(Module *module) {
+  delete_names(module->internal);
+  delete_names(module->internal_macros);
   free(module);
 }
 
@@ -121,6 +128,18 @@ void module_define(Module *module, const char *name, NseVal value) {
   NseVal *copy = malloc(sizeof(NseVal));
   memcpy(copy, &value, sizeof(NseVal));
   namespace_add(module->internal, name, copy);
+  add_ref(value);
+}
+
+void module_define_macro(Module *module, const char *name, NseVal value) {
+  NseVal *existing = namespace_remove(module->internal_macros, name);
+  if (existing) {
+    del_ref(*existing);
+    free(existing);
+  }
+  NseVal *copy = malloc(sizeof(NseVal));
+  memcpy(copy, &value, sizeof(NseVal));
+  namespace_add(module->internal_macros, name, copy);
   add_ref(value);
 }
 
@@ -159,6 +178,12 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
       }
     case TYPE_SYMBOL:
       *scope = scope_push(*scope, formal.symbol, actual);
+      return 1;
+    case TYPE_QUOTE:
+      if (!is_true(nse_equals(formal.quote->quoted, actual))) {
+        raise_error("pattern match failed");
+        return 0;
+      }
       return 1;
     case TYPE_CONS:
       if (!is_cons(actual)) {
@@ -221,15 +246,50 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
     return result;
   } else if (match_symbol(operator, "def")) {
     char *name = to_symbol(head(args));
-    NseVal value = eval(head(tail(args)), scope);
-    if (RESULT_OK(value)) {
-      module_define(scope->module, name, value);
-      del_ref(value);
-      return SYMBOL(name);
+    if (name) {
+      NseVal value = eval(head(tail(args)), scope);
+      if (RESULT_OK(value)) {
+        module_define(scope->module, name, value);
+        del_ref(value);
+        return SYMBOL(name);
+      }
+    } else {
+      raise_error("name must be a symbol");
+    }
+    return undefined;
+  } else if (match_symbol(operator, "defm")) {
+    char *name = to_symbol(head(args));
+    if (name) {
+      Scope *macro_scope = copy_scope(scope);
+      NseVal scope_ref = check_alloc(REFERENCE(create_reference(macro_scope, (Destructor) delete_scope)));
+      if (RESULT_OK(scope_ref)) {
+        NseVal env[] = {tail(args), scope_ref};
+        NseVal value = check_alloc(CLOSURE(create_closure(eval_anon, env, 2)));
+        del_ref(scope_ref);
+        if (RESULT_OK(value)) {
+          module_define_macro(scope->module, name, value);
+          del_ref(value);
+          return SYMBOL(name);
+        }
+      }
+    } else {
+      raise_error("name must be a symbol");
     }
     return undefined;
   }
   NseVal result = undefined;
+  if (is_symbol(operator)) {
+    NseVal *macro_function = namespace_lookup(scope->module->internal_macros, to_symbol(operator));
+    if (macro_function) {
+      NseVal expanded = nse_apply(*macro_function, args);
+      if (!RESULT_OK(expanded)) {
+        return expanded;
+      }
+      result = eval(expanded, scope);
+      del_ref(expanded);
+      return result;
+    }
+  }
   NseVal function = eval(operator, scope);
   if (RESULT_OK(function)) {
     NseVal arg_list = eval_list(args, scope);
@@ -259,4 +319,35 @@ NseVal eval(NseVal code, Scope *scope) {
     default:
       return undefined;
   }
+}
+
+NseVal expand_macro_1(NseVal code, Scope *scope, int *expanded) {
+  if (!scope->module || !is_cons(code)) {
+    return code;
+  }
+  NseVal macro = head(code);
+  if (!is_symbol(macro)) {
+    return code;
+  }
+  if (is_special_form(macro) ) {
+    return code;
+  }
+  NseVal args = tail(code);
+  NseVal *function = namespace_lookup(scope->module->internal_macros, to_symbol(macro));
+  if (!function) {
+    return code;
+  }
+  *expanded = 1;
+  return nse_apply(*function, args);
+}
+
+NseVal expand_macro(NseVal code, Scope *scope) {
+  int expanded;
+  do {
+    expanded = 0;
+    NseVal result = expand_macro_1(code, scope, &expanded);
+    del_ref(code);
+    code = result;
+  } while (expanded && RESULT_OK(code));
+  return code;
 }

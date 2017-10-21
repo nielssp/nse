@@ -18,4 +18,7 @@ void module_define(Module *module, const char *name, NseVal value);
 
 NseVal eval(NseVal code, Scope *scope);
 
+NseVal expand_macro_1(NseVal code, Scope *scope, int *expanded);
+NseVal expand_macro(NseVal code, Scope *scope);
+
 #endif

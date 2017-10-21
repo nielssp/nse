@@ -16,6 +16,12 @@
 #define TYPE_CLOSURE 'c'
 #define TYPE_REFERENCE 'r'
 
+#define SPECIAL_IF "if"
+#define SPECIAL_LET "let"
+#define SPECIAL_LAMBDA "fn"
+#define SPECIAL_DEFINE "def"
+#define SPECIAL_DEFINE_MACRO "defm"
+
 #define I64(i) ((NseVal) { .type = TYPE_I64, .i64 = (i) })
 #define FUNC(f) ((NseVal) { .type = TYPE_FUNC, .func = (f) })
 
@@ -99,6 +105,7 @@ Symbol *create_symbol(const char *s);
 Closure *create_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_size);
 Reference *create_reference(void *pointer, void destructor(void *));
 
+Syntax *copy_syntax(Syntax *syntax, NseVal quoted);
 NseVal check_alloc(NseVal v);
 
 char *to_symbol(NseVal v);
@@ -128,6 +135,7 @@ int is_symbol(NseVal v);
 int is_true(NseVal b);
 
 int match_symbol(NseVal v, const char *sym);
+int is_special_form(NseVal v);
 
 NseVal nse_apply(NseVal func, NseVal args);
 NseVal nse_and(NseVal a, NseVal b);
