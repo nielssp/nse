@@ -305,7 +305,9 @@ void delete(NseVal value) {
       free(value.closure);
       return;
     case TYPE_REFERENCE:
-      value.reference->destructor(value.reference->pointer);
+      if (value.reference->destructor) {
+        value.reference->destructor(value.reference->pointer);
+      }
       free(value.reference);
       return;
     default:
@@ -382,6 +384,15 @@ int is_function(NseVal v) {
   return 0;
 }
 
+int is_reference(NseVal v) {
+  if (v.type == TYPE_REFERENCE) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_reference(v.syntax->quoted);
+  }
+  return 0;
+}
+
 int is_symbol(NseVal v) {
   if (v.type == TYPE_SYMBOL) {
     return 1;
@@ -396,6 +407,15 @@ char *to_symbol(NseVal v) {
     return v.symbol;
   } else if (v.type == TYPE_SYNTAX) {
     return to_symbol(v.syntax->quoted);
+  }
+  return NULL;
+}
+
+void *to_reference(NseVal v) {
+  if (v.type == TYPE_REFERENCE) {
+    return v.reference->pointer;
+  } else if (v.type == TYPE_SYNTAX) {
+    return to_reference(v.syntax->quoted);
   }
   return NULL;
 }
@@ -573,6 +593,9 @@ NseVal print(NseVal value) {
       break;
     case TYPE_CLOSURE:
       printf("#<lambda>");
+      break;
+    case TYPE_REFERENCE:
+      printf("#<referend#%p>", value.reference->pointer);
       break;
     default:
       raise_error("undefined type: %d", value.type);

@@ -1,6 +1,6 @@
 GCCARGS = -Wall -pedantic -std=c11 -g
 CC = clang $(GCCARGS)
-MAIN_LIBS = -lreadline
+MAIN_LIBS = -lreadline -ldl
 
 all: nse
 
@@ -28,10 +28,13 @@ nsec: nsec.o libnsert.a
 nsec.o: nsec.c
 	$(CC) -c -o $@ $<
 
-nse: main.o read.o eval.o libnsert.a
+nse: main.o read.o eval.o rtci.o libnsert.a
 	$(CC) $(MAIN_LIBS) -o $@ $^
 
 main.o: main.c
+	$(CC) -c -o $@ $<
+
+rtci.o: rtci.c
 	$(CC) -c -o $@ $<
 
 eval.o: eval.c

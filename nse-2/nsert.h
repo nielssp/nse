@@ -109,6 +109,7 @@ Syntax *copy_syntax(Syntax *syntax, NseVal quoted);
 NseVal check_alloc(NseVal v);
 
 char *to_symbol(NseVal v);
+void *to_reference(NseVal v);
 
 extern Syntax *error_form;
 extern char *error_string;
@@ -131,6 +132,7 @@ int is_nil(NseVal v);
 int is_list(NseVal v);
 int is_i64(NseVal v);
 int is_function(NseVal v);
+int is_reference(NseVal v);
 int is_symbol(NseVal v);
 int is_true(NseVal b);
 
