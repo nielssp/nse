@@ -1,0 +1,19 @@
+jump main
+
+factorial:
+  dup
+  cjump continue
+  return
+continue:
+  dup
+  dup
+  push 1
+  sub
+  call factorial
+  mult
+  return
+
+main:
+  push 10
+  call factorial
+  quit
