@@ -9,8 +9,9 @@
 #define TYPE_CONS '.'
 #define TYPE_I64 'i'
 #define TYPE_SYMBOL 's'
+#define TYPE_STRING '"'
 #define TYPE_QUOTE '\''
-#define TYPE_TYPE_QUOTE 6
+#define TYPE_TQUOTE '&'
 #define TYPE_SYNTAX 'x'
 #define TYPE_FUNC 'f'
 #define TYPE_CLOSURE 'c'
@@ -29,7 +30,9 @@
 #define SYNTAX(c) ((NseVal) { .type = TYPE_SYNTAX, .syntax = (c) })
 #define CLOSURE(c) ((NseVal) { .type = TYPE_CLOSURE, .closure = (c) })
 #define SYMBOL(s) ((NseVal) { .type = TYPE_SYMBOL, .symbol = (s) })
+#define STRING(s) ((NseVal) { .type = TYPE_STRING, .string = (s) })
 #define QUOTE(q) ((NseVal) { .type = TYPE_QUOTE, .quote = (q) })
+#define TQUOTE(q) ((NseVal) { .type = TYPE_TQUOTE, .quote = (q) })
 #define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
 
 #define TRUE (SYMBOL(create_symbol("t")))
@@ -41,8 +44,10 @@ typedef struct nse_val NseVal;
 typedef struct cons Cons;
 typedef struct closure Closure;
 typedef struct quote Quote;
+typedef struct quote TypeQuote;
 typedef struct syntax Syntax;
 typedef struct reference Reference;
+typedef struct string String;
 typedef char Symbol;
 
 typedef void (* Destructor)(void *);
@@ -56,6 +61,7 @@ struct nse_val {
     Quote *quote;
     Quote *type_quote;
     char *symbol;
+    String *string;
     NseVal (*func)(NseVal);
     Closure *closure;
     Reference *reference;
@@ -80,6 +86,12 @@ struct quote {
   NseVal quoted;
 };
 
+struct string {
+  size_t refs;
+  size_t length;
+  char chars[];
+};
+
 struct reference {
   size_t refs;
   void *pointer;
@@ -100,8 +112,10 @@ extern NseVal undefined;
 extern NseVal nil;
 Cons *create_cons(NseVal h, NseVal t);
 Quote *create_quote(NseVal quoted);
+TypeQuote *create_type_quote(NseVal quoted);
 Syntax *create_syntax(NseVal quoted);
 Symbol *create_symbol(const char *s);
+String *create_string(const char *s, size_t length);
 Closure *create_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_size);
 Reference *create_reference(void *pointer, void destructor(void *));
 
@@ -131,6 +145,8 @@ int is_cons(NseVal v);
 int is_nil(NseVal v);
 int is_list(NseVal v);
 int is_i64(NseVal v);
+int is_quote(NseVal v);
+int is_type_quote(NseVal v);
 int is_function(NseVal v);
 int is_reference(NseVal v);
 int is_symbol(NseVal v);

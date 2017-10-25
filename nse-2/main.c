@@ -9,7 +9,6 @@
 #include "nsert.h"
 #include "read.h"
 #include "eval.h"
-#include "rtci.h"
 
 const char *short_options = "hvlt:Tms:c:";
 

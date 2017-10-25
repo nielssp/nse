@@ -10,6 +10,7 @@ struct module {
   const char *name;
   Namespace internal;
   Namespace internal_macros;
+  Namespace internal_types;
 };
 
 struct scope {
@@ -92,6 +93,7 @@ Module *create_module(const char *name) {
   module->name = name;
   module->internal = create_namespace();
   module->internal_macros = create_namespace();
+  module->internal_types = create_namespace();
   return module;
 }
 
@@ -110,6 +112,7 @@ void delete_names(Namespace namespace) {
 void delete_module(Module *module) {
   delete_names(module->internal);
   delete_names(module->internal_macros);
+  delete_names(module->internal_types);
   free(module);
 }
 
@@ -140,6 +143,18 @@ void module_define_macro(Module *module, const char *name, NseVal value) {
   NseVal *copy = malloc(sizeof(NseVal));
   memcpy(copy, &value, sizeof(NseVal));
   namespace_add(module->internal_macros, name, copy);
+  add_ref(value);
+}
+
+void module_define_type(Module *module, const char *name, NseVal value) {
+  NseVal *existing = namespace_remove(module->internal_types, name);
+  if (existing) {
+    del_ref(*existing);
+    free(existing);
+  }
+  NseVal *copy = malloc(sizeof(NseVal));
+  memcpy(copy, &value, sizeof(NseVal));
+  namespace_add(module->internal_types, name, copy);
   add_ref(value);
 }
 
@@ -307,7 +322,8 @@ NseVal eval(NseVal code, Scope *scope) {
     case TYPE_CONS:
       return eval_cons(code.cons, scope);
     case TYPE_I64:
-      return code;
+    case TYPE_STRING:
+      return add_ref(code);
     case TYPE_QUOTE:
       return syntax_to_datum(code.quote->quoted);
     case TYPE_SYMBOL:
