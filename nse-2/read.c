@@ -156,6 +156,66 @@ Syntax *parse_int(Stack *input) {
   return end_pos(syntax, input);
 }
 
+Syntax *parse_string(Stack *input) {
+  size_t l = 0;
+  size_t size = 10;
+  char *buffer = malloc(size);
+  if (!buffer) {
+    raise_error("out of memory");
+    return NULL;
+  }
+  pop(input);
+  int c = peek(input);
+  Syntax *syntax = start_pos(create_syntax(undefined), input);
+  if (syntax) {
+    int escape = 0;
+    while (1) {
+      if (c == EOF) {
+        raise_error("unexpected end of file, expected '\"'");
+        // TODO: add start pos to error
+        free(buffer);
+        free(syntax);
+        return NULL;
+      }
+      if (escape) {
+        // TODO: do something with c
+        escape = 0;
+      } else if (c == '"') {
+        pop(input);
+        break;
+      } else if (c == '\\') {
+        escape = 1;
+        pop(input);
+        c = peek(input);
+        continue;
+      }
+      buffer[l++] = (char)c;
+      pop(input);
+      c = peek(input);
+      if (l >= size) {
+        size += 10;
+        char *new_buffer = realloc(buffer, size);
+        if (new_buffer) {
+          buffer = new_buffer;
+        } else {
+          raise_error("out of memory");
+          free(buffer);
+          free(syntax);
+          return NULL;
+        }
+      }
+    }
+    syntax->quoted = check_alloc(STRING(create_string(buffer, l)));
+    if (!RESULT_OK(syntax->quoted)) {
+      free(syntax);
+      syntax = NULL;
+    }
+  }
+  free(buffer);
+  return end_pos(syntax, input);
+}
+
+
 Syntax *parse_symbol(Stack *input) {
   size_t l = 0;
   size_t size = 10;
@@ -209,13 +269,17 @@ Syntax *parse_prim(Stack *input) {
     pop(input);
     return NULL;
   }
-  if (c == '\'') {
+  if (c == '\'' || c == '&') {
     Syntax *syntax = start_pos(create_syntax(undefined), input);
     if (syntax) {
       pop(input);
-      NseVal quoted = SYNTAX(parse_prim(input));
+      NseVal quoted = check_alloc(SYNTAX(parse_prim(input)));
       if (RESULT_OK(quoted)) {
-        syntax->quoted = check_alloc(QUOTE(create_quote(quoted)));
+        if (c == '&') {
+          syntax->quoted = check_alloc(TQUOTE(create_type_quote(quoted)));
+        } else {
+          syntax->quoted = check_alloc(QUOTE(create_quote(quoted)));
+        }
         del_ref(quoted);
         if (RESULT_OK(syntax->quoted)) {
           return end_pos(syntax, input);
@@ -250,6 +314,9 @@ Syntax *parse_prim(Stack *input) {
   if (c == '-' && isdigit(peekn(2, input))) {
     return parse_int(input);
   }
+  if (c == '"') {
+    return parse_string(input);
+  }
   return parse_symbol(input);
 }
 
@@ -265,15 +332,15 @@ Syntax *parse_list(Stack *input) {
     syntax->quoted = nil;
     return end_pos(syntax, input);
   } else {
-    NseVal head = SYNTAX(parse_prim(input));
+    NseVal head = check_alloc(SYNTAX(parse_prim(input)));
     if (RESULT_OK(head)) {
       NseVal tail;
       skip(input);
       if (peek(input) == '.') {
         pop(input);
-        tail = SYNTAX(parse_prim(input));
+        tail = check_alloc(SYNTAX(parse_prim(input)));
       } else {
-        tail = SYNTAX(parse_list(input));
+        tail = check_alloc(SYNTAX(parse_list(input)));
       }
       if (RESULT_OK(tail)) {
         syntax->quoted = check_alloc(CONS(create_cons(head, tail)));

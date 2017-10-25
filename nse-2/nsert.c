@@ -119,6 +119,10 @@ Quote *create_quote(NseVal quoted) {
   return quote;
 }
 
+TypeQuote *create_type_quote(NseVal quoted) {
+  return create_quote(quoted);
+}
+
 Syntax *create_syntax(NseVal quoted) {
   Syntax *syntax = malloc(sizeof(Syntax));
   if (!syntax) {
@@ -159,6 +163,18 @@ Symbol *create_symbol(const char *s) {
   copy[len] = '\0';
   symmap_add(symbols, copy, copy);
   return copy;
+}
+
+String *create_string(const char *s, size_t length) {
+  String *str = malloc(sizeof(String) + length);
+  if (!str) {
+    raise_error("string: could not allocate %zd bytes of memory", sizeof(String) + length);
+    return NULL;
+  }
+  str->refs = 1;
+  str->length = length;
+  memcpy(str->chars, s, length);
+  return str;
 }
 
 Closure *create_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_size) {
@@ -206,9 +222,11 @@ NseVal check_alloc(NseVal v) {
     case TYPE_CONS:
     case TYPE_CLOSURE:
     case TYPE_QUOTE:
+    case TYPE_TQUOTE:
     case TYPE_SYNTAX:
     case TYPE_REFERENCE:
     case TYPE_SYMBOL:
+    case TYPE_STRING:
       if ((void *)v.cons == NULL) {
         return undefined;
       }
@@ -225,8 +243,12 @@ NseVal add_ref(NseVal value) {
     case TYPE_CLOSURE:
       value.closure->refs++;
       break;
+    case TYPE_TQUOTE:
     case TYPE_QUOTE:
       value.quote->refs++;
+      break;
+    case TYPE_STRING:
+      value.string->refs++;
       break;
     case TYPE_SYNTAX:
       value.syntax->refs++;
@@ -241,19 +263,23 @@ NseVal add_ref(NseVal value) {
 void del_ref(NseVal value) {
   size_t *refs = NULL;
   switch (value.type) {
-    case  TYPE_CONS:
+    case TYPE_CONS:
       refs = &value.cons->refs;
       break;
-    case  TYPE_CLOSURE:
+    case TYPE_CLOSURE:
       refs = &value.closure->refs;
       break;
-    case  TYPE_QUOTE:
+    case TYPE_TQUOTE:
+    case TYPE_QUOTE:
       refs = &value.quote->refs;
       break;
-    case  TYPE_SYNTAX:
+    case TYPE_STRING:
+      refs = &value.string->refs;
+      break;
+    case TYPE_SYNTAX:
       refs = &value.syntax->refs;
       break;
-    case  TYPE_REFERENCE:
+    case TYPE_REFERENCE:
       refs = &value.reference->refs;
       break;
     default:
@@ -273,7 +299,7 @@ void delete_all(NseVal value) {
     del_ref(value.cons->head);
     del_ref(value.cons->tail);
   }
-  if (value.type == TYPE_QUOTE) {
+  if (value.type == TYPE_QUOTE || value.type == TYPE_TQUOTE) {
     del_ref(value.quote->quoted);
   }
   if (value.type == TYPE_CLOSURE) {
@@ -296,7 +322,11 @@ void delete(NseVal value) {
       free(value.symbol);
       return;
     case TYPE_QUOTE:
+    case TYPE_TQUOTE:
       free(value.quote);
+      return;
+    case TYPE_STRING:
+      free(value.string);
       return;
     case TYPE_SYNTAX:
       free(value.syntax);
@@ -389,6 +419,33 @@ int is_reference(NseVal v) {
     return 1;
   } else if (v.type == TYPE_SYNTAX) {
     return is_reference(v.syntax->quoted);
+  }
+  return 0;
+}
+
+int is_quote(NseVal v) {
+  if (v.type == TYPE_QUOTE) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_quote(v.syntax->quoted);
+  }
+  return 0;
+}
+
+int is_type_quote(NseVal v) {
+  if (v.type == TYPE_TQUOTE) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_type_quote(v.syntax->quoted);
+  }
+  return 0;
+}
+
+int is_string(NseVal v) {
+  if (v.type == TYPE_STRING) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_string(v.syntax->quoted);
   }
   return 0;
 }
@@ -494,12 +551,18 @@ NseVal nse_equals(NseVal a, NseVal b) {
       return b.type == TYPE_NIL ? TRUE : FALSE;
     case TYPE_CONS:
       return nse_and(nse_equals(head(a), head(b)), nse_equals(tail(a), tail(b)));
+    case TYPE_STRING:
+      if (a.string->length != b.string->length) {
+        return FALSE;
+      }
+      return strncmp(a.string->chars, b.string->chars, a.string->length) == 0 ? TRUE : FALSE;
     case TYPE_SYMBOL:
       if (a.symbol == b.symbol) {
         return TRUE;
       }
       return FALSE;
     case TYPE_QUOTE:
+    case TYPE_TQUOTE:
       return nse_equals(a.quote->quoted, b.quote->quoted);
     case TYPE_I64:
       if (a.i64 == b.i64) {
@@ -533,6 +596,15 @@ NseVal syntax_to_datum(NseVal v) {
       NseVal quoted = syntax_to_datum(v.quote->quoted);
       if (RESULT_OK(quoted)) {
         quote = check_alloc(QUOTE(create_quote(quoted)));
+        del_ref(quoted);
+      }
+      return quote;
+    }
+    case TYPE_TQUOTE: {
+      NseVal quote = undefined;
+      NseVal quoted = syntax_to_datum(v.quote->quoted);
+      if (RESULT_OK(quoted)) {
+        quote = check_alloc(TQUOTE(create_type_quote(quoted)));
         del_ref(quoted);
       }
       return quote;
@@ -573,6 +645,13 @@ NseVal print(NseVal value) {
       print_cons(value.cons);
       printf(")");
       break;
+    case TYPE_STRING:
+      printf("\"");
+      for (size_t i = 0; i < value.string->length; i++) {
+        printf("%c", value.string->chars[i]);
+      }
+      printf("\"");
+      break;
     case TYPE_SYMBOL:
       printf("%s", value.symbol);
       break;
@@ -581,6 +660,10 @@ NseVal print(NseVal value) {
       break;
     case TYPE_QUOTE:
       printf("'");
+      print(value.quote->quoted);
+      break;
+    case TYPE_TQUOTE:
+      printf("&");
       print(value.quote->quoted);
       break;
     case TYPE_SYNTAX:
