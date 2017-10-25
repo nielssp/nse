@@ -595,7 +595,7 @@ NseVal print(NseVal value) {
       printf("#<lambda>");
       break;
     case TYPE_REFERENCE:
-      printf("#<referend#%p>", value.reference->pointer);
+      printf("#<reference#%p>", value.reference->pointer);
       break;
     default:
       raise_error("undefined type: %d", value.type);
