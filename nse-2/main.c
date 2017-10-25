@@ -146,8 +146,6 @@ int main(int argc, char *argv[]) {
   module_define(system, "-", FUNC(subtract));
   module_define(system, "=", FUNC(equals));
 
-  module_define(system, "c-load", FUNC(c_load));
-  module_define(system, "c-symbol", FUNC(c_symbol));
   current_scope = use_module(system);
 
   rl_bind_key('\t', rl_insert); // TODO: autocomplete
