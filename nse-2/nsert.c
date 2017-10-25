@@ -609,10 +609,8 @@ NseVal syntax_to_datum(NseVal v) {
       }
       return quote;
     }
-    case  TYPE_CLOSURE:
-    case  TYPE_REFERENCE:
     default:
-      return v;
+      return add_ref(v);
   }
 }
 

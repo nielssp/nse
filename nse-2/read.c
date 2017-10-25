@@ -227,7 +227,7 @@ Syntax *parse_symbol(Stack *input) {
   int c = peek(input);
   Syntax *syntax = start_pos(create_syntax(undefined), input);
   if (syntax) {
-    while (c != EOF && !iswhite(c) && c != '(' && c != ')') {
+    while (c != EOF && !iswhite(c) && c != '(' && c != ')' && c != '"') {
       buffer[l++] = (char)c;
       pop(input);
       c = peek(input);
