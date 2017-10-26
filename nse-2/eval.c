@@ -333,7 +333,7 @@ NseVal eval(NseVal code, Scope *scope) {
       return pop_debug_form(eval(code.syntax->quoted, scope), previous);
     }
     default:
-      raise_error("unknown value type: %02x (%c)", code.type, code.type);
+      raise_error("unexpected value type: %s", nse_val_type_to_string(code.type));
       return undefined;
   }
 }

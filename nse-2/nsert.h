@@ -6,20 +6,6 @@
 
 #include "type.h"
 
-#define TYPE_UNDEFINED '0'
-#define TYPE_NIL 'n'
-#define TYPE_CONS '.'
-#define TYPE_I64 'i'
-#define TYPE_SYMBOL 's'
-#define TYPE_STRING '"'
-#define TYPE_QUOTE '\''
-#define TYPE_TQUOTE '&'
-#define TYPE_SYNTAX 'x'
-#define TYPE_FUNC 'f'
-#define TYPE_CLOSURE 'c'
-#define TYPE_REFERENCE 'r'
-#define TYPE_TYPE 'T'
-
 #define SPECIAL_IF "if"
 #define SPECIAL_LET "let"
 #define SPECIAL_LAMBDA "fn"
@@ -44,6 +30,22 @@
 
 #define RESULT_OK(value) ((value).type != TYPE_UNDEFINED)
 
+typedef enum {
+ TYPE_UNDEFINED,
+ TYPE_NIL,
+ TYPE_CONS,
+ TYPE_I64,
+ TYPE_SYMBOL,
+ TYPE_STRING,
+ TYPE_QUOTE,
+ TYPE_TQUOTE,
+ TYPE_SYNTAX,
+ TYPE_FUNC,
+ TYPE_CLOSURE,
+ TYPE_REFERENCE,
+ TYPE_TYPE
+} NseValType;
+
 typedef struct nse_val NseVal;
 typedef struct cons Cons;
 typedef struct closure Closure;
@@ -57,7 +59,7 @@ typedef char Symbol;
 typedef void (* Destructor)(void *);
 
 struct nse_val {
-  uint8_t type;
+  NseValType type;
   union {
     int64_t i64;
     Cons *cons;
@@ -165,6 +167,8 @@ NseVal nse_and(NseVal a, NseVal b);
 NseVal nse_equals(NseVal a, NseVal b);
 
 NseVal syntax_to_datum(NseVal v);
+
+const char *nse_val_type_to_string(NseValType t);
 
 Type *get_type(NseVal v);
 

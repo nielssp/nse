@@ -260,6 +260,8 @@ NseVal add_ref(NseVal value) {
     case TYPE_TYPE:
       copy_type(value.type_val);
       break;
+    default:
+      break;
   }
   return value;
 }
@@ -621,6 +623,37 @@ NseVal syntax_to_datum(NseVal v) {
   }
 }
 
+const char *nse_val_type_to_string(NseValType t) {
+  switch (t) {
+    case TYPE_UNDEFINED:
+      return "undefined";
+    case TYPE_NIL:
+      return "nil";
+    case TYPE_CONS:
+      return "cons";
+    case TYPE_I64:
+      return "i64";
+    case TYPE_SYMBOL:
+      return "symbol";
+    case TYPE_STRING:
+      return "string";
+    case TYPE_QUOTE:
+      return "quote";
+    case TYPE_TQUOTE:
+      return "type-quote";
+    case TYPE_SYNTAX:
+      return "syntax";
+    case TYPE_FUNC:
+      return "func";
+    case TYPE_CLOSURE:
+      return "closure";
+    case TYPE_REFERENCE:
+      return "reference";
+    case TYPE_TYPE:
+      return "type";
+  }
+}
+
 Type *get_type(NseVal v) {
   switch (v.type) {
     case TYPE_UNDEFINED:
@@ -648,7 +681,5 @@ Type *get_type(NseVal v) {
       return copy_type(ref_type);
     case TYPE_TYPE:
       return copy_type(type_type);
-    default:
-      return NULL;
   }
 }
