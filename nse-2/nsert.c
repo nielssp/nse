@@ -227,6 +227,7 @@ NseVal check_alloc(NseVal v) {
     case TYPE_REFERENCE:
     case TYPE_SYMBOL:
     case TYPE_STRING:
+    case TYPE_TYPE:
       if ((void *)v.cons == NULL) {
         return undefined;
       }
@@ -256,6 +257,9 @@ NseVal add_ref(NseVal value) {
     case TYPE_REFERENCE:
       value.reference->refs++;
       break;
+    case TYPE_TYPE:
+      copy_type(value.type_val);
+      break;
   }
   return value;
 }
@@ -282,6 +286,9 @@ void del_ref(NseVal value) {
     case TYPE_REFERENCE:
       refs = &value.reference->refs;
       break;
+    case TYPE_TYPE:
+      delete_type(value.type_val);
+      return;
     default:
       return;
   }
@@ -611,5 +618,37 @@ NseVal syntax_to_datum(NseVal v) {
     }
     default:
       return add_ref(v);
+  }
+}
+
+Type *get_type(NseVal v) {
+  switch (v.type) {
+    case TYPE_UNDEFINED:
+      return NULL;
+    case TYPE_NIL:
+      return copy_type(nil_type);
+    case TYPE_CONS:
+      return create_cons_type(get_type(v.cons->head), get_type(v.cons->tail));
+    case TYPE_I64:
+      return copy_type(i64_type);
+    case TYPE_SYMBOL:
+      return create_symbol_type(v.symbol);
+    case TYPE_STRING:
+      return copy_type(string_type);
+    case TYPE_QUOTE:
+      return create_quote_type(get_type(v.quote->quoted));
+    case TYPE_TQUOTE:
+      return create_type_quote_type(get_type(v.quote->quoted));
+    case TYPE_SYNTAX:
+      return create_syntax_type(get_type(v.syntax->quoted));
+    case TYPE_FUNC:
+    case TYPE_CLOSURE:
+      return create_func_type(copy_type(any_type), copy_type(any_type));
+    case TYPE_REFERENCE:
+      return copy_type(ref_type);
+    case TYPE_TYPE:
+      return copy_type(type_type);
+    default:
+      return NULL;
   }
 }

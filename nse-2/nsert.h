@@ -36,7 +36,7 @@
 #define STRING(s) ((NseVal) { .type = TYPE_STRING, .string = (s) })
 #define QUOTE(q) ((NseVal) { .type = TYPE_QUOTE, .quote = (q) })
 #define TQUOTE(q) ((NseVal) { .type = TYPE_TQUOTE, .quote = (q) })
-#define TYPE(t) ((NseVal) { .type = TYPE_TYPE, .type = (t) })
+#define TYPE(t) ((NseVal) { .type = TYPE_TYPE, .type_val = (t) })
 #define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
 
 #define TRUE (SYMBOL(create_symbol("t")))
@@ -166,6 +166,6 @@ NseVal nse_equals(NseVal a, NseVal b);
 
 NseVal syntax_to_datum(NseVal v);
 
-NseVal print(NseVal value);
+Type *get_type(NseVal v);
 
 #endif

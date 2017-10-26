@@ -4,6 +4,7 @@
 typedef enum {
   BASE_TYPE_ANY,
   BASE_TYPE_NIL,
+  BASE_TYPE_REF,
   BASE_TYPE_I8,
   BASE_TYPE_I16,
   BASE_TYPE_I32,
@@ -12,8 +13,7 @@ typedef enum {
   BASE_TYPE_U16,
   BASE_TYPE_U32,
   BASE_TYPE_U64,
-  BASE_TYPE_F32,
-  BASE_TYPE_F64,
+  BASE_TYPE_F32, BASE_TYPE_F64,
   BASE_TYPE_STRING,
   BASE_TYPE_ANY_SYMBOL,
   BASE_TYPE_TYPE,
@@ -42,6 +42,7 @@ struct type {
 
 extern Type *any_type;
 extern Type *nil_type;
+extern Type *ref_type;
 extern Type *i8_type;
 extern Type *i16_type;
 extern Type *i32_type;
@@ -70,5 +71,7 @@ Type *copy_type(Type *t);
 void delete_type(Type *t);
 
 int is_subtype_of(const Type *a, const Type *b);
+
+const char *base_type_to_string(BaseType t);
 
 #endif

@@ -19,6 +19,62 @@ static void write_cons(Cons *cons, Stream *stream) {
   write_cons_tail(cons->tail, stream);
 }
 
+static void write_type(Type *type, Stream *stream) {
+  switch (type->type) {
+    case BASE_TYPE_ANY:
+    case BASE_TYPE_NIL:
+    case BASE_TYPE_REF:
+    case BASE_TYPE_I8:
+    case BASE_TYPE_I16:
+    case BASE_TYPE_I32:
+    case BASE_TYPE_I64:
+    case BASE_TYPE_U8:
+    case BASE_TYPE_U16:
+    case BASE_TYPE_U32:
+    case BASE_TYPE_U64:
+    case BASE_TYPE_F32:
+    case BASE_TYPE_F64:
+    case BASE_TYPE_STRING:
+    case BASE_TYPE_ANY_SYMBOL:
+    case BASE_TYPE_TYPE:
+      stream_printf(stream, base_type_to_string(type->type));
+      break;
+    case BASE_TYPE_SYMBOL:
+      stream_printf(stream, "'%s", type->var_name);
+      break;
+    case BASE_TYPE_TYPE_VAR:
+      stream_printf(stream, "%s", type->var_name);
+      break;
+    case BASE_TYPE_QUOTE:
+    case BASE_TYPE_TYPE_QUOTE:
+    case BASE_TYPE_SYNTAX:
+      stream_printf(stream, "(");
+      stream_printf(stream, base_type_to_string(type->type));
+      stream_printf(stream, " ");
+      write_type(type->param_a, stream);
+      stream_printf(stream, ")");
+      break;
+    case BASE_TYPE_CONS:
+    case BASE_TYPE_FUNC:
+    case BASE_TYPE_UNION:
+      stream_printf(stream, "(");
+      stream_printf(stream, base_type_to_string(type->type));
+      stream_printf(stream, " ");
+      write_type(type->param_a, stream);
+      stream_printf(stream, " ");
+      write_type(type->param_b, stream);
+      stream_printf(stream, ")");
+      break;
+    case BASE_TYPE_RECUR:
+      stream_printf(stream, "(");
+      stream_printf(stream, base_type_to_string(type->type));
+      stream_printf(stream, " %s ", type->var_name);
+      write_type(type->param_b, stream);
+      stream_printf(stream, ")");
+      break;
+  }
+}
+
 NseVal nse_write(NseVal value, Stream *stream) {
   switch (value.type) {
     case TYPE_NIL:
@@ -49,6 +105,10 @@ NseVal nse_write(NseVal value, Stream *stream) {
     case TYPE_TQUOTE:
       stream_printf(stream, "&");
       nse_write(value.quote->quoted, stream);
+      break;
+    case TYPE_TYPE:
+      stream_printf(stream, "&");
+      write_type(value.type_val, stream);
       break;
     case TYPE_SYNTAX:
       stream_printf(stream, "#<syntax ");

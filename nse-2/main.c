@@ -45,6 +45,11 @@ NseVal subtract(NseVal args) {
   return I64(acc);
 }
 
+NseVal type_of(NseVal args) {
+  Type *t = get_type(head(args));
+  return check_alloc(TYPE(t));
+}
+
 NseVal equals(NseVal args) {
   NseVal previous = undefined;
   while (args.type == TYPE_CONS) {
@@ -146,6 +151,7 @@ int main(int argc, char *argv[]) {
   module_define(system, "+", FUNC(sum));
   module_define(system, "-", FUNC(subtract));
   module_define(system, "=", FUNC(equals));
+  module_define(system, "type-of", FUNC(type_of));
 
   current_scope = use_module(system);
 

@@ -13,6 +13,7 @@ struct subst {
 
 Type *any_type = &(Type){ .refs = 1, .type = BASE_TYPE_ANY };
 Type *nil_type = &(Type){ .refs = 1, .type = BASE_TYPE_NIL };
+Type *ref_type = &(Type){ .refs = 1, .type = BASE_TYPE_REF };
 Type *i8_type = &(Type){ .refs = 1, .type = BASE_TYPE_I8 };
 Type *i16_type = &(Type){ .refs = 1, .type = BASE_TYPE_I16 };
 Type *i32_type = &(Type){ .refs = 1, .type = BASE_TYPE_I32 };
@@ -60,6 +61,8 @@ static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
       return 1;
     case BASE_TYPE_NIL:
       return a->type == BASE_TYPE_NIL;
+    case BASE_TYPE_REF:
+      return a->type == BASE_TYPE_REF;
     case BASE_TYPE_I64:
       if (a->type == BASE_TYPE_I64 || a->type == BASE_TYPE_U32) {
         return 1;
@@ -246,5 +249,60 @@ void delete_type(Type *t) {
         break;
     }
     free(t);
+  }
+}
+
+const char *base_type_to_string(BaseType t) {
+  switch (t) {
+    case BASE_TYPE_ANY:
+      return "any";
+    case BASE_TYPE_NIL:
+      return "nil";
+    case BASE_TYPE_REF:
+      return "ref";
+    case BASE_TYPE_I8:
+      return "i8";
+    case BASE_TYPE_I16:
+      return "i16";
+    case BASE_TYPE_I32:
+      return "i32";
+    case BASE_TYPE_I64:
+      return "i64";
+    case BASE_TYPE_U8:
+      return "u8";
+    case BASE_TYPE_U16:
+      return "u16";
+    case BASE_TYPE_U32:
+      return "u32";
+    case BASE_TYPE_U64:
+      return "u64";
+    case BASE_TYPE_F32:
+      return "f32";
+    case BASE_TYPE_F64:
+      return "f64";
+    case BASE_TYPE_STRING:
+      return "string";
+    case BASE_TYPE_ANY_SYMBOL:
+      return "any-symbol";
+    case BASE_TYPE_TYPE:
+      return "type";
+    case BASE_TYPE_SYMBOL:
+      return "symbol";
+    case BASE_TYPE_TYPE_VAR:
+      return "type-var";
+    case BASE_TYPE_QUOTE:
+      return "quote";
+    case BASE_TYPE_TYPE_QUOTE:
+      return "type-quote";
+    case BASE_TYPE_SYNTAX:
+      return "syntax";
+    case BASE_TYPE_CONS:
+      return "cons";
+    case BASE_TYPE_FUNC:
+      return "→";
+    case BASE_TYPE_UNION:
+      return "∪";
+    case BASE_TYPE_RECUR:
+      return "µ";
   }
 }
