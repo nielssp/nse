@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
     } else {
       ungetc(c, in);
     }
-    if (strcmp(token, "jump") == 0 || strcmp(token, "cjump") == 0) {
+    if (strcmp(token, "jump") == 0 || strcmp(token, "branch") == 0 || strcmp(token, "call") == 0) {
       char *target = read_token(in);
       fputc(token[0], out);
       prog_p += 1;
@@ -150,6 +150,9 @@ int main(int argc, char *argv[]) {
       prog_p += 1;
     } else if (strcmp(token, "dup") == 0) {
       fputc('d', out);
+      prog_p += 1;
+    } else if (strcmp(token, "return") == 0) {
+      fputc('r', out);
       prog_p += 1;
     } else if (strcmp(token, "push") == 0) {
       char *param = read_token(in);

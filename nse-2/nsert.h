@@ -16,6 +16,7 @@
 #define TYPE_FUNC 'f'
 #define TYPE_CLOSURE 'c'
 #define TYPE_REFERENCE 'r'
+#define TYPE_TYPE 'T'
 
 #define SPECIAL_IF "if"
 #define SPECIAL_LET "let"

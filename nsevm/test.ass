@@ -2,7 +2,7 @@ jump main
 
 factorial:
   dup
-  cjump continue
+  branch continue
   return
 continue:
   dup

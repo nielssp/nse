@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 void boot(char *stack, size_t offset) {
+  char *start;
   char *prog_p = stack;
   char *stack_p = stack + offset;
   while (1) {
@@ -40,6 +41,15 @@ void boot(char *stack, size_t offset) {
         prog_p = stack + *((int *)(prog_p + 1));
         break;
       case 'c':
+        *((size_t *)stack_p) = (prog_p - stack) + 2;
+        stack_p += sizeof(size_t);
+        prog_p = stack + *((int *)(prog_p + 1));
+        break;
+      case 'r':
+        stack_p -= sizeof(size_t);
+        prog_p = stack + *((size_t *)stack_p);
+        break;
+      case 'b':
         if (*((int *)(stack_p - 4))) {
           prog_p = stack + *((int *)(prog_p + 1));
         } else {
@@ -49,9 +59,17 @@ void boot(char *stack, size_t offset) {
         break;
       case 'q':
         printf("Terminated. Stack contents:\n");
-        char *start = stack + offset;
+        start = stack + offset;
         while (start < stack_p) {
-          printf("%p: %08x\n", start, *((int *)start));
+          printf("%p: %08x (%d)\n", start, *((int *)start), *((int *)start));
+          start += 4;
+        }
+        return;
+      default:
+        printf("Invalid instruction: %02x (%c) at %p (%zx)\n", *prog_p, *prog_p, prog_p, prog_p - stack);
+        start = stack + offset;
+        while (start < stack_p) {
+          printf("%p: %08x (%d)\n", start, *((int *)start), *((int *)start));
           start += 4;
         }
         return;

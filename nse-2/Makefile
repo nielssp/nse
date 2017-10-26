@@ -49,6 +49,9 @@ libnsert.a: nsert.o hash_map.o
 nsert.o: nsert.c nsert.h
 	$(CC) -c -o $@ $<
 
+type.o: type.c type.h
+	$(CC) -c -o $@ $<
+
 hash_map.o: util/hash_map.c util/hash_map.h
 	$(CC) -c -o $@ $<
 

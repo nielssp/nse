@@ -40,6 +40,35 @@ struct type {
   Type *param_b;
 };
 
-int is_subtype_of(Type *a, Type *b);
+extern Type *any_type;
+extern Type *nil_type;
+extern Type *i8_type;
+extern Type *i16_type;
+extern Type *i32_type;
+extern Type *i64_type;
+extern Type *u8_type;
+extern Type *u16_type;
+extern Type *u32_type;
+extern Type *u64_type;
+extern Type *f32_type;
+extern Type *f64_type;
+extern Type *string_type;
+extern Type *any_symbol_type;
+extern Type *type_type;
+
+Type *create_symbol_type(const char *symbol);
+Type *create_type_var(const char *var_name);
+Type *create_quote_type(Type *quoted_type);
+Type *create_type_quote_type(Type *quoted_type);
+Type *create_syntax_type(Type *quoted_type);
+Type *create_cons_type(Type *head_type, Type *tail_type);
+Type *create_func_type(Type *arg_type, Type *return_type);
+Type *create_union_type(Type *type_a, Type *type_b);
+Type *create_recur_type(const char *name, Type *t);
+
+Type *copy_type(Type *t);
+void delete_type(Type *t);
+
+int is_subtype_of(const Type *a, const Type *b);
 
 #endif
