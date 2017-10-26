@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#include "type.h"
+
 #define TYPE_UNDEFINED '0'
 #define TYPE_NIL 'n'
 #define TYPE_CONS '.'
@@ -34,6 +36,7 @@
 #define STRING(s) ((NseVal) { .type = TYPE_STRING, .string = (s) })
 #define QUOTE(q) ((NseVal) { .type = TYPE_QUOTE, .quote = (q) })
 #define TQUOTE(q) ((NseVal) { .type = TYPE_TQUOTE, .quote = (q) })
+#define TYPE(t) ((NseVal) { .type = TYPE_TYPE, .type = (t) })
 #define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
 
 #define TRUE (SYMBOL(create_symbol("t")))
@@ -64,6 +67,7 @@ struct nse_val {
     char *symbol;
     String *string;
     NseVal (*func)(NseVal);
+    Type *type_val;
     Closure *closure;
     Reference *reference;
   };
@@ -163,6 +167,5 @@ NseVal nse_equals(NseVal a, NseVal b);
 NseVal syntax_to_datum(NseVal v);
 
 NseVal print(NseVal value);
-NseVal printr(NseVal value);
 
 #endif

@@ -8,6 +8,7 @@
 
 #include "nsert.h"
 #include "read.h"
+#include "write.h"
 #include "eval.h"
 
 const char *short_options = "hvlt:Tms:c:";
@@ -171,14 +172,14 @@ int main(int argc, char *argv[]) {
       NseVal result = eval(code, current_scope);
       del_ref(code);
       if (RESULT_OK(result)) {
-        print(result);
+        nse_write(result, stdout_stream);
         del_ref(result);
       } else {
         printf("error: %s", error_string);
         if (error_form != NULL) {
           NseVal datum = syntax_to_datum(error_form->quoted);
           printf(": ");
-          print(datum);
+          nse_write(datum, stdout_stream);
           del_ref(datum);
           printf("\nIn %s on line %zd column %zd", error_form->file, error_form->start_line, error_form->start_column);
         }

@@ -28,7 +28,7 @@ nsec: nsec.o libnsert.a
 nsec.o: nsec.c
 	$(CC) -c -o $@ $<
 
-nse: main.o read.o eval.o rtci.o libnsert.a
+nse: main.o read.o write.o eval.o rtci.o libnsert.a stream.o
 	$(CC) $(MAIN_LIBS) -o $@ $^
 
 main.o: main.c
@@ -40,16 +40,22 @@ rtci.o: rtci.c
 eval.o: eval.c
 	$(CC) -c -o $@ $<
 
+write.o: write.c
+	$(CC) -c -o $@ $<
+
 read.o: read.c
 	$(CC) -c -o $@ $<
 
-libnsert.a: nsert.o hash_map.o
+libnsert.a: nsert.o hash_map.o type.o
 	ar rcs $@ $^
 
 nsert.o: nsert.c nsert.h
 	$(CC) -c -o $@ $<
 
 type.o: type.c type.h
+	$(CC) -c -o $@ $<
+
+stream.o: util/stream.c util/stream.h
 	$(CC) -c -o $@ $<
 
 hash_map.o: util/hash_map.c util/hash_map.h
