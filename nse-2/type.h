@@ -25,7 +25,8 @@ typedef enum {
   BASE_TYPE_CONS,
   BASE_TYPE_FUNC,
   BASE_TYPE_UNION,
-  BASE_TYPE_RECUR
+  BASE_TYPE_PRODUCT,
+  BASE_TYPE_RECUR,
 } BaseType;
 
 typedef struct type Type;
@@ -36,8 +37,12 @@ struct type {
   union {
     char *var_name;
     Type *param_a;
+    size_t num_operands;
   };
-  Type *param_b;
+  union {
+    Type *param_b;
+    Type **operands;
+  };
 };
 
 extern Type *any_type;
@@ -65,11 +70,14 @@ Type *create_syntax_type(Type *quoted_type);
 Type *create_cons_type(Type *head_type, Type *tail_type);
 Type *create_func_type(Type *arg_type, Type *return_type);
 Type *create_union_type(Type *type_a, Type *type_b);
+Type *create_product_type(Type *operands[], size_t num_operands);
 Type *create_recur_type(const char *name, Type *t);
 
 Type *copy_type(Type *t);
 void delete_type(Type *t);
 
+int type_is_product(const Type *t);
+int type_equals(const Type *a, const Type *b);
 int is_subtype_of(const Type *a, const Type *b);
 
 const char *base_type_to_string(BaseType t);

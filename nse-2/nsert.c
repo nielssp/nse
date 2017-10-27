@@ -580,6 +580,8 @@ NseVal nse_equals(NseVal a, NseVal b) {
         return TRUE;
       }
       return FALSE;
+    case TYPE_TYPE:
+      return type_equals(a.type_val, b.type_val) ? TRUE : FALSE;
     default:
       return FALSE;
   }

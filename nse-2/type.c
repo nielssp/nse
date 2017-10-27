@@ -54,13 +54,68 @@ static const Type *apply_substitution(const char *name, Subst *s) {
   return NULL;
 }
 
+int type_is_product(const Type *t) {
+  if (t->type == BASE_TYPE_PRODUCT || t->type == BASE_TYPE_NIL) {
+    return 1;
+  } else if (t->type == BASE_TYPE_CONS) {
+    return type_is_product(t->param_b);
+  }
+  return 0;
+}
+
+int type_equals(const Type *a, const Type *b) {
+  if (a->type != b->type) {
+    return 0;
+  }
+  switch (a->type) {
+    case BASE_TYPE_PRODUCT:
+      if (a->num_operands != b->num_operands) {
+        return 0;
+      }
+      for (size_t i = 0; i < a->num_operands; i++) {
+        if (!type_equals(a->operands[i], b->operands[i])) {
+          return 0;
+        }
+      }
+      return 1;
+    case BASE_TYPE_CONS:
+    case BASE_TYPE_FUNC:
+    case BASE_TYPE_UNION:
+      if (!type_equals(a->param_b, b->param_b)) {
+        return 0;
+      }
+    case BASE_TYPE_QUOTE:
+    case BASE_TYPE_TYPE_QUOTE:
+    case BASE_TYPE_SYNTAX:
+      return type_equals(a->param_a, b->param_a);
+    case BASE_TYPE_RECUR:
+      if (!type_equals(a->param_b, b->param_b)) {
+        return 0;
+      }
+    case BASE_TYPE_SYMBOL:
+    case BASE_TYPE_TYPE_VAR:
+      return strcmp(a->var_name, b->var_name) == 0;
+    default:
+      return 1;
+  }
+
+}
+
+
 static int is_subtype_of_s(const Type *a, const Type *b, Subst *s);
 static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
+  if (a->type == BASE_TYPE_TYPE_VAR) {
+    const Type *replacement = apply_substitution(a->var_name, s);
+    if (replacement) {
+      return is_subtype_of_s(replacement, b, s);
+    }
+    return 0;
+  }
   switch (b->type) {
     case BASE_TYPE_ANY:
       return 1;
     case BASE_TYPE_NIL:
-      return a->type == BASE_TYPE_NIL;
+      return a->type == BASE_TYPE_NIL || (a->type == BASE_TYPE_PRODUCT && a->num_operands == 0);
     case BASE_TYPE_REF:
       return a->type == BASE_TYPE_REF;
     case BASE_TYPE_I64:
@@ -119,11 +174,55 @@ static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
     case BASE_TYPE_SYNTAX:
       return a->type == BASE_TYPE_SYNTAX && is_subtype_of_s(a->param_a, b->param_a, s);
     case BASE_TYPE_CONS:
-      return a->type == BASE_TYPE_CONS && is_subtype_of_s(a->param_a, b->param_a, s) && is_subtype_of_s(a->param_b, b->param_b, s);
+      if (a->type == BASE_TYPE_PRODUCT) {
+        for (size_t i = 0; i < a->num_operands; i++) {
+          if (b->type != BASE_TYPE_CONS) {
+            return 0;
+          } else if (!is_subtype_of_s(a->operands[i], b->param_a, s)) {
+            return 0;
+          }
+          b = b->param_b;
+        }
+        if (b->type != BASE_TYPE_NIL) {
+          return 0;
+        }
+        return 1;
+      } else if (a->type == BASE_TYPE_CONS) {
+        return is_subtype_of_s(a->param_a, b->param_a, s) && is_subtype_of_s(a->param_b, b->param_b, s);
+      } else {
+        return 0;
+      }
     case BASE_TYPE_FUNC:
       return a->type == BASE_TYPE_FUNC && is_subtype_of_s(b->param_a, a->param_a, s) && is_subtype_of_s(a->param_b, b->param_b, s);
     case BASE_TYPE_UNION:
       return is_subtype_of_s(a, b->param_a, s) || is_subtype_of_s(a, b->param_b, s);
+    case BASE_TYPE_PRODUCT:
+      if (a->type == BASE_TYPE_PRODUCT) {
+        if (a->num_operands != b->num_operands) {
+          return 0;
+        }
+        for (size_t i = 0; i < a->num_operands; i++) {
+          if (!is_subtype_of_s(a->operands[i], b->operands[i], s)) {
+            return 0;
+          }
+        }
+        return 1;
+      } else if (a->type == BASE_TYPE_CONS) {
+        for (size_t i = 0; i < b->num_operands; i++) {
+          if (a->type != BASE_TYPE_CONS) {
+            return 0;
+          } else if (!is_subtype_of_s(a->param_a, b->operands[i], s)) {
+            return 0;
+          }
+          a = a->param_b;
+        }
+        if (a->type != BASE_TYPE_NIL) {
+          return 0;
+        }
+        return 1;
+      } else {
+        return 0;
+      }
     case BASE_TYPE_RECUR: {
       Subst *new_s = add_substitution(b->var_name, b, s);
       int result = is_subtype_of_s(a, b->param_b, new_s);
@@ -204,20 +303,36 @@ Type *create_union_type(Type *type_a, Type *type_b) {
   return create_binary_type(BASE_TYPE_UNION, type_a, type_b);
 }
 
+Type *create_product_type(Type *operands[], size_t num_operands) {
+  Type *t = malloc(sizeof(Type));
+  t->refs = 1;
+  t->type = BASE_TYPE_PRODUCT;
+  t->num_operands = num_operands;
+  t->operands = malloc(sizeof(Type *) * num_operands);
+  if (!t->operands) {
+    free(t);
+    for (size_t i = 0; i < num_operands; i++) {
+      delete_type(operands[i]);
+    }
+    return NULL;
+  }
+  memcpy(t->operands, operands, sizeof(Type *) * num_operands);
+  return t;
+}
+
 Type *create_recur_type(const char *name, Type *body) {
   Type *t = malloc(sizeof(Type));
   t->refs = 1;
   t->type = BASE_TYPE_RECUR;
   size_t len = strlen(name);
-  char *copy = malloc(len + 1);
-  if (!copy) {
+  t->var_name = malloc(len + 1);
+  if (!t->var_name) {
     free(t);
     delete_type(body);
     return NULL;
   }
-  memcpy(copy, name, len);
-  copy[len] = '\0';
-  t->var_name = copy;
+  memcpy(t->var_name, name, len);
+  t->var_name[len] = '\0';
   t->param_b = body;
   return t;
 }
@@ -233,6 +348,12 @@ void delete_type(Type *t) {
   }
   if (t->refs == 0) {
     switch (t->type) {
+      case BASE_TYPE_PRODUCT:
+        for (size_t i = 0; i < t->num_operands; i++) {
+          delete_type(t->operands[i]);
+        }
+        free(t->operands);
+        break;
       case BASE_TYPE_CONS:
       case BASE_TYPE_FUNC:
       case BASE_TYPE_UNION:
@@ -305,6 +426,8 @@ const char *base_type_to_string(BaseType t) {
       return "→";
     case BASE_TYPE_UNION:
       return "∪";
+    case BASE_TYPE_PRODUCT:
+      return "*";
     case BASE_TYPE_RECUR:
       return "µ";
   }

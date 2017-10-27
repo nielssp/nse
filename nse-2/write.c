@@ -55,6 +55,16 @@ static void write_type(Type *type, Stream *stream) {
       stream_printf(stream, ")");
       break;
     case BASE_TYPE_CONS:
+      if (type_is_product(type)) {
+        stream_printf(stream, "(%s", base_type_to_string(BASE_TYPE_PRODUCT));
+        while (type->type == BASE_TYPE_CONS) {
+          stream_printf(stream, " ");
+          write_type(type->param_a, stream);
+          type = type->param_b;
+        }
+        stream_printf(stream, ")");
+        break;
+      }
     case BASE_TYPE_FUNC:
     case BASE_TYPE_UNION:
       stream_printf(stream, "(");
@@ -63,6 +73,15 @@ static void write_type(Type *type, Stream *stream) {
       write_type(type->param_a, stream);
       stream_printf(stream, " ");
       write_type(type->param_b, stream);
+      stream_printf(stream, ")");
+      break;
+    case BASE_TYPE_PRODUCT:
+      stream_printf(stream, "(");
+      stream_printf(stream, base_type_to_string(type->type));
+      for (size_t i = 0; i < type->num_operands; i++) {
+        stream_printf(stream, " ");
+        write_type(type->operands[i], stream);
+      }
       stream_printf(stream, ")");
       break;
     case BASE_TYPE_RECUR:
