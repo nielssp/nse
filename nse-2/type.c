@@ -64,6 +64,12 @@ int type_is_product(const Type *t) {
 }
 
 int type_equals(const Type *a, const Type *b) {
+  if (a->type == BASE_TYPE_ALIAS) {
+    return type_equals(a->param_b, b);
+  }
+  if (b->type == BASE_TYPE_ALIAS) {
+    return type_equals(a, b->param_b);
+  }
   if (a->type != b->type) {
     return 0;
   }
@@ -110,6 +116,8 @@ static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
       return is_subtype_of_s(replacement, b, s);
     }
     return 0;
+  } else if (a->type == BASE_TYPE_ALIAS) {
+    return is_subtype_of_s(a->param_b, b, s);
   }
   switch (b->type) {
     case BASE_TYPE_ANY:
@@ -229,6 +237,8 @@ static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
       delete_substitution(new_s);
       return result;
     }
+    case BASE_TYPE_ALIAS:
+      return is_subtype_of_s(a, b->param_b, s);
   }
 }
 
@@ -268,6 +278,23 @@ static Type *create_binary_type(BaseType type, Type *param_a, Type *param_b) {
   t->type = type;
   t->param_a = param_a;
   t->param_b = param_b;
+  return t;
+}
+
+static Type *create_binary_type_name(BaseType type, const char *name, Type *body) {
+  Type *t = malloc(sizeof(Type));
+  t->refs = 1;
+  t->type = type;
+  size_t len = strlen(name);
+  t->var_name = malloc(len + 1);
+  if (!t->var_name) {
+    free(t);
+    delete_type(body);
+    return NULL;
+  }
+  memcpy(t->var_name, name, len);
+  t->var_name[len] = '\0';
+  t->param_b = body;
   return t;
 }
 
@@ -320,21 +347,12 @@ Type *create_product_type(Type *operands[], size_t num_operands) {
   return t;
 }
 
-Type *create_recur_type(const char *name, Type *body) {
-  Type *t = malloc(sizeof(Type));
-  t->refs = 1;
-  t->type = BASE_TYPE_RECUR;
-  size_t len = strlen(name);
-  t->var_name = malloc(len + 1);
-  if (!t->var_name) {
-    free(t);
-    delete_type(body);
-    return NULL;
-  }
-  memcpy(t->var_name, name, len);
-  t->var_name[len] = '\0';
-  t->param_b = body;
-  return t;
+Type *create_recur_type(const char *name, Type *t) {
+  return create_binary_type_name(BASE_TYPE_RECUR, name, t);
+}
+
+Type *create_alias_type(const char *name, Type *t) {
+  return create_binary_type_name(BASE_TYPE_ALIAS, name, t);
 }
 
 Type *copy_type(Type *t) {
@@ -364,6 +382,7 @@ void delete_type(Type *t) {
         delete_type(t->param_a);
         break;
       case BASE_TYPE_RECUR:
+      case BASE_TYPE_ALIAS:
         delete_type(t->param_b);
       case BASE_TYPE_SYMBOL:
       case BASE_TYPE_TYPE_VAR:
@@ -430,5 +449,7 @@ const char *base_type_to_string(BaseType t) {
       return "*";
     case BASE_TYPE_RECUR:
       return "µ";
+    case BASE_TYPE_ALIAS:
+      return "alias";
   }
 }

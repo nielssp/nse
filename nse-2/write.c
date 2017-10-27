@@ -91,6 +91,9 @@ static void write_type(Type *type, Stream *stream) {
       write_type(type->param_b, stream);
       stream_printf(stream, ")");
       break;
+    case BASE_TYPE_ALIAS:
+      stream_printf(stream, "%s", type->var_name);
+      break;
   }
 }
 
@@ -148,4 +151,14 @@ NseVal nse_write(NseVal value, Stream *stream) {
       return undefined;
   }
   return nil;
+}
+
+char *nse_write_to_string(NseVal value) {
+  size_t size = 32;
+  char *buffer = (char *)malloc(size);
+  Stream *stream = stream_buffer(buffer, size);
+  nse_write(value, stream);
+  buffer = stream_get_content(stream);
+  stream_close(stream);
+  return buffer;
 }

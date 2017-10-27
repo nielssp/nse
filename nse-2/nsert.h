@@ -133,6 +133,7 @@ NseVal check_alloc(NseVal v);
 
 char *to_symbol(NseVal v);
 void *to_reference(NseVal v);
+Type *to_type(NseVal v);
 
 extern Syntax *error_form;
 extern char *error_string;
@@ -159,6 +160,7 @@ int is_type_quote(NseVal v);
 int is_function(NseVal v);
 int is_reference(NseVal v);
 int is_symbol(NseVal v);
+int is_type(NseVal v);
 int is_true(NseVal b);
 
 int match_symbol(NseVal v, const char *sym);

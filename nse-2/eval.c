@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "nsert.h"
+#include "write.h"
 
 #include "eval.h"
 
@@ -282,6 +283,32 @@ NseVal eval_anon(NseVal args, NseVal env[]) {
   return result;
 }
 
+NseVal eval_anon_type(NseVal args, NseVal env[]) {
+  NseVal name = env[2];
+  NseVal name_cons = check_alloc(CONS(create_cons(name, args)));
+  if (!RESULT_OK(name_cons)) {
+    return undefined;
+  }
+  NseVal name_datum = syntax_to_datum(name_cons);
+  del_ref(name_cons);
+  if (!RESULT_OK(name_datum)) {
+    return undefined;
+  }
+  NseVal result = eval_anon(args, env);
+  if (RESULT_OK(result)) {
+    if (is_type(result)) {
+      Type *t = to_type(result);
+      char *type_name_str = nse_write_to_string(name_datum);
+      Type *alias = create_alias_type(type_name_str, copy_type(t));
+      free(type_name_str);
+      del_ref(result);
+      result = TYPE(alias);
+    }
+  }
+  del_ref(name_datum);
+  return result;
+}
+
 NseVal eval_cons(Cons *cons, Scope *scope) {
   NseVal operator = cons->head;
   NseVal args = cons->tail;
@@ -352,6 +379,57 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           }
         } else {
           raise_error("name of constant must be a symbol");
+        }
+      }
+    }
+    return undefined;
+  } else if (match_symbol(operator, SPECIAL_DEFINE_TYPE)) {
+    NseVal h = head(args);
+    if (RESULT_OK(h)) {
+      if (is_cons(h)) {
+        char *name = to_symbol(head(h));
+        if (name) {
+          Scope *fn_scope = copy_scope(scope);
+          NseVal scope_ref = check_alloc(REFERENCE(create_reference(fn_scope, (Destructor) delete_scope)));
+          if (RESULT_OK(scope_ref)) {
+            NseVal body = tail(args);
+            NseVal formal = tail(h);
+            if (RESULT_OK(formal) && RESULT_OK(body)) {
+              NseVal def = check_alloc(CONS(create_cons(formal, body)));
+              if (RESULT_OK(def)) {
+                NseVal env[] = {def, scope_ref, head(h)};
+                Type *arg_type = parameters_to_type(formal);
+                Type *func_type = create_func_type(arg_type, copy_type(any_type));
+                NseVal func = check_alloc(CLOSURE(create_closure(eval_anon_type, func_type, env, 3)));
+                del_ref(scope_ref);
+                del_ref(def);
+                if (RESULT_OK(func)) {
+                  module_define_type(scope->module, name, func);
+                  del_ref(func);
+                  return SYMBOL(name);
+                }
+              }
+            }
+          }
+        } else {
+          raise_error("name of type must be a symbol");
+        }
+      } else {
+        char *name = to_symbol(h);
+        if (name) {
+          NseVal value = eval(head(tail(args)), scope);
+          if (RESULT_OK(value)) {
+            if (is_type(value)) {
+              Type *t = to_type(value);
+              Type *alias = create_alias_type(name, t);
+              value = TYPE(alias);
+            }
+            module_define_type(scope->module, name, value);
+            del_ref(value);
+            return SYMBOL(name);
+          }
+        } else {
+          raise_error("name of type must be a symbol");
         }
       }
     }

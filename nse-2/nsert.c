@@ -470,6 +470,15 @@ int is_symbol(NseVal v) {
   return 0;
 }
 
+int is_type(NseVal v) {
+  if (v.type == TYPE_TYPE) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_type(v.syntax->quoted);
+  }
+  return 0;
+}
+
 char *to_symbol(NseVal v) {
   if (v.type == TYPE_SYMBOL) {
     return v.symbol;
@@ -484,6 +493,15 @@ void *to_reference(NseVal v) {
     return v.reference->pointer;
   } else if (v.type == TYPE_SYNTAX) {
     return to_reference(v.syntax->quoted);
+  }
+  return NULL;
+}
+
+Type *to_type(NseVal v) {
+  if (v.type == TYPE_TYPE) {
+    return v.type_val;
+  } else if (v.type == TYPE_SYNTAX) {
+    return to_type(v.syntax->quoted);
   }
   return NULL;
 }
