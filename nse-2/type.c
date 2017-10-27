@@ -121,7 +121,7 @@ static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
     case BASE_TYPE_CONS:
       return a->type == BASE_TYPE_CONS && is_subtype_of_s(a->param_a, b->param_a, s) && is_subtype_of_s(a->param_b, b->param_b, s);
     case BASE_TYPE_FUNC:
-      return a->type == BASE_TYPE_FUNC && is_subtype_of_s(a->param_a, b->param_a, s) && is_subtype_of_s(a->param_b, b->param_b, s);
+      return a->type == BASE_TYPE_FUNC && is_subtype_of_s(b->param_a, a->param_a, s) && is_subtype_of_s(a->param_b, b->param_b, s);
     case BASE_TYPE_UNION:
       return is_subtype_of_s(a, b->param_a, s) || is_subtype_of_s(a, b->param_b, s);
     case BASE_TYPE_RECUR: {
