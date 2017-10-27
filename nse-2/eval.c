@@ -64,6 +64,7 @@ Scope *copy_scope(Scope *scope) {
   Scope *copy = malloc(sizeof(Scope));
   copy->name = scope->name;
   copy->value = scope->value;
+  copy->type = scope->type;
   copy->next = copy_scope(scope->next);
   copy->module = scope->module;
   add_ref(copy->value);
