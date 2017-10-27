@@ -177,13 +177,14 @@ String *create_string(const char *s, size_t length) {
   return str;
 }
 
-Closure *create_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_size) {
+Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], size_t env_size) {
   Closure *closure = malloc(sizeof(Closure) + env_size * sizeof(NseVal));
   if (!closure) {
     raise_error("closure: could not allocate %zd bytes of memory", sizeof(Closure) + env_size * sizeof(NseVal));
   }
   closure->refs = 1;
   closure->f = f;
+  closure->type = type;
   closure->env_size = env_size;
   if (env_size > 0) {
     memcpy(closure->env, env, env_size * sizeof(NseVal));
@@ -312,6 +313,7 @@ void delete_all(NseVal value) {
     del_ref(value.quote->quoted);
   }
   if (value.type == TYPE_CLOSURE) {
+    delete_type(value.closure->type);
     for (size_t i = 0; i < value.closure->env_size; i++) {
       del_ref(value.closure->env[i]);
     }
@@ -675,8 +677,9 @@ Type *get_type(NseVal v) {
     case TYPE_SYNTAX:
       return create_syntax_type(get_type(v.syntax->quoted));
     case TYPE_FUNC:
-    case TYPE_CLOSURE:
       return create_func_type(copy_type(any_type), copy_type(any_type));
+    case TYPE_CLOSURE:
+      return copy_type(v.closure->type);
     case TYPE_REFERENCE:
       return copy_type(ref_type);
     case TYPE_TYPE:

@@ -6,6 +6,11 @@
 
 DEFINE_HASH_MAP(namespace, Namespace, char *, NseVal *, string_hash, string_equals)
 
+typedef enum {
+  TYPE_SCOPE,
+  VALUE_SCOPE
+} ScopeType;
+
 struct module {
   const char *name;
   Namespace internal;
@@ -18,13 +23,17 @@ struct scope {
   const char *name;
   NseVal value;
   Scope *next;
+  ScopeType type;
 };
+
+static Type *parameters_to_type(NseVal formal);
 
 Scope *scope_push(Scope *next, const char *name, NseVal value) {
   Scope *scope = malloc(sizeof(Scope));
   scope->name = name;
   scope->value = value;
   scope->next = next;
+  scope->type = VALUE_SCOPE;
   if (next) {
     scope->module = next->module;
   }
@@ -79,7 +88,15 @@ NseVal scope_get(Scope *scope, const char *name) {
     }
   }
   if (scope->module) {
-    NseVal *value = namespace_lookup(scope->module->internal, name);
+    NseVal *value;
+    switch (scope->type) {
+      case VALUE_SCOPE:
+        value = namespace_lookup(scope->module->internal, name);
+        break;
+      case TYPE_SCOPE:
+        value = namespace_lookup(scope->module->internal_types, name);
+        break;
+    }
     if (value) {
       return *value;
     }
@@ -119,6 +136,13 @@ void delete_module(Module *module) {
 Scope *use_module(Module *module) {
   Scope *scope = scope_push(NULL, NULL, undefined);
   scope->module = module;
+  return scope;
+}
+
+Scope *use_module_types(Module *module) {
+  Scope *scope = scope_push(NULL, NULL, undefined);
+  scope->module = module;
+  scope->type = TYPE_SCOPE;
   return scope;
 }
 
@@ -181,6 +205,30 @@ NseVal eval_list(NseVal list, Scope *scope) {
     return result;
   }
   return eval(list, scope);
+}
+
+static Type *parameters_to_type(NseVal formal) {
+  switch (formal.type) {
+    case TYPE_UNDEFINED:
+      return NULL;
+    case TYPE_NIL:
+      return copy_type(nil_type);
+    case TYPE_CONS:
+      return create_cons_type(parameters_to_type(formal.cons->head), parameters_to_type(formal.cons->tail));
+    case TYPE_SYMBOL:
+      return copy_type(any_type);
+    case TYPE_QUOTE: {
+      NseVal datum = syntax_to_datum(formal.quote->quoted);
+      Type *type = get_type(datum);
+      del_ref(datum);
+      return type;
+    }
+    case TYPE_SYNTAX:
+      return parameters_to_type(formal.syntax->quoted);
+    default:
+      raise_error("unexpected value type: %s", nse_val_type_to_string(formal.type));
+      return NULL;
+  }
 }
 
 int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
@@ -255,7 +303,9 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
     NseVal scope_ref = check_alloc(REFERENCE(create_reference(fn_scope, (Destructor) delete_scope)));
     if (RESULT_OK(scope_ref)) {
       NseVal env[] = {args, scope_ref};
-      result = check_alloc(CLOSURE(create_closure(eval_anon, env, 2)));
+      Type *arg_type = parameters_to_type(head(args));
+      Type *func_type = create_func_type(arg_type, copy_type(any_type));
+      result = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
       del_ref(scope_ref);
     }
     return result;
@@ -279,7 +329,9 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       NseVal scope_ref = check_alloc(REFERENCE(create_reference(macro_scope, (Destructor) delete_scope)));
       if (RESULT_OK(scope_ref)) {
         NseVal env[] = {tail(args), scope_ref};
-        NseVal value = check_alloc(CLOSURE(create_closure(eval_anon, env, 2)));
+        Type *arg_type = parameters_to_type(head(tail(args)));
+        Type *func_type = create_func_type(arg_type, copy_type(any_type));
+        NseVal value = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
         del_ref(scope_ref);
         if (RESULT_OK(value)) {
           module_define_macro(scope->module, name, value);
@@ -326,6 +378,12 @@ NseVal eval(NseVal code, Scope *scope) {
       return add_ref(code);
     case TYPE_QUOTE:
       return syntax_to_datum(code.quote->quoted);
+    case TYPE_TQUOTE: {
+      Scope *type_scope = use_module_types(scope->module);
+      NseVal result = eval(code.quote->quoted, type_scope);
+      scope_pop(type_scope);
+      return result;
+    }
     case TYPE_SYMBOL:
       return add_ref(scope_get(scope, code.symbol));
     case TYPE_SYNTAX: {

@@ -15,6 +15,7 @@ Module *create_module(const char *name);
 void delete_module(Module *module);
 Scope *use_module(Module *module);
 void module_define(Module *module, const char *name, NseVal value);
+void module_define_type(Module *module, const char *name, NseVal value);
 
 NseVal eval(NseVal code, Scope *scope);
 

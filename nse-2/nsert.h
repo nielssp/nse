@@ -84,6 +84,7 @@ struct cons {
 struct closure {
   size_t refs;
   NseVal (*f)(NseVal, NseVal[]);
+  Type *type;
   size_t env_size;
   NseVal env[];
 };
@@ -123,7 +124,7 @@ TypeQuote *create_type_quote(NseVal quoted);
 Syntax *create_syntax(NseVal quoted);
 Symbol *create_symbol(const char *s);
 String *create_string(const char *s, size_t length);
-Closure *create_closure(NseVal f(NseVal, NseVal[]), NseVal env[], size_t env_size);
+Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], size_t env_size);
 Reference *create_reference(void *pointer, void destructor(void *));
 
 Syntax *copy_syntax(Syntax *syntax, NseVal quoted);

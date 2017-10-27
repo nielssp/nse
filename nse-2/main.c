@@ -153,6 +153,8 @@ int main(int argc, char *argv[]) {
   module_define(system, "=", FUNC(equals));
   module_define(system, "type-of", FUNC(type_of));
 
+  module_define_type(system, "nil", TYPE(nil_type));
+
   current_scope = use_module(system);
 
   rl_bind_key('\t', rl_insert); // TODO: autocomplete

@@ -153,6 +153,7 @@ static Type *create_unary_type_name(BaseType type, const char *name) {
   size_t len = strlen(name);
   char *copy = malloc(len + 1);
   if (!copy) {
+    free(t);
     return NULL;
   }
   memcpy(copy, name, len);
@@ -210,6 +211,8 @@ Type *create_recur_type(const char *name, Type *body) {
   size_t len = strlen(name);
   char *copy = malloc(len + 1);
   if (!copy) {
+    free(t);
+    delete_type(body);
     return NULL;
   }
   memcpy(copy, name, len);
