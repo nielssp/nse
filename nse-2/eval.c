@@ -284,7 +284,7 @@ NseVal eval_anon(NseVal args, NseVal env[]) {
 NseVal eval_cons(Cons *cons, Scope *scope) {
   NseVal operator = cons->head;
   NseVal args = cons->tail;
-  if (match_symbol(operator, "if")) {
+  if (match_symbol(operator, SPECIAL_IF)) {
     NseVal result = undefined;
     NseVal condition = eval(head(args), scope);
     if (RESULT_OK(condition)) {
@@ -296,8 +296,8 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       del_ref(condition);
     }
     return result;
-  } else if (match_symbol(operator, "let")) {
-  } else if (match_symbol(operator, "fn")) {
+  } else if (match_symbol(operator, SPECIAL_LET)) {
+  } else if (match_symbol(operator, SPECIAL_LAMBDA)) {
     Scope *fn_scope = copy_scope(scope);
     NseVal result = undefined;
     NseVal scope_ref = check_alloc(REFERENCE(create_reference(fn_scope, (Destructor) delete_scope)));
@@ -309,38 +309,86 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       del_ref(scope_ref);
     }
     return result;
-  } else if (match_symbol(operator, "def")) {
-    char *name = to_symbol(head(args));
-    if (name) {
-      NseVal value = eval(head(tail(args)), scope);
-      if (RESULT_OK(value)) {
-        module_define(scope->module, name, value);
-        del_ref(value);
-        return SYMBOL(name);
-      }
-    } else {
-      raise_error("name must be a symbol");
-    }
-    return undefined;
-  } else if (match_symbol(operator, "defm")) {
-    char *name = to_symbol(head(args));
-    if (name) {
-      Scope *macro_scope = copy_scope(scope);
-      NseVal scope_ref = check_alloc(REFERENCE(create_reference(macro_scope, (Destructor) delete_scope)));
-      if (RESULT_OK(scope_ref)) {
-        NseVal env[] = {tail(args), scope_ref};
-        Type *arg_type = parameters_to_type(head(tail(args)));
-        Type *func_type = create_func_type(arg_type, copy_type(any_type));
-        NseVal value = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
-        del_ref(scope_ref);
-        if (RESULT_OK(value)) {
-          module_define_macro(scope->module, name, value);
-          del_ref(value);
-          return SYMBOL(name);
+  } else if (match_symbol(operator, SPECIAL_DEFINE)) {
+    NseVal h = head(args);
+    if (RESULT_OK(h)) {
+      if (is_cons(h)) {
+        char *name = to_symbol(head(h));
+        if (name) {
+          Scope *fn_scope = copy_scope(scope);
+          NseVal scope_ref = check_alloc(REFERENCE(create_reference(fn_scope, (Destructor) delete_scope)));
+          if (RESULT_OK(scope_ref)) {
+            NseVal body = tail(args);
+            NseVal formal = tail(h);
+            if (RESULT_OK(formal) && RESULT_OK(body)) {
+              NseVal def = check_alloc(CONS(create_cons(formal, body)));
+              if (RESULT_OK(def)) {
+                NseVal env[] = {def, scope_ref};
+                Type *arg_type = parameters_to_type(formal);
+                Type *func_type = create_func_type(arg_type, copy_type(any_type));
+                NseVal func = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
+                del_ref(scope_ref);
+                del_ref(def);
+                if (RESULT_OK(func)) {
+                  module_define(scope->module, name, func);
+                  del_ref(func);
+                  return SYMBOL(name);
+                }
+              }
+            }
+          }
+        } else {
+          raise_error("name of function must be a symbol");
+        }
+      } else {
+        char *name = to_symbol(h);
+        if (name) {
+          NseVal value = eval(head(tail(args)), scope);
+          if (RESULT_OK(value)) {
+            module_define(scope->module, name, value);
+            del_ref(value);
+            return SYMBOL(name);
+          }
+        } else {
+          raise_error("name of constant must be a symbol");
         }
       }
-    } else {
-      raise_error("name must be a symbol");
+    }
+    return undefined;
+  } else if (match_symbol(operator, SPECIAL_DEFINE_MACRO)) {
+    NseVal h = head(args);
+    if (RESULT_OK(h)) {
+      if (is_cons(h)) {
+        char *name = to_symbol(head(h));
+        if (name) {
+          Scope *macro_scope = copy_scope(scope);
+          NseVal scope_ref = check_alloc(REFERENCE(create_reference(macro_scope, (Destructor) delete_scope)));
+          if (RESULT_OK(scope_ref)) {
+            NseVal body = tail(args);
+            NseVal formal = tail(h);
+            if (RESULT_OK(formal) && RESULT_OK(body)) {
+              NseVal def = check_alloc(CONS(create_cons(formal, body)));
+              if (RESULT_OK(def)) {
+                NseVal env[] = {def, scope_ref};
+                Type *arg_type = parameters_to_type(formal);
+                Type *func_type = create_func_type(arg_type, copy_type(any_type));
+                NseVal value = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
+                del_ref(scope_ref);
+                del_ref(def);
+                if (RESULT_OK(value)) {
+                  module_define_macro(scope->module, name, value);
+                  del_ref(value);
+                  return SYMBOL(name);
+                }
+              }
+            }
+          }
+        } else {
+          raise_error("name of macro must be a symbol");
+        }
+      } else {
+        raise_error("macro must be a function");
+      }
     }
     return undefined;
   }

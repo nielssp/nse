@@ -10,7 +10,8 @@
 #define SPECIAL_LET "let"
 #define SPECIAL_LAMBDA "fn"
 #define SPECIAL_DEFINE "def"
-#define SPECIAL_DEFINE_MACRO "defm"
+#define SPECIAL_DEFINE_MACRO "def-macro"
+#define SPECIAL_DEFINE_TYPE "def-type"
 
 #define I64(i) ((NseVal) { .type = TYPE_I64, .i64 = (i) })
 #define FUNC(f) ((NseVal) { .type = TYPE_FUNC, .func = (f) })

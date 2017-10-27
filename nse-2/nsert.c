@@ -506,6 +506,7 @@ int is_special_form(NseVal v) {
     result |= strcmp(v.symbol, SPECIAL_LET) == 0;
     result |= strcmp(v.symbol, SPECIAL_DEFINE) == 0;
     result |= strcmp(v.symbol, SPECIAL_DEFINE_MACRO) == 0;
+    result |= strcmp(v.symbol, SPECIAL_DEFINE_TYPE) == 0;
   } else if (v.type == TYPE_SYNTAX) {
     result = is_special_form(v.syntax->quoted);
   }
