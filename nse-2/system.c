@@ -71,6 +71,17 @@ static NseVal subtype_of(NseVal args) {
   return undefined;
 }
 
+static NseVal cons_type(NseVal args) {
+  NseVal a = head(args);
+  NseVal b = elem(1, args);
+  Type *type_a = to_type(a);
+  Type *type_b = to_type(b);
+  if (type_a && type_b) {
+    return TYPE(create_cons_type(copy_type(type_a), copy_type(type_b)));
+  }
+  return undefined;
+}
+
 static NseVal union_type(NseVal args) {
   NseVal a = head(args);
   NseVal b = elem(1, args);
@@ -91,6 +102,7 @@ Module *get_system_module() {
 
   module_define(system, "is-a", FUNC(is_a));
   module_define(system, "subtype-of?", FUNC(subtype_of));
+  module_define(system, "cons-type", FUNC(cons_type));
   module_define(system, "union-type", FUNC(union_type));
 
   module_define_type(system, "nil", TYPE(nil_type));
