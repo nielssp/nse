@@ -380,6 +380,17 @@ NseVal tail(NseVal value) {
   return result;
 }
 
+NseVal elem(size_t n, NseVal value) {
+  for (size_t i = 0; i < n; i++) {
+    value = tail(value);
+    if (!RESULT_OK(value)) {
+      return undefined;
+    }
+  }
+  return head(value);
+}
+
+
 int is_cons(NseVal v) {
   if (v.type == TYPE_CONS) {
     return 1;

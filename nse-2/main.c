@@ -10,6 +10,7 @@
 #include "read.h"
 #include "write.h"
 #include "eval.h"
+#include "system.h"
 
 const char *short_options = "hvlt:Tms:c:";
 
@@ -24,49 +25,6 @@ Scope *current_scope = NULL;
 
 void describe_option(const char *short_option, const char *long_option, const char *description) {
   printf("  -%-14s --%-18s %s\n", short_option, long_option, description);
-}
-
-NseVal sum(NseVal args) {
-  int64_t acc = 0;
-  while (is_cons(args)) {
-    acc += head(args).i64;
-    args = tail(args);
-  }
-  return I64(acc);
-}
-
-NseVal subtract(NseVal args) {
-  int64_t acc = head(args).i64;
-  args = tail(args);
-  while (is_cons(args)) {
-    acc -= head(args).i64;
-    args = tail(args);
-  }
-  return I64(acc);
-}
-
-NseVal type_of(NseVal args) {
-  Type *t = get_type(head(args));
-  return check_alloc(TYPE(t));
-}
-
-NseVal equals(NseVal args) {
-  NseVal previous = undefined;
-  while (args.type == TYPE_CONS) {
-    NseVal h = head(args);
-    if (previous.type != TYPE_UNDEFINED) {
-      NseVal result = nse_equals(previous, h);
-      if (!is_true(result)) {
-        return FALSE;
-      }
-    }
-    previous = h;
-    args = tail(args);
-  }
-  if (!RESULT_OK(previous)) {
-    raise_error("too few arguments");
-  }
-  return TRUE;
 }
 
 NseVal load(NseVal args) {
@@ -146,14 +104,8 @@ int main(int argc, char *argv[]) {
     puts("not implemented");
     return 1;
   }
-  Module *system = create_module("system");
+  Module *system = get_system_module();
   module_define(system, "load", FUNC(load));
-  module_define(system, "+", FUNC(sum));
-  module_define(system, "-", FUNC(subtract));
-  module_define(system, "=", FUNC(equals));
-  module_define(system, "type-of", FUNC(type_of));
-
-  module_define_type(system, "nil", TYPE(nil_type));
 
   current_scope = use_module(system);
 

@@ -149,6 +149,7 @@ void del_ref(NseVal p);
 
 NseVal head(NseVal cons);
 NseVal tail(NseVal cons);
+NseVal elem(size_t n, NseVal cons);
 size_t list_length(NseVal list);
 
 int is_cons(NseVal v);

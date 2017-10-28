@@ -504,6 +504,13 @@ NseVal eval(NseVal code, Scope *scope) {
     case TYPE_STRING:
       return add_ref(code);
     case TYPE_QUOTE:
+      if (scope->type == TYPE_SCOPE) {
+        NseVal datum = syntax_to_datum(code.quote->quoted);
+        if (!RESULT_OK(datum)) {
+          return datum;
+        }
+        return check_alloc(TYPE(get_type(datum)));
+      }
       return syntax_to_datum(code.quote->quoted);
     case TYPE_TQUOTE: {
       Scope *type_scope = use_module_types(scope->module);
