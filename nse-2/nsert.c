@@ -533,6 +533,7 @@ int is_special_form(NseVal v) {
     result |= strcmp(v.symbol, SPECIAL_IF) == 0;
     result |= strcmp(v.symbol, SPECIAL_LAMBDA) == 0;
     result |= strcmp(v.symbol, SPECIAL_LET) == 0;
+    result |= strcmp(v.symbol, SPECIAL_TRY) == 0;
     result |= strcmp(v.symbol, SPECIAL_DEFINE) == 0;
     result |= strcmp(v.symbol, SPECIAL_DEFINE_MACRO) == 0;
     result |= strcmp(v.symbol, SPECIAL_DEFINE_TYPE) == 0;

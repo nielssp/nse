@@ -337,6 +337,33 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       del_ref(scope_ref);
     }
     return result;
+  } else if (match_symbol(operator, SPECIAL_TRY)) {
+    NseVal h = head(args);
+    if (RESULT_OK(h)) {
+      NseVal result = eval(h, scope);
+      if (RESULT_OK(result)) {
+        NseVal tag = check_alloc(SYMBOL(create_symbol("ok")));
+        NseVal tail = check_alloc(CONS(create_cons(result, nil)));
+        del_ref(result);
+        NseVal output = check_alloc(CONS(create_cons(tag, tail))); 
+        del_ref(tag);
+        del_ref(tail);
+        return output;
+      } else {
+        NseVal tag = check_alloc(SYMBOL(create_symbol("error")));
+        NseVal msg = check_alloc(STRING(create_string(error_string, strlen(error_string))));
+        NseVal form = check_alloc(SYNTAX(error_form));
+        NseVal tail1 = check_alloc(CONS(create_cons(form, nil)));
+        NseVal tail2 = check_alloc(CONS(create_cons(msg, tail1)));
+        del_ref(msg);
+        del_ref(tail1);
+        NseVal output = check_alloc(CONS(create_cons(tag, tail2))); 
+        del_ref(tag);
+        del_ref(tail2);
+        return output;
+      }
+    }
+    return undefined;
   } else if (match_symbol(operator, SPECIAL_DEFINE)) {
     NseVal h = head(args);
     if (RESULT_OK(h)) {

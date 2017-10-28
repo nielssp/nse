@@ -9,6 +9,7 @@
 #define SPECIAL_IF "if"
 #define SPECIAL_LET "let"
 #define SPECIAL_LAMBDA "fn"
+#define SPECIAL_TRY "try"
 #define SPECIAL_DEFINE "def"
 #define SPECIAL_DEFINE_MACRO "def-macro"
 #define SPECIAL_DEFINE_TYPE "def-type"
