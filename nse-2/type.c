@@ -118,6 +118,8 @@ static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
     return 0;
   } else if (a->type == BASE_TYPE_ALIAS) {
     return is_subtype_of_s(a->param_b, b, s);
+  } else if (a->type == BASE_TYPE_UNION) {
+    return is_subtype_of_s(a->param_a, b, s) && is_subtype_of_s(a->param_b, b, s);
   }
   switch (b->type) {
     case BASE_TYPE_ANY:

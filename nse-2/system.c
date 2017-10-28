@@ -60,6 +60,17 @@ static NseVal is_a(NseVal args) {
   return result;
 }
 
+static NseVal subtype_of(NseVal args) {
+  NseVal a = head(args);
+  NseVal b = elem(1, args);
+  Type *type_a = to_type(a);
+  Type *type_b = to_type(b);
+  if (type_a && type_b) {
+    return is_subtype_of(type_a, type_b) ? TRUE : FALSE;
+  }
+  return undefined;
+}
+
 static NseVal union_type(NseVal args) {
   NseVal a = head(args);
   NseVal b = elem(1, args);
@@ -79,6 +90,7 @@ Module *get_system_module() {
   module_define(system, "type-of", FUNC(type_of));
 
   module_define(system, "is-a", FUNC(is_a));
+  module_define(system, "subtype-of?", FUNC(subtype_of));
   module_define(system, "union-type", FUNC(union_type));
 
   module_define_type(system, "nil", TYPE(nil_type));
