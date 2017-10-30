@@ -15,10 +15,13 @@ static NseVal sum(NseVal args) {
 static NseVal subtract(NseVal args) {
   int64_t acc = head(args).i64;
   args = tail(args);
-  while (is_cons(args)) {
+  if (!is_cons(args)) {
+    return I64(-acc);
+  }
+  do {
     acc -= head(args).i64;
     args = tail(args);
-  }
+  } while (is_cons(args));
   return I64(acc);
 }
 
@@ -90,6 +93,18 @@ static NseVal union_type(NseVal args) {
   return undefined;
 }
 
+static NseVal expand_type(NseVal args) {
+  NseVal a = head(args);
+  Type *type_a = to_type(a);
+  if (type_a) {
+    if (type_a->type == BASE_TYPE_ALIAS) {
+      return TYPE(copy_type(type_a->param_b));
+    }
+    return a;
+  }
+  return undefined;
+}
+
 Module *get_system_module() {
   Module *system = create_module("system");
   module_define(system, "+", FUNC(sum));
@@ -101,6 +116,7 @@ Module *get_system_module() {
   module_define(system, "subtype-of?", FUNC(subtype_of));
   module_define(system, "cons-type", FUNC(cons_type));
   module_define(system, "union-type", FUNC(union_type));
+  module_define(system, "expand-type", FUNC(expand_type));
 
   module_define_type(system, "nothing", TYPE(nothing_type));
   module_define_type(system, "any", TYPE(any_type));
