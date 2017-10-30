@@ -1,6 +1,7 @@
 #include "nsert.h"
 
 #include "system.h"
+#include "write.h"
 
 static NseVal sum(NseVal args) {
   int64_t acc = 0;
@@ -72,14 +73,10 @@ static NseVal subtype_of(NseVal args) {
 }
 
 static NseVal cons_type(NseVal args) {
-  NseVal a = head(args);
-  NseVal b = elem(1, args);
-  Type *type_a = to_type(a);
-  Type *type_b = to_type(b);
-  if (type_a && type_b) {
-    return TYPE(create_cons_type(copy_type(type_a), copy_type(type_b)));
-  }
-  return undefined;
+  ARG_POP_TYPE(Type *, type_a, args, to_type, "a type");
+  ARG_POP_TYPE(Type *, type_b, args, to_type, "a type");
+  ARG_DONE(args);
+  return TYPE(create_cons_type(copy_type(type_a), copy_type(type_b)));
 }
 
 static NseVal union_type(NseVal args) {
@@ -105,7 +102,7 @@ Module *get_system_module() {
   module_define(system, "cons-type", FUNC(cons_type));
   module_define(system, "union-type", FUNC(union_type));
 
-  module_define_type(system, "nil", TYPE(nil_type));
+  module_define_type(system, "nothing", TYPE(nothing_type));
   module_define_type(system, "any", TYPE(any_type));
   module_define_type(system, "nil", TYPE(nil_type));
   module_define_type(system, "ref", TYPE(ref_type));

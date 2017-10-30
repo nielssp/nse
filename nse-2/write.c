@@ -21,6 +21,7 @@ static void write_cons(Cons *cons, Stream *stream) {
 
 static void write_type(Type *type, Stream *stream) {
   switch (type->type) {
+    case BASE_TYPE_NOTHING:
     case BASE_TYPE_ANY:
     case BASE_TYPE_NIL:
     case BASE_TYPE_REF:

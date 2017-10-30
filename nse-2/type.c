@@ -11,6 +11,7 @@ struct subst {
   Subst *next;
 };
 
+Type *nothing_type = &(Type){ .refs = 1, .type = BASE_TYPE_NOTHING };
 Type *any_type = &(Type){ .refs = 1, .type = BASE_TYPE_ANY };
 Type *nil_type = &(Type){ .refs = 1, .type = BASE_TYPE_NIL };
 Type *ref_type = &(Type){ .refs = 1, .type = BASE_TYPE_REF };
@@ -120,8 +121,12 @@ static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
     return is_subtype_of_s(a->param_b, b, s);
   } else if (a->type == BASE_TYPE_UNION) {
     return is_subtype_of_s(a->param_a, b, s) && is_subtype_of_s(a->param_b, b, s);
+  } else if (a->type == BASE_TYPE_NOTHING) {
+    return 1;
   }
   switch (b->type) {
+    case BASE_TYPE_NOTHING:
+      return 0;
     case BASE_TYPE_ANY:
       return 1;
     case BASE_TYPE_NIL:
@@ -399,6 +404,8 @@ void delete_type(Type *t) {
 
 const char *base_type_to_string(BaseType t) {
   switch (t) {
+    case BASE_TYPE_NOTHING:
+      return "nothing";
     case BASE_TYPE_ANY:
       return "any";
     case BASE_TYPE_NIL:

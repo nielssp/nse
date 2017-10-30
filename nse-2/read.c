@@ -227,7 +227,7 @@ Syntax *parse_symbol(Stack *input) {
   int c = peek(input);
   Syntax *syntax = start_pos(create_syntax(undefined), input);
   if (syntax) {
-    while (c != EOF && !iswhite(c) && c != '(' && c != ')' && c != '"') {
+    while (c != EOF && !iswhite(c) && c != '(' && c != ')' && c != '"' && c != ';') {
       buffer[l++] = (char)c;
       pop(input);
       c = peek(input);
@@ -263,6 +263,13 @@ Syntax *parse_prim(Stack *input) {
   if (c == EOF) {
     raise_error("%s:%zu:%zu: end of input", input->file_name, input->line, input->column);
     return NULL;
+  }
+  if (c == ';') {
+    while (c != '\n' && c != EOF) {
+      pop(input);
+      c = peek(input);
+    }
+    return parse_prim(input);
   }
   if (c == '.') {
     raise_error("%s:%zu:%zu: unexpected '.'", input->file_name, input->line, input->column);

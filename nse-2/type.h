@@ -2,6 +2,7 @@
 #define TYPE_H
 
 typedef enum {
+  BASE_TYPE_NOTHING,
   BASE_TYPE_ANY,
   BASE_TYPE_NIL,
   BASE_TYPE_REF,
@@ -46,6 +47,7 @@ struct type {
   };
 };
 
+extern Type *nothing_type;
 extern Type *any_type;
 extern Type *nil_type;
 extern Type *ref_type;

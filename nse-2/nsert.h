@@ -32,6 +32,27 @@
 
 #define RESULT_OK(value) ((value).type != TYPE_UNDEFINED)
 
+#define ARG_POP_TYPE(type, name, args, convert, type_name) type name;\
+  {\
+    NseVal temp1 = head(args);\
+    if (!RESULT_OK(temp1)) {\
+      raise_error("too few parameters for function");\
+      return undefined;\
+    }\
+    args = tail(args);\
+    name = convert(temp1);\
+    if (name == NULL) {\
+      char *temp2 = nse_write_to_string(temp1);\
+      raise_error("%s is not %s", temp2, type_name);\
+      free(temp2);\
+      return undefined;\
+    }\
+  }
+#define ARG_DONE(args) if (!is_nil(args)) {\
+  raise_error("too many parameters for function");\
+  return undefined;\
+}
+
 typedef enum {
  TYPE_UNDEFINED,
  TYPE_NIL,
