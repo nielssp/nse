@@ -12,12 +12,13 @@
 #include "eval.h"
 #include "system.h"
 
-const char *short_options = "hvlt:Tms:c:";
+const char *short_options = "hvc:n";
 
 const struct option long_options[] = {
   {"help", no_argument, NULL, 'h'},
   {"version", no_argument, NULL, 'v'},
   {"compile", required_argument, NULL, 'c'},
+  {"no-std", no_argument, NULL, 'n'},
   {0, 0, 0, 0}
 };
 
@@ -81,6 +82,7 @@ int paren_end(int count, int key) {
 int main(int argc, char *argv[]) {
   int opt;
   int option_index;
+  int std = 1;
   while ((opt = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
     switch (opt) {
       case 'h':
@@ -89,6 +91,7 @@ int main(int argc, char *argv[]) {
         describe_option("h", "help", "Show help.");
         describe_option("v", "version", "Show version information.");
         describe_option("c <lispfile>", "compile <lispfile>", "Compile file.");
+        describe_option("n", "no-std", "Don't load standard library");
         return 0;
       case 'v':
         puts("nse-2");
@@ -97,6 +100,9 @@ int main(int argc, char *argv[]) {
         // compile: optarg
         puts("not implemented");
         return 1;
+      case 'n':
+        std = 0;
+        break;
     }
   }
   if (optind < argc) {
@@ -112,6 +118,12 @@ int main(int argc, char *argv[]) {
   rl_bind_key('\t', rl_insert); // TODO: autocomplete
   rl_bind_key('(', paren_start);
   rl_bind_key(')', paren_end);
+
+  if (std) {
+    NseVal args = CONS(create_cons(SYMBOL(create_symbol("std.lisp")), nil));
+    del_ref(load(args));
+    del_ref(args);
+  }
 
   while (1) {
     char *input = readline("\001\033[1;32m\002>\001\033[0m\002 ");
