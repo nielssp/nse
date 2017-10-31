@@ -82,6 +82,12 @@ static NseVal cons_type(NseVal args) {
   return TYPE(create_cons_type(copy_type(type_a), copy_type(type_b)));
 }
 
+static NseVal simplify_type_(NseVal args) {
+  ARG_POP_TYPE(Type *, type_a, args, to_type, "a type");
+  ARG_DONE(args);
+  return TYPE(simplify_type(type_a));
+}
+
 static NseVal union_type(NseVal args) {
   NseVal a = head(args);
   NseVal b = elem(1, args);
@@ -117,6 +123,7 @@ Module *get_system_module() {
   module_define(system, "cons-type", FUNC(cons_type));
   module_define(system, "union-type", FUNC(union_type));
   module_define(system, "expand-type", FUNC(expand_type));
+  module_define(system, "simplify-type", FUNC(simplify_type_));
 
   module_define_type(system, "nothing", TYPE(nothing_type));
   module_define_type(system, "any", TYPE(any_type));

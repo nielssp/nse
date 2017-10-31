@@ -11,5 +11,35 @@
 (def (head (h . t)) h)
 (def (tail (h . t)) t)
 
+(def-macro (or a b) (list 'if a ''t b))
+(def-macro (and a b) (list 'if a b ''f))
+
 (def (nil? xs) (= xs nil))
 (def (map f xs) (if (nil? xs) nil (cons (f (head xs)) (map f (tail xs)))))
+
+(def (++ xs ys)
+     (if (nil? xs) ys
+       (if (nil? ys) xs
+         (cons (head xs) (++ (tail xs) ys)))))
+
+(def (filter f xs)
+     (if (nil? xs) '()
+       (if (f (head xs)) (cons (head xs) (filter f (tail xs))) (filter f (tail xs)))))
+
+(def (foldl start f xs)
+  (if (nil? xs) start (foldl f (f (head xs)) (tail xs))))
+
+(def (foldr start f xs)
+  (if (nil? xs) start (f (head xs) (foldr start f (tail xs)))))
+
+(def (sum xs) (foldl 0 + xs))
+
+(def (range start end)
+  (if (= start end) (cons end nil) (cons start (range (+ start 1) end))))
+
+(def (zip-with f  xs ys)
+  (if (or (nil? xs) (nil? ys)) '()
+    (cons (f (head xs) (head ys)) (zip-with f (tail xs) (tail ys)))))
+
+(def (zip xs ys) (zip-with (fn (x y) (list x y)) xs ys))
+

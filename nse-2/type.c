@@ -342,15 +342,19 @@ Type *create_product_type(Type *operands[], size_t num_operands) {
   t->refs = 1;
   t->type = BASE_TYPE_PRODUCT;
   t->num_operands = num_operands;
-  t->operands = malloc(sizeof(Type *) * num_operands);
-  if (!t->operands) {
-    free(t);
-    for (size_t i = 0; i < num_operands; i++) {
-      delete_type(operands[i]);
+  if (num_operands > 0) {
+    t->operands = malloc(sizeof(Type *) * num_operands);
+    if (!t->operands) {
+      free(t);
+      for (size_t i = 0; i < num_operands; i++) {
+        delete_type(operands[i]);
+      }
+      return NULL;
     }
-    return NULL;
+    memcpy(t->operands, operands, sizeof(Type *) * num_operands);
+  } else {
+    t->operands = NULL;
   }
-  memcpy(t->operands, operands, sizeof(Type *) * num_operands);
   return t;
 }
 
@@ -462,3 +466,41 @@ const char *base_type_to_string(BaseType t) {
       return "alias";
   }
 }
+
+Type *simplify_type(Type *t) {
+  switch (t->type) {
+    case BASE_TYPE_PRODUCT: {
+      Type *copy = create_product_type(NULL, 0);
+      copy->num_operands = t->num_operands;
+      copy->operands = malloc(sizeof(Type *) * t->num_operands);
+      for (size_t i = 0; i < t->num_operands; i++) {
+        copy->operands[i] = simplify_type(t->operands[i]);
+      }
+      return copy;
+    }
+    case BASE_TYPE_CONS:
+    case BASE_TYPE_FUNC:
+      return create_binary_type(t->type, simplify_type(t->param_a), simplify_type(t->param_b));
+    case BASE_TYPE_UNION: {
+      Type *a = simplify_type(t->param_a);
+      Type *b = simplify_type(t->param_b);
+      if (is_subtype_of(a, b)) {
+        return b;
+      } else if (is_subtype_of(b, a)) {
+        return a;
+      } else {
+        return create_union_type(a, b);
+      }
+    }
+    case BASE_TYPE_QUOTE:
+    case BASE_TYPE_TYPE_QUOTE:
+    case BASE_TYPE_SYNTAX:
+      return create_unary_type(t->type, simplify_type(t->param_a));
+    case BASE_TYPE_RECUR:
+    case BASE_TYPE_ALIAS:
+      return create_binary_type_name(t->type, t->var_name, t->param_b);
+    default:
+      return copy_type(t);
+  }
+}
+

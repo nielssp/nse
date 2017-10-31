@@ -83,6 +83,7 @@ void delete_type(Type *t);
 int type_is_product(const Type *t);
 int type_equals(const Type *a, const Type *b);
 int is_subtype_of(const Type *a, const Type *b);
+Type *simplify_type(Type *t);
 
 const char *base_type_to_string(BaseType t);
 
