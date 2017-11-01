@@ -37,6 +37,7 @@ static void write_type(Type *type, Stream *stream) {
     case BASE_TYPE_F64:
     case BASE_TYPE_STRING:
     case BASE_TYPE_ANY_SYMBOL:
+    case BASE_TYPE_KEYWORD:
     case BASE_TYPE_TYPE:
       stream_printf(stream, base_type_to_string(type->type));
       break;
@@ -119,6 +120,9 @@ NseVal nse_write(NseVal value, Stream *stream) {
     case TYPE_SYMBOL:
       stream_printf(stream, "%s", value.symbol);
       break;
+    case TYPE_KEYWORD:
+      stream_printf(stream, ":%s", value.symbol);
+      break;
     case TYPE_I64:
       stream_printf(stream, "%ld", value.i64);
       break;
@@ -148,8 +152,7 @@ NseVal nse_write(NseVal value, Stream *stream) {
     case TYPE_REFERENCE:
       stream_printf(stream, "#<reference#%p>", value.reference->pointer);
       break;
-    default:
-      raise_error("undefined type: %d", value.type);
+    case TYPE_UNDEFINED:
       return undefined;
   }
   return nil;

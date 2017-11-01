@@ -123,6 +123,11 @@ Symbol *create_symbol(const char *s) {
   return copy;
 }
 
+Keyword *create_keyword(const char *s) {
+  return create_symbol(s);
+}
+
+
 String *create_string(const char *s, size_t length) {
   String *str = malloc(sizeof(String) + length);
   if (!str) {
@@ -185,6 +190,7 @@ NseVal check_alloc(NseVal v) {
     case TYPE_SYNTAX:
     case TYPE_REFERENCE:
     case TYPE_SYMBOL:
+    case TYPE_KEYWORD:
     case TYPE_STRING:
     case TYPE_TYPE:
       if ((void *)v.cons == NULL) {
@@ -288,6 +294,7 @@ void delete(NseVal value) {
       free(value.cons);
       return;
     case TYPE_SYMBOL:
+    case TYPE_KEYWORD:
       free(value.symbol);
       return;
     case TYPE_QUOTE:
@@ -557,6 +564,7 @@ NseVal nse_equals(NseVal a, NseVal b) {
       }
       return strncmp(a.string->chars, b.string->chars, a.string->length) == 0 ? TRUE : FALSE;
     case TYPE_SYMBOL:
+    case TYPE_KEYWORD:
       if (a.symbol == b.symbol) {
         return TRUE;
       }
@@ -628,6 +636,8 @@ const char *nse_val_type_to_string(NseValType t) {
       return "i64";
     case TYPE_SYMBOL:
       return "symbol";
+    case TYPE_KEYWORD:
+      return "keyword";
     case TYPE_STRING:
       return "string";
     case TYPE_QUOTE:
@@ -659,6 +669,8 @@ Type *get_type(NseVal v) {
       return copy_type(i64_type);
     case TYPE_SYMBOL:
       return create_symbol_type(v.symbol);
+    case TYPE_KEYWORD:
+      return copy_type(keyword_type);
     case TYPE_STRING:
       return copy_type(string_type);
     case TYPE_QUOTE:

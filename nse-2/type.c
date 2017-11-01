@@ -29,6 +29,7 @@ Type *f32_type = &(Type){ .refs = 1, .type = BASE_TYPE_F32 };
 Type *f64_type = &(Type){ .refs = 1, .type = BASE_TYPE_F64 };
 Type *string_type = &(Type){ .refs = 1, .type = BASE_TYPE_STRING };
 Type *any_symbol_type = &(Type){ .refs = 1, .type = BASE_TYPE_ANY_SYMBOL };
+Type *keyword_type = &(Type){ .refs = 1, .type = BASE_TYPE_KEYWORD };
 Type *type_type = &(Type){ .refs = 1, .type = BASE_TYPE_TYPE };
 
 static Subst *add_substitution(const char *name, const Type *type, Subst *next) {
@@ -172,6 +173,8 @@ static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
       return a->type == BASE_TYPE_F32;
     case BASE_TYPE_STRING:
       return a->type == BASE_TYPE_STRING;
+    case BASE_TYPE_KEYWORD:
+      return a->type == BASE_TYPE_KEYWORD;
     case BASE_TYPE_ANY_SYMBOL:
       return a->type == BASE_TYPE_SYMBOL || a->type == BASE_TYPE_ANY_SYMBOL;
     case BASE_TYPE_TYPE:
@@ -483,6 +486,8 @@ const char *base_type_to_string(BaseType t) {
       return "string";
     case BASE_TYPE_ANY_SYMBOL:
       return "any-symbol";
+    case BASE_TYPE_KEYWORD:
+      return "keyword";
     case BASE_TYPE_TYPE:
       return "type";
     case BASE_TYPE_SYMBOL:

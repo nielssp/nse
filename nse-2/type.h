@@ -20,6 +20,7 @@ typedef enum {
   BASE_TYPE_ANY_SYMBOL,
   BASE_TYPE_TYPE,
   BASE_TYPE_SYMBOL,
+  BASE_TYPE_KEYWORD,
   BASE_TYPE_TYPE_VAR,
   BASE_TYPE_QUOTE,
   BASE_TYPE_TYPE_QUOTE,
@@ -65,6 +66,7 @@ extern Type *f32_type;
 extern Type *f64_type;
 extern Type *string_type;
 extern Type *any_symbol_type;
+extern Type *keyword_type;
 extern Type *type_type;
 
 Type *create_symbol_type(const char *symbol);

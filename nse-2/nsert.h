@@ -22,6 +22,7 @@
 #define SYNTAX(c) ((NseVal) { .type = TYPE_SYNTAX, .syntax = (c) })
 #define CLOSURE(c) ((NseVal) { .type = TYPE_CLOSURE, .closure = (c) })
 #define SYMBOL(s) ((NseVal) { .type = TYPE_SYMBOL, .symbol = (s) })
+#define KEYWORD(s) ((NseVal) { .type = TYPE_KEYWORD, .symbol = (s) })
 #define STRING(s) ((NseVal) { .type = TYPE_STRING, .string = (s) })
 #define QUOTE(q) ((NseVal) { .type = TYPE_QUOTE, .quote = (q) })
 #define TQUOTE(q) ((NseVal) { .type = TYPE_TQUOTE, .quote = (q) })
@@ -80,6 +81,7 @@ typedef struct syntax Syntax;
 typedef struct reference Reference;
 typedef struct string String;
 typedef char Symbol;
+typedef char Keyword;
 
 typedef void (* Destructor)(void *);
 
@@ -148,6 +150,7 @@ Quote *create_quote(NseVal quoted);
 TypeQuote *create_type_quote(NseVal quoted);
 Syntax *create_syntax(NseVal quoted);
 Symbol *create_symbol(const char *s);
+Keyword *create_keyword(const char *s);
 String *create_string(const char *s, size_t length);
 Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], size_t env_size);
 Reference *create_reference(void *pointer, void destructor(void *));
@@ -185,6 +188,7 @@ int is_type_quote(NseVal v);
 int is_function(NseVal v);
 int is_reference(NseVal v);
 int is_symbol(NseVal v);
+int is_keyword(NseVal v);
 int is_type(NseVal v);
 int is_true(NseVal b);
 

@@ -225,9 +225,13 @@ Syntax *parse_symbol(Stack *input) {
     return NULL;
   }
   int c = peek(input);
+  int qualified = 0;
   Syntax *syntax = start_pos(create_syntax(undefined), input);
   if (syntax) {
     while (c != EOF && !iswhite(c) && c != '(' && c != ')' && c != '"' && c != ';') {
+      if (c == '/') {
+        qualified = 1;
+      }
       buffer[l++] = (char)c;
       pop(input);
       c = peek(input);
@@ -241,7 +245,6 @@ Syntax *parse_symbol(Stack *input) {
           free(buffer);
           free(syntax);
           return NULL;
-          break;
         }
       }
     }
@@ -275,6 +278,14 @@ Syntax *parse_prim(Stack *input) {
     raise_error("%s:%zu:%zu: unexpected '.'", input->file_name, input->line, input->column);
     pop(input);
     return NULL;
+  }
+  if (c == ':') {
+    pop(input);
+    Syntax *s = parse_symbol(input);
+    if (s) {
+      s->quoted.type = TYPE_KEYWORD;
+    }
+    return s;
   }
   if (c == '\'' || c == '&') {
     Syntax *syntax = start_pos(create_syntax(undefined), input);
