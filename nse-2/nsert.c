@@ -13,7 +13,6 @@ void delete_all(NseVal value);
 void delete(NseVal value);
 NseVal parse_list(char **input);
 
-char *error_string = NULL;
 Syntax *error_form = NULL;
 
 void set_debug_form(Syntax *syntax) {
@@ -48,47 +47,6 @@ NseVal pop_debug_form(NseVal result, Syntax *previous) {
   error_form = previous;
   return result;
 }
-
-void raise_error(const char *format, ...) {
-  va_list va;
-  char *old = error_string;
-  char *buffer = malloc(50);
-  size_t size = 50;
-  while (1) {
-    va_start(va, format);
-    int n = vsnprintf(buffer, size, format, va);
-    va_end(va);
-    if (n < 0) {
-      // ERROR
-      break;
-    }
-    if (n  < size) {
-      error_string = buffer;
-      break;
-    }
-    size_t new_size = n + 1;
-    char *new_buffer = malloc(new_size);
-    if (!new_buffer) {
-      // ERROR
-      break;
-    }
-    memcpy(new_buffer, buffer, size);
-    free(buffer);
-    buffer = new_buffer;
-    size = new_size;
-  }
-  if (old) {
-    free(old);
-  }
-}
-
-void clear_error() {
-  if (error_string) {
-    free(error_string);
-    error_string = NULL;
-  }
-}
-
 
 NseVal undefined = { .type = TYPE_UNDEFINED };
 NseVal nil = { .type = TYPE_NIL };

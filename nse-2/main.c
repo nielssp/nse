@@ -79,6 +79,28 @@ int paren_end(int count, int key) {
   return 0;
 }
 
+char *get_line(size_t line, const char *text) {
+  size_t lines = 1;
+  size_t length = 0;
+  while (*(text++)) {
+    if (line == lines) {
+      length++;
+      if (*text == '\n') {
+        break;
+      }
+    } else if (*text == '\n') {
+      lines++;
+    }
+  }
+  char *line_buf = malloc(length + 1);
+  line_buf[length] = 0;
+  if (length == 0) {
+    return line_buf;
+  }
+  memcpy(line_buf, text - length - 1, length);
+  return line_buf;
+}
+
 int main(int argc, char *argv[]) {
   int opt;
   int option_index;
@@ -138,7 +160,6 @@ int main(int argc, char *argv[]) {
     add_history(input);
     Stack *stack = open_stack_string(input, "(user)");
     NseVal code = check_alloc(SYNTAX(parse_prim(stack)));
-    free(input);
     close_stack(stack);
     if (RESULT_OK(code)) {
       NseVal result = eval(code, current_scope);
@@ -147,18 +168,34 @@ int main(int argc, char *argv[]) {
         nse_write(result, stdout_stream);
         del_ref(result);
       } else {
-        printf("error: %s", error_string);
+        printf("error: %s", current_error());
         if (error_form != NULL) {
           NseVal datum = syntax_to_datum(error_form->quoted);
           printf(": ");
           nse_write(datum, stdout_stream);
           del_ref(datum);
           printf("\nIn %s on line %zd column %zd", error_form->file, error_form->start_line, error_form->start_column);
+          if (error_form->start_line > 0) {
+            char *line = get_line(error_form->start_line, input);
+            printf("\n%s\n", line);
+            for (size_t i = 1; i < error_form->start_column; i++) {
+              printf(" ");
+            }
+            printf("^");
+            if (error_form->start_line == error_form->end_line) {
+              size_t length = error_form->end_column - error_form->start_column - 1;
+              for (size_t i = 0; i < length; i++) {
+                printf("^");
+              }
+            }
+            free(line);
+          }
         }
       }
     } else {
-      printf("error: %s: ", error_string);
+      printf("error: %s: ", current_error());
     }
+    free(input);
     printf("\n");
   }
   scope_pop(current_scope);

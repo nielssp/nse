@@ -30,6 +30,7 @@ typedef enum {
   BASE_TYPE_PRODUCT,
   BASE_TYPE_RECUR,
   BASE_TYPE_ALIAS,
+  BASE_TYPE_FORALL,
 } BaseType;
 
 typedef struct type Type;
@@ -77,6 +78,7 @@ Type *create_union_type(Type *type_a, Type *type_b);
 Type *create_product_type(Type *operands[], size_t num_operands);
 Type *create_recur_type(const char *name, Type *t);
 Type *create_alias_type(const char *name, Type *t);
+Type *create_forall_type(const char *name, Type *t);
 
 Type *copy_type(Type *t);
 void delete_type(Type *t);

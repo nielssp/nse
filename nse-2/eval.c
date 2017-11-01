@@ -351,7 +351,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
         return output;
       } else {
         NseVal tag = check_alloc(SYMBOL(create_symbol("error")));
-        NseVal msg = check_alloc(STRING(create_string(error_string, strlen(error_string))));
+        NseVal msg = check_alloc(STRING(create_string(current_error(), strlen(current_error()))));
         NseVal form = check_alloc(SYNTAX(error_form));
         NseVal tail1 = check_alloc(CONS(create_cons(form, nil)));
         NseVal tail2 = check_alloc(CONS(create_cons(msg, tail1)));

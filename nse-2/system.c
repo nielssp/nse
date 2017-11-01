@@ -76,6 +76,9 @@ static NseVal subtype_of(NseVal args) {
 }
 
 static NseVal cons_type(NseVal args) {
+//  DESCRIBE_FORM("(cons a b)");
+//  DESCRIBE_FUNC("Creates a cons-type from types a and b");
+//  DESCRIBE_TYPE("&(-> (* type type) type)");
   ARG_POP_TYPE(Type *, type_a, args, to_type, "a type");
   ARG_POP_TYPE(Type *, type_b, args, to_type, "a type");
   ARG_DONE(args);
@@ -97,6 +100,20 @@ static NseVal union_type(NseVal args) {
     return TYPE(create_union_type(copy_type(type_a), copy_type(type_b)));
   }
   return undefined;
+}
+
+static NseVal func_type(NseVal args) {
+  ARG_POP_TYPE(Type *, type_a, args, to_type, "a type");
+  ARG_POP_TYPE(Type *, type_b, args, to_type, "a type");
+  ARG_DONE(args);
+  return TYPE(create_func_type(copy_type(type_a), copy_type(type_b)));
+}
+
+static NseVal forall_type(NseVal args) {
+  ARG_POP_TYPE(char *, name, args, to_symbol, "a symbol");
+  ARG_POP_TYPE(Type *, t, args, to_type, "a type");
+  ARG_DONE(args);
+  return TYPE(create_forall_type(name, copy_type(t)));
 }
 
 static NseVal expand_type(NseVal args) {
@@ -142,5 +159,10 @@ Module *get_system_module() {
   module_define_type(system, "string", TYPE(string_type));
   module_define_type(system, "any-symbol", TYPE(any_symbol_type));
   module_define_type(system, "type", TYPE(type_type));
+  module_define_type(system, "cons", FUNC(cons_type));
+  module_define_type(system, "+", FUNC(union_type));
+  //module_define_type(system, "*", FUNC(product_type));
+  module_define_type(system, "->", FUNC(func_type));
+  module_define_type(system, "forall", FUNC(forall_type));
   return system;
 }

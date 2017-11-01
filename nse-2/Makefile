@@ -49,13 +49,16 @@ read.o: read.c
 system.o: system.c
 	$(CC) -c -o $@ $<
 
-libnsert.a: nsert.o hash_map.o type.o
+libnsert.a: nsert.o hash_map.o type.o error.o
 	ar rcs $@ $^
 
 nsert.o: nsert.c nsert.h
 	$(CC) -c -o $@ $<
 
 type.o: type.c type.h
+	$(CC) -c -o $@ $<
+
+error.o: error.c error.h
 	$(CC) -c -o $@ $<
 
 stream.o: util/stream.c util/stream.h

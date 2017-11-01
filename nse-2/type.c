@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "error.h"
+
 #include "type.h"
 
 typedef struct subst Subst;
@@ -96,6 +98,7 @@ int type_equals(const Type *a, const Type *b) {
     case BASE_TYPE_SYNTAX:
       return type_equals(a->param_a, b->param_a);
     case BASE_TYPE_RECUR:
+    case BASE_TYPE_FORALL:
       if (!type_equals(a->param_b, b->param_b)) {
         return 0;
       }
@@ -246,6 +249,12 @@ static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
     }
     case BASE_TYPE_ALIAS:
       return is_subtype_of_s(a, b->param_b, s);
+    case BASE_TYPE_FORALL: {
+      Subst *new_s = add_substitution(b->var_name, any_type, s);
+      int result = is_subtype_of_s(a, b->param_b, new_s);
+      delete_substitution(new_s);
+      return result;
+    }
   }
 }
 
@@ -254,55 +263,76 @@ int is_subtype_of(const Type *a, const Type *b) {
 }
 
 static Type *create_unary_type(BaseType type, Type *param_a) {
-  Type *t = malloc(sizeof(Type));
-  t->refs = 1;
-  t->type = type;
-  t->param_a = param_a;
-  t->param_b = NULL;
-  return t;
+  if (param_a) {
+    Type *t = allocate(sizeof(Type));
+    if (t) {
+      t->refs = 1;
+      t->type = type;
+      t->param_a = param_a;
+      t->param_b = NULL;
+      return t;
+    }
+  }
+  delete_type(param_a);
+  return NULL;
 }
 
 static Type *create_unary_type_name(BaseType type, const char *name) {
-  Type *t = malloc(sizeof(Type));
-  t->refs = 1;
-  t->type = type;
-  size_t len = strlen(name);
-  char *copy = malloc(len + 1);
-  if (!copy) {
-    free(t);
-    return NULL;
+  if (name) {
+    Type *t = allocate(sizeof(Type));
+    if (t) {
+      t->refs = 1;
+      t->type = type;
+      size_t len = strlen(name);
+      char *copy = allocate(len + 1);
+      if (copy) {
+        memcpy(copy, name, len);
+        copy[len] = '\0';
+        t->var_name = copy;
+        t->param_b = NULL;
+        return t;
+      }
+      free(t);
+    }
   }
-  memcpy(copy, name, len);
-  copy[len] = '\0';
-  t->var_name = copy;
-  t->param_b = NULL;
-  return t;
+  return NULL;
 }
 
 static Type *create_binary_type(BaseType type, Type *param_a, Type *param_b) {
-  Type *t = malloc(sizeof(Type));
-  t->refs = 1;
-  t->type = type;
-  t->param_a = param_a;
-  t->param_b = param_b;
-  return t;
+  if (param_a && param_b) {
+    Type *t = allocate(sizeof(Type));
+    if (t) {
+      t->refs = 1;
+      t->type = type;
+      t->param_a = param_a;
+      t->param_b = param_b;
+      return t;
+    }
+  }
+  delete_type(param_a);
+  delete_type(param_b);
+  return NULL;
 }
 
 static Type *create_binary_type_name(BaseType type, const char *name, Type *body) {
-  Type *t = malloc(sizeof(Type));
-  t->refs = 1;
-  t->type = type;
-  size_t len = strlen(name);
-  t->var_name = malloc(len + 1);
-  if (!t->var_name) {
-    free(t);
-    delete_type(body);
-    return NULL;
+  if (name && body) {
+    Type *t = allocate(sizeof(Type));
+    if (t) {
+      t->refs = 1;
+      t->type = type;
+      size_t len = strlen(name);
+      t->var_name = allocate(len + 1);
+      if (t->var_name) {
+        memcpy(t->var_name, name, len);
+        t->var_name[len] = '\0';
+        t->param_b = body;
+        return t;
+      }
+      free(t);
+    }
   }
-  memcpy(t->var_name, name, len);
-  t->var_name[len] = '\0';
-  t->param_b = body;
-  return t;
+  delete_type(body);
+  return NULL;
 }
 
 Type *create_symbol_type(const char *symbol) {
@@ -338,24 +368,29 @@ Type *create_union_type(Type *type_a, Type *type_b) {
 }
 
 Type *create_product_type(Type *operands[], size_t num_operands) {
-  Type *t = malloc(sizeof(Type));
-  t->refs = 1;
-  t->type = BASE_TYPE_PRODUCT;
-  t->num_operands = num_operands;
-  if (num_operands > 0) {
-    t->operands = malloc(sizeof(Type *) * num_operands);
-    if (!t->operands) {
-      free(t);
-      for (size_t i = 0; i < num_operands; i++) {
-        delete_type(operands[i]);
+  if (operands) {
+    Type *t = allocate(sizeof(Type));
+    if (t) {
+      t->refs = 1;
+      t->type = BASE_TYPE_PRODUCT;
+      t->num_operands = num_operands;
+      if (num_operands > 0) {
+        t->operands = allocate(sizeof(Type *) * num_operands);
+        if (t->operands) {
+          memcpy(t->operands, operands, sizeof(Type *) * num_operands);
+          return t;
+        }
+      } else {
+        t->operands = NULL;
+        return t;
       }
-      return NULL;
+      free(t);
     }
-    memcpy(t->operands, operands, sizeof(Type *) * num_operands);
-  } else {
-    t->operands = NULL;
+    for (size_t i = 0; i < num_operands; i++) {
+      delete_type(operands[i]);
+    }
   }
-  return t;
+  return NULL;
 }
 
 Type *create_recur_type(const char *name, Type *t) {
@@ -366,12 +401,19 @@ Type *create_alias_type(const char *name, Type *t) {
   return create_binary_type_name(BASE_TYPE_ALIAS, name, t);
 }
 
+Type *create_forall_type(const char *name, Type *t) {
+  return create_binary_type_name(BASE_TYPE_FORALL, name, t);
+}
+
 Type *copy_type(Type *t) {
   t->refs++;
   return t;
 }
 
 void delete_type(Type *t) {
+  if (!t) {
+    return;
+  }
   if (t->refs > 0) {
     t->refs--;
   }
@@ -392,6 +434,7 @@ void delete_type(Type *t) {
       case BASE_TYPE_SYNTAX:
         delete_type(t->param_a);
         break;
+      case BASE_TYPE_FORALL:
       case BASE_TYPE_RECUR:
       case BASE_TYPE_ALIAS:
         delete_type(t->param_b);
@@ -455,15 +498,17 @@ const char *base_type_to_string(BaseType t) {
     case BASE_TYPE_CONS:
       return "cons";
     case BASE_TYPE_FUNC:
-      return "→";
+      return "->";
     case BASE_TYPE_UNION:
-      return "∪";
+      return "+";
     case BASE_TYPE_PRODUCT:
       return "*";
     case BASE_TYPE_RECUR:
       return "µ";
     case BASE_TYPE_ALIAS:
       return "alias";
+    case BASE_TYPE_FORALL:
+      return "forall";
   }
 }
 
@@ -471,12 +516,27 @@ Type *simplify_type(Type *t) {
   switch (t->type) {
     case BASE_TYPE_PRODUCT: {
       Type *copy = create_product_type(NULL, 0);
-      copy->num_operands = t->num_operands;
-      copy->operands = malloc(sizeof(Type *) * t->num_operands);
-      for (size_t i = 0; i < t->num_operands; i++) {
-        copy->operands[i] = simplify_type(t->operands[i]);
+      if (copy) {
+        copy->num_operands = t->num_operands;
+        copy->operands = allocate(sizeof(Type *) * t->num_operands);
+        if (copy->operands) {
+          size_t i = 0;
+          for (size_t i = 0; i < t->num_operands; i++) {
+            copy->operands[i] = simplify_type(t->operands[i]);
+            if (!copy->operands[i]) {
+              break;
+            }
+          }
+          if (i == t->num_operands) {
+            return copy;
+          }
+          for (size_t j = 0; j < i; j++) {
+            delete_type(copy->operands[i]);
+          }
+        }
+        free(copy);
       }
-      return copy;
+      return NULL;
     }
     case BASE_TYPE_CONS:
     case BASE_TYPE_FUNC:
@@ -484,13 +544,18 @@ Type *simplify_type(Type *t) {
     case BASE_TYPE_UNION: {
       Type *a = simplify_type(t->param_a);
       Type *b = simplify_type(t->param_b);
-      if (is_subtype_of(a, b)) {
-        return b;
-      } else if (is_subtype_of(b, a)) {
-        return a;
-      } else {
-        return create_union_type(a, b);
+      if (a && b) {
+        if (is_subtype_of(a, b)) {
+          return b;
+        } else if (is_subtype_of(b, a)) {
+          return a;
+        } else {
+          return create_union_type(a, b);
+        }
       }
+      delete_type(a);
+      delete_type(b);
+      return NULL;
     }
     case BASE_TYPE_QUOTE:
     case BASE_TYPE_TYPE_QUOTE:
@@ -498,6 +563,7 @@ Type *simplify_type(Type *t) {
       return create_unary_type(t->type, simplify_type(t->param_a));
     case BASE_TYPE_RECUR:
     case BASE_TYPE_ALIAS:
+    case BASE_TYPE_FORALL:
       return create_binary_type_name(t->type, t->var_name, t->param_b);
     default:
       return copy_type(t);

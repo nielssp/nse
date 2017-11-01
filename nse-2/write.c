@@ -86,6 +86,7 @@ static void write_type(Type *type, Stream *stream) {
       stream_printf(stream, ")");
       break;
     case BASE_TYPE_RECUR:
+    case BASE_TYPE_FORALL:
       stream_printf(stream, "(");
       stream_printf(stream, base_type_to_string(type->type));
       stream_printf(stream, " %s ", type->var_name);

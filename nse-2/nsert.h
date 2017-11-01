@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#include "error.h"
 #include "type.h"
 
 #define SPECIAL_IF "if"
@@ -59,6 +60,7 @@ typedef enum {
  TYPE_CONS,
  TYPE_I64,
  TYPE_SYMBOL,
+ TYPE_KEYWORD,
  TYPE_STRING,
  TYPE_QUOTE,
  TYPE_TQUOTE,

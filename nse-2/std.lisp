@@ -16,6 +16,7 @@
 
 (def (or a b) (or a b))
 (def (and a b) (and a b))
+(def (not a) (if a 'f 't))
 
 (def (nil? xs) (= xs nil))
 (def (map f xs) (if (nil? xs) nil (cons (f (head xs)) (map f (tail xs)))))
@@ -46,3 +47,9 @@
 
 (def (zip xs ys) (zip-with list xs ys))
 
+(def-type (option t) (union-type (cons-type &'some (cons-type t &nil)) &'none))
+(def (some x) (list 'some y))
+(def none 'none)
+(def (oget ('some x)) x)
+(def (defined? opt) (not (is-a opt &'none)))
+(def (omap f opt) (if (defined? opt) (some (f (oget opt))) none))
