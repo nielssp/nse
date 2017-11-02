@@ -27,6 +27,8 @@ Stream *stream_stderr();
 Stream *stream_file(const char *filename, const char *mode);
 /* Open a buffer as a stream. */
 Stream *stream_buffer(char *buffer, size_t length);
+/* Open a nul-terminated string as a stream */
+Stream *stream_string(const char *string);
 /* Get buffer content (only for buffer streams). */
 char *stream_get_content(Stream *stream);
 /* Get buffer size (only for buffer streams). */

@@ -2,15 +2,18 @@
 
 #include "read.c"
 
-Syntax *parse_int_string(const char *string) {
-  Stack *stack = open_stack_string(string, "test");
-  Syntax *result = parse_int(stack);
-  close_stack(stack);
+#include <string.h>
+
+Syntax *read_int_string(const char *string) {
+  Stream *stream = stream_string(string);
+  Reader *reader = open_reader(stream, "test");
+  Syntax *result = read_int(reader);
+  close_reader(reader);
   return result;
 }
 
-void test_parse_int() {
-  Syntax *result = parse_int_string("15");
+void test_read_int() {
+  Syntax *result = read_int_string("15");
   assert(result->start_line = 1);
   assert(result->start_column = 1);
   assert(result->end_line = 1);
@@ -20,7 +23,7 @@ void test_parse_int() {
   assert(value.i64 == 15);
   free(result);
 
-  result = parse_int_string("-125215");
+  result = read_int_string("-125215");
   assert(result->start_line = 1);
   assert(result->start_column = 1);
   assert(result->end_line = 1);
@@ -32,7 +35,7 @@ void test_parse_int() {
 }
 
 int main() {
-  run_test(test_parse_int);
+  run_test(test_read_int);
   return 0;
 }
 

@@ -7,15 +7,9 @@
 
 #define MAX_LOOKAHEAD 2
 
-#define STACK_FILE 1
-#define STACK_STRING 2
-
-struct stack {
+struct reader {
   char type;
-  union {
-    FILE *file;
-    const char *string;
-  };
+  Stream *stream;
   const char *file_name;
   size_t la;
   char la_buffer[MAX_LOOKAHEAD];
@@ -23,12 +17,11 @@ struct stack {
   size_t column;
 };
 
-Syntax *parse_list(Stack *input);
+static Syntax *read_list(Reader *input);
 
-Stack *open_stack_file(FILE *file, const char *file_name) {
-  Stack *s = malloc(sizeof(Stack));
-  s->type = STACK_FILE;
-  s->file = file;
+Reader *open_reader(Stream *stream, const char *file_name) {
+  Reader *s = malloc(sizeof(Reader));
+  s->stream = stream;
   s->la = 0;
   s->line = 1;
   s->column = 1;
@@ -36,25 +29,12 @@ Stack *open_stack_file(FILE *file, const char *file_name) {
   return s;
 }
 
-Stack *open_stack_string(const char *string, const char *file_name) {
-  Stack *s = malloc(sizeof(Stack));
-  s->type = STACK_STRING;
-  s->string = string;
-  s->la = 0;
-  s->line = 1;
-  s->column = 1;
-  s->file_name = file_name;
-  return s;
+void close_reader(Reader *reader) {
+  stream_close(reader->stream);
+  free(reader);
 }
 
-void close_stack(Stack *s) {
-  if (s->type == STACK_FILE) {
-    fclose(s->file);
-  }
-  free(s);
-}
-
-int pop(Stack *s) {
+static int pop(Reader *s) {
   int c;
   if (s->la > 0) {
     c = s->la_buffer[0];
@@ -63,16 +43,7 @@ int pop(Stack *s) {
       s->la_buffer[i] = s->la_buffer[i + 1];
     }
   } else {
-    if (s->type == STACK_FILE) {
-      c = fgetc(s->file);
-    } else {
-      if (s->string[0] == 0) {
-        c = EOF;
-      } else {
-        c = s->string[0];
-        s->string++;
-      }
-    }
+    c = stream_getc(s->stream);
   }
   if (c == '\n') {
     s->line++;
@@ -83,21 +54,11 @@ int pop(Stack *s) {
   return c;
 }
 
-int peekn(size_t n, Stack *s) {
+static int peekn(size_t n, Reader *s) {
   while (s->la < n) {
-    int c;
-    if (s->type == STACK_FILE) {
-      c = fgetc(s->file);
-      if (c == EOF) {
-        return EOF;
-      }
-    } else {
-      if (s->string[0] == 0) {
-        return EOF;
-      } else {
-        c = s->string[0];
-        s->string++;
-      }
+    int c = stream_getc(s->stream);
+    if (c == EOF) {
+      return EOF;
     }
     s->la_buffer[s->la] = (char)c;
     s->la++;
@@ -105,21 +66,21 @@ int peekn(size_t n, Stack *s) {
   return s->la_buffer[n - 1];
 }
 
-char peek(Stack *s) {
+static char peek(Reader *s) {
   return peekn(1, s);
 }
 
-int iswhite(int c) {
+static int iswhite(int c) {
   return c == '\n' || c == '\r' || c == '\t' || c == ' ';
 }
 
-void skip(Stack *input) {
+static void skip(Reader *input) {
   while (iswhite(peek(input))) {
     pop(input);
   }
 }
 
-Syntax *start_pos(Syntax *syntax, Stack *input) {
+static Syntax *start_pos(Syntax *syntax, Reader *input) {
   if (syntax) {
     syntax->file = input->file_name;
     syntax->start_line = input->line;
@@ -130,7 +91,7 @@ Syntax *start_pos(Syntax *syntax, Stack *input) {
   return syntax;
 }
 
-Syntax *end_pos(Syntax *syntax, Stack *input) {
+static Syntax *end_pos(Syntax *syntax, Reader *input) {
   if (syntax) {
     syntax->end_line = input->line;
     syntax->end_column = input->column;
@@ -138,7 +99,7 @@ Syntax *end_pos(Syntax *syntax, Stack *input) {
   return syntax;
 }
 
-Syntax *parse_int(Stack *input) {
+static Syntax *read_int(Reader *input) {
   int64_t value = 0;
   int sign = 1;
   Syntax *syntax = start_pos(create_syntax(undefined), input);
@@ -156,7 +117,7 @@ Syntax *parse_int(Stack *input) {
   return end_pos(syntax, input);
 }
 
-Syntax *parse_string(Stack *input) {
+static Syntax *read_string(Reader *input) {
   size_t l = 0;
   size_t size = 10;
   char *buffer = malloc(size);
@@ -216,7 +177,7 @@ Syntax *parse_string(Stack *input) {
 }
 
 
-Syntax *parse_symbol(Stack *input) {
+static Syntax *read_symbol(Reader *input) {
   size_t l = 0;
   size_t size = 10;
   char *buffer = malloc(size);
@@ -259,7 +220,7 @@ Syntax *parse_symbol(Stack *input) {
   return end_pos(syntax, input);
 }
 
-Syntax *parse_prim(Stack *input) {
+Syntax *nse_read(Reader *input) {
   char c;
   skip(input);
   c = peek(input);
@@ -272,16 +233,16 @@ Syntax *parse_prim(Stack *input) {
       pop(input);
       c = peek(input);
     }
-    return parse_prim(input);
+    return nse_read(input);
   }
-  if (c == '.') {
-    raise_error("%s:%zu:%zu: unexpected '.'", input->file_name, input->line, input->column);
+  if (c == '.' || c == ')') {
+    raise_error("%s:%zu:%zu: unexpected '%c'", input->file_name, input->line, input->column, c);
     pop(input);
     return NULL;
   }
   if (c == ':') {
     pop(input);
-    Syntax *s = parse_symbol(input);
+    Syntax *s = read_symbol(input);
     if (s) {
       s->quoted.type = TYPE_KEYWORD;
     }
@@ -291,7 +252,7 @@ Syntax *parse_prim(Stack *input) {
     Syntax *syntax = start_pos(create_syntax(undefined), input);
     if (syntax) {
       pop(input);
-      NseVal quoted = check_alloc(SYNTAX(parse_prim(input)));
+      NseVal quoted = check_alloc(SYNTAX(nse_read(input)));
       if (RESULT_OK(quoted)) {
         if (c == '&') {
           syntax->quoted = check_alloc(TQUOTE(create_type_quote(quoted)));
@@ -311,7 +272,7 @@ Syntax *parse_prim(Stack *input) {
     Syntax *syntax = start_pos(create_syntax(undefined), input);
     if (syntax) {
       pop(input);
-      Syntax *list = parse_list(input);
+      Syntax *list = read_list(input);
       if (list){
         syntax->quoted = list->quoted;
         free(list);
@@ -327,18 +288,18 @@ Syntax *parse_prim(Stack *input) {
     return NULL;
   }
   if (isdigit(c)) {
-    return parse_int(input);
+    return read_int(input);
   }
   if (c == '-' && isdigit(peekn(2, input))) {
-    return parse_int(input);
+    return read_int(input);
   }
   if (c == '"') {
-    return parse_string(input);
+    return read_string(input);
   }
-  return parse_symbol(input);
+  return read_symbol(input);
 }
 
-Syntax *parse_list(Stack *input) {
+static Syntax *read_list(Reader *input) {
   Syntax *syntax = start_pos(create_syntax(undefined), input);
   if (!syntax) {
     return NULL;
@@ -350,15 +311,15 @@ Syntax *parse_list(Stack *input) {
     syntax->quoted = nil;
     return end_pos(syntax, input);
   } else {
-    NseVal head = check_alloc(SYNTAX(parse_prim(input)));
+    NseVal head = check_alloc(SYNTAX(nse_read(input)));
     if (RESULT_OK(head)) {
       NseVal tail;
       skip(input);
       if (peek(input) == '.') {
         pop(input);
-        tail = check_alloc(SYNTAX(parse_prim(input)));
+        tail = check_alloc(SYNTAX(nse_read(input)));
       } else {
-        tail = check_alloc(SYNTAX(parse_list(input)));
+        tail = check_alloc(SYNTAX(read_list(input)));
       }
       if (RESULT_OK(tail)) {
         syntax->quoted = check_alloc(CONS(create_cons(head, tail)));

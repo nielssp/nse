@@ -1,16 +1,14 @@
 #ifndef READ_H
 #define READ_H
 
-#include <stdio.h>
-
 #include "nsert.h"
+#include "util/stream.h"
 
-typedef struct stack Stack;
+typedef struct reader Reader;
 
-Stack *open_stack_file(FILE *file, const char *file_name);
-Stack *open_stack_string(const char *string, const char *file_name);
-void close_stack(Stack *s);
+Reader *open_reader(Stream *stream, const char *file_name);
+void close_reader(Reader *reader);
 
-Syntax *parse_prim(Stack *input);
+Syntax *nse_read(Reader *reader);
 
 #endif

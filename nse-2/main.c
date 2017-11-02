@@ -32,11 +32,11 @@ NseVal load(NseVal args) {
   NseVal name = head(args);
   if (RESULT_OK(name)) {
     if (is_symbol(name)) {
-      FILE *f = fopen(name.symbol, "r");
+      Stream *f = stream_file(name.symbol, "r");
       if (f) {
-        Stack *stack = open_stack_file(f, name.symbol);
+        Reader *reader = open_reader(f, name.symbol);
         while (1) {
-          Syntax *code = parse_prim(stack);
+          Syntax *code = nse_read(reader);
           if (code != NULL) {
             NseVal result = eval(SYNTAX(code), current_scope);
             del_ref(SYNTAX(code));
@@ -52,7 +52,7 @@ NseVal load(NseVal args) {
             break;
           }
         }
-        close_stack(stack);
+        close_reader(reader);
         return name;
       } else {
         raise_error("could not open file: %s: %s", name.symbol, strerror(errno));
@@ -158,9 +158,9 @@ int main(int argc, char *argv[]) {
       continue;
     }
     add_history(input);
-    Stack *stack = open_stack_string(input, "(user)");
-    NseVal code = check_alloc(SYNTAX(parse_prim(stack)));
-    close_stack(stack);
+    Stream *input_buffer = stream_buffer(input, strlen(input));
+    Reader *reader = open_reader(input_buffer, "(user)");
+    NseVal code = check_alloc(SYNTAX(nse_read(reader)));
     if (RESULT_OK(code)) {
       NseVal result = eval(code, current_scope);
       del_ref(code);
@@ -195,6 +195,7 @@ int main(int argc, char *argv[]) {
     } else {
       printf("error: %s: ", current_error());
     }
+    close_reader(reader);
     free(input);
     printf("\n");
   }
