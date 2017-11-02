@@ -1,11 +1,11 @@
 #include <string.h>
 
-#include "module.h"
+#include "nsert.h"
 
 #include "util/hash_map.h"
 
 DEFINE_PRIVATE_HASH_MAP(namespace, Namespace, char *, NseVal *, string_hash, string_equals)
-DEFINE_PRIVATE_HASH_MAP(symmap, SymMap, char *, char *, string_hash, string_equals)
+DEFINE_PRIVATE_HASH_MAP(symmap, SymMap, char *, Symbol *, string_hash, string_equals)
 DEFINE_PRIVATE_HASH_MAP(module_map, ModuleMap, char *, Module *, string_hash, string_equals)
 
 struct module {
@@ -19,10 +19,15 @@ struct module {
 
 static ModuleMap loaded_modules = NULL_HASH_MAP;
 
-void init_modules() {
-  //loaded_modules = module_map_create();
-  //module_map_add(loaded_modules, "special/modules", ...);
-  //module_map_add(loaded_modules, "special/keywords", ...);
+static Module *lang_module = NULL;
+static Module *keyword_module = NULL;
+
+static void init_modules() {
+  loaded_modules = create_module_map();
+  lang_module = create_module("lang");
+  intern_special("t");
+  intern_special("f");
+  keyword_module = create_module("keyword");
 }
 
 Scope *scope_push(Scope *next, const char *name, NseVal value) {
@@ -116,7 +121,7 @@ NseVal scope_get_macro(Scope *scope, const char *name) {
 
 Module *create_module(const char *name) {
   if (!HASH_MAP_INITIALIZED(loaded_modules)) {
-    loaded_modules = create_module_map();
+    init_modules();
   }
   if (module_map_lookup(loaded_modules, name) != NULL) {
     raise_error("module already defined: %s", name);
@@ -144,7 +149,7 @@ static void delete_symbols(SymMap symbols) {
   delete_symmap(symbols);
 }
 
-static void delete_names(Namespace namespace) {
+static void delete_defs(Namespace namespace) {
   NamespaceIterator it = create_namespace_iterator(namespace);
   for (NamespaceEntry entry = namespace_next(it); entry.key; entry = namespace_next(it)) {
     if (entry.value) {
@@ -157,11 +162,11 @@ static void delete_names(Namespace namespace) {
 }
 
 void delete_module(Module *module) {
+  delete_defs(module->defs);
+  delete_defs(module->macro_defs);
+  delete_defs(module->type_defs);
   delete_symbols(module->internal);
   delete_symbols(module->external);
-  delete_names(module->defs);
-  delete_names(module->macro_defs);
-  delete_names(module->type_defs);
   free(module);
 }
 
@@ -180,7 +185,7 @@ Scope *use_module_types(Module *module) {
 
 Module *find_module(const char *name) {
   if (!HASH_MAP_INITIALIZED(loaded_modules)) {
-    loaded_modules = create_module_map();
+    init_modules();
   }
   Module *module = module_map_lookup(loaded_modules, name);
   if (!module) {
@@ -199,7 +204,7 @@ static char *get_symbol_module(const char **s) {
       module_length = i;
     }
   }
-  *s += module_length;
+  *s += module_length + 1;
   char *module_name = allocate(module_length + 1);
   if (!module_name) {
     return NULL;
@@ -216,6 +221,7 @@ Symbol *find_symbol(const char *s) {
     if (module) {
       Symbol *value = symmap_lookup(module->external, s);
       if (value) {
+        value->refs++;
         return value;
       } else {
         raise_error("module %s has no external symbol with name: %s", module_name, s);
@@ -228,16 +234,47 @@ Symbol *find_symbol(const char *s) {
   return NULL;
 }
 
-Symbol *module_intern_symbol(Module *module, const char *s) {
-  Symbol *value = symmap_lookup(module->internal, s);
+Symbol *module_extern_symbol(Module *module, const char *s) {
+  Symbol *value = symmap_lookup(module->external, s);
   if (value) {
+    value->refs++;
     return value;
   }
-  value = create_symbol(s);
+  value = create_symbol(s, module);
   if (!s) {
     return NULL;
   }
-  symmap_add(module->internal, value, value);
+  symmap_add(module->external, value->name, value);
+  value->refs++;
+  return value;
+}
+
+Symbol *intern_keyword(const char *s) {
+  if (!HASH_MAP_INITIALIZED(loaded_modules)) {
+    init_modules();
+  }
+  return module_extern_symbol(keyword_module, s);
+}
+
+Symbol *intern_special(const char *s) {
+  if (!HASH_MAP_INITIALIZED(loaded_modules)) {
+    init_modules();
+  }
+  return module_extern_symbol(lang_module, s);
+}
+
+Symbol *module_intern_symbol(Module *module, const char *s) {
+  Symbol *value = symmap_lookup(module->internal, s);
+  if (value) {
+    value->refs++;
+    return value;
+  }
+  value = create_symbol(s, module);
+  if (!s) {
+    return NULL;
+  }
+  symmap_add(module->internal, value->name, value);
+  value->refs++;
   return value;
 }
 

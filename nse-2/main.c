@@ -33,9 +33,9 @@ NseVal load(NseVal args) {
   NseVal name = head(args);
   if (RESULT_OK(name)) {
     if (is_symbol(name)) {
-      Stream *f = stream_file(name.symbol, "r");
+      Stream *f = stream_file(name.symbol->name, "r");
       if (f) {
-        Reader *reader = open_reader(f, name.symbol, system_module);
+        Reader *reader = open_reader(f, name.symbol->name, system_module);
         while (1) {
           Syntax *code = nse_read(reader);
           if (code != NULL) {
@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
   rl_bind_key(')', paren_end);
 
   if (std) {
-    NseVal args = CONS(create_cons(SYMBOL(create_symbol("std.lisp")), nil));
+    NseVal args = CONS(create_cons(SYMBOL(create_symbol("std.lisp", system_module)), nil));
     del_ref(load(args));
     del_ref(args);
   }

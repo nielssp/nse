@@ -118,10 +118,10 @@ NseVal nse_write(NseVal value, Stream *stream) {
       stream_printf(stream, "\"");
       break;
     case TYPE_SYMBOL:
-      stream_printf(stream, "%s", value.symbol);
+      stream_printf(stream, "%s", value.symbol->name);
       break;
     case TYPE_KEYWORD:
-      stream_printf(stream, ":%s", value.symbol);
+      stream_printf(stream, ":%s", value.symbol->name);
       break;
     case TYPE_I64:
       stream_printf(stream, "%ld", value.i64);

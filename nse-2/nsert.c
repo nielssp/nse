@@ -91,19 +91,21 @@ Syntax *create_syntax(NseVal quoted) {
   return syntax;
 }
 
-Symbol *create_symbol(const char *s) {
+Symbol *create_symbol(const char *s, Module *module) {
   size_t len = strlen(s);
-  char *copy = allocate(len + 1);
-  if (!copy) {
+  Symbol *symbol = allocate(sizeof(Symbol) + len + 1);
+  if (!symbol) {
     return NULL;
   }
-  memcpy(copy, s, len);
-  copy[len] = '\0';
-  return copy;
+  symbol->refs = 1;
+  symbol->module = module;
+  memcpy(symbol->name, s, len);
+  symbol->name[len] = '\0';
+  return symbol;
 }
 
-Keyword *create_keyword(const char *s) {
-  return create_symbol(s);
+Symbol *create_keyword(const char *s, Module *module) {
+  return create_symbol(s, module);
 }
 
 
@@ -191,6 +193,10 @@ NseVal add_ref(NseVal value) {
     case TYPE_QUOTE:
       value.quote->refs++;
       break;
+    case TYPE_SYMBOL:
+    case TYPE_KEYWORD:
+      value.symbol->refs++;
+      break;
     case TYPE_STRING:
       value.string->refs++;
       break;
@@ -221,6 +227,10 @@ void del_ref(NseVal value) {
     case TYPE_TQUOTE:
     case TYPE_QUOTE:
       refs = &value.quote->refs;
+      break;
+    case TYPE_SYMBOL:
+    case TYPE_KEYWORD:
+      refs = &value.symbol->refs;
       break;
     case TYPE_STRING:
       refs = &value.string->refs;
@@ -435,7 +445,7 @@ int is_type(NseVal v) {
 
 char *to_symbol(NseVal v) {
   if (v.type == TYPE_SYMBOL) {
-    return v.symbol;
+    return v.symbol->name;
   } else if (v.type == TYPE_SYNTAX) {
     return to_symbol(v.syntax->quoted);
   }
@@ -463,7 +473,7 @@ Type *to_type(NseVal v) {
 int match_symbol(NseVal v, const char *sym) {
   int result = 0;
   if (v.type == TYPE_SYMBOL) {
-    result = strcmp(v.symbol, sym) == 0;
+    result = strcmp(v.symbol->name, sym) == 0;
   } else if (v.type == TYPE_SYNTAX) {
     result = match_symbol(v.syntax->quoted, sym);
   }
@@ -473,13 +483,14 @@ int match_symbol(NseVal v, const char *sym) {
 int is_special_form(NseVal v) {
   int result = 0;
   if (v.type == TYPE_SYMBOL) {
-    result |= strcmp(v.symbol, SPECIAL_IF) == 0;
-    result |= strcmp(v.symbol, SPECIAL_LAMBDA) == 0;
-    result |= strcmp(v.symbol, SPECIAL_LET) == 0;
-    result |= strcmp(v.symbol, SPECIAL_TRY) == 0;
-    result |= strcmp(v.symbol, SPECIAL_DEFINE) == 0;
-    result |= strcmp(v.symbol, SPECIAL_DEFINE_MACRO) == 0;
-    result |= strcmp(v.symbol, SPECIAL_DEFINE_TYPE) == 0;
+    // TODO: module should be system
+    result |= strcmp(v.symbol->name, SPECIAL_IF) == 0;
+    result |= strcmp(v.symbol->name, SPECIAL_LAMBDA) == 0;
+    result |= strcmp(v.symbol->name, SPECIAL_LET) == 0;
+    result |= strcmp(v.symbol->name, SPECIAL_TRY) == 0;
+    result |= strcmp(v.symbol->name, SPECIAL_DEFINE) == 0;
+    result |= strcmp(v.symbol->name, SPECIAL_DEFINE_MACRO) == 0;
+    result |= strcmp(v.symbol->name, SPECIAL_DEFINE_TYPE) == 0;
   } else if (v.type == TYPE_SYNTAX) {
     result = is_special_form(v.syntax->quoted);
   }
@@ -487,6 +498,7 @@ int is_special_form(NseVal v) {
 }
 
 int is_true(NseVal b) {
+  // TODO: module should be system
   return match_symbol(b, "t");
 }
 
@@ -646,7 +658,7 @@ Type *get_type(NseVal v) {
     case TYPE_I64:
       return copy_type(i64_type);
     case TYPE_SYMBOL:
-      return create_symbol_type(v.symbol);
+      return create_symbol_type(v.symbol->name); // TODO: get fqn
     case TYPE_KEYWORD:
       return copy_type(keyword_type);
     case TYPE_STRING:

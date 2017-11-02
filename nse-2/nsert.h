@@ -29,8 +29,8 @@
 #define TYPE(t) ((NseVal) { .type = TYPE_TYPE, .type_val = (t) })
 #define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
 
-#define TRUE (SYMBOL(create_symbol("t")))
-#define FALSE (SYMBOL(create_symbol("f")))
+#define TRUE (SYMBOL(intern_special("t")))
+#define FALSE (SYMBOL(intern_special("f")))
 
 #define RESULT_OK(value) ((value).type != TYPE_UNDEFINED)
 
@@ -80,8 +80,7 @@ typedef struct quote TypeQuote;
 typedef struct syntax Syntax;
 typedef struct reference Reference;
 typedef struct string String;
-typedef char Symbol;
-typedef char Keyword;
+typedef struct symbol Symbol;
 
 typedef void (* Destructor)(void *);
 
@@ -93,7 +92,7 @@ struct nse_val {
     Syntax *syntax;
     Quote *quote;
     Quote *type_quote;
-    char *symbol;
+    Symbol *symbol;
     String *string;
     NseVal (*func)(NseVal);
     Type *type_val;
@@ -143,14 +142,22 @@ struct syntax {
   NseVal quoted;
 };
 
+#include "module.h"
+
+struct symbol {
+  size_t refs;
+  Module *module;
+  char name[];
+};
+
 extern NseVal undefined;
 extern NseVal nil;
 Cons *create_cons(NseVal h, NseVal t);
 Quote *create_quote(NseVal quoted);
 TypeQuote *create_type_quote(NseVal quoted);
 Syntax *create_syntax(NseVal quoted);
-Symbol *create_symbol(const char *s);
-Keyword *create_keyword(const char *s);
+Symbol *create_symbol(const char *s, Module *module);
+Symbol *create_keyword(const char *s, Module *module);
 String *create_string(const char *s, size_t length);
 Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], size_t env_size);
 Reference *create_reference(void *pointer, void destructor(void *));
