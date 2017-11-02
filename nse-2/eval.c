@@ -5,185 +5,6 @@
 
 #include "eval.h"
 
-DEFINE_HASH_MAP(namespace, Namespace, char *, NseVal *, string_hash, string_equals)
-
-typedef enum {
-  TYPE_SCOPE,
-  VALUE_SCOPE
-} ScopeType;
-
-struct module {
-  const char *name;
-  Namespace internal;
-  Namespace internal_macros;
-  Namespace internal_types;
-};
-
-struct scope {
-  Module *module;
-  const char *name;
-  NseVal value;
-  Scope *next;
-  ScopeType type;
-};
-
-static Type *parameters_to_type(NseVal formal);
-
-Scope *scope_push(Scope *next, const char *name, NseVal value) {
-  Scope *scope = malloc(sizeof(Scope));
-  scope->name = name;
-  scope->value = value;
-  scope->next = next;
-  scope->type = VALUE_SCOPE;
-  if (next) {
-    scope->module = next->module;
-  }
-  add_ref(value);
-  return scope;
-}
-
-Scope *scope_pop(Scope *scope) {
-  Scope *next = scope->next;
-  del_ref(scope->value);
-  free(scope);
-  return next;
-}
-
-void scope_pop_until(Scope *start, Scope *end) {
-  while (start != end) {
-    Scope *next = start->next;
-    del_ref(start->value);
-    free(start);
-    start = next;
-  }
-}
-
-Scope *copy_scope(Scope *scope) {
-  if (scope == NULL) {
-    return NULL;
-  }
-  Scope *copy = malloc(sizeof(Scope));
-  copy->name = scope->name;
-  copy->value = scope->value;
-  copy->type = scope->type;
-  copy->next = copy_scope(scope->next);
-  copy->module = scope->module;
-  add_ref(copy->value);
-  return copy;
-}
-
-void delete_scope(Scope *scope) {
-  if (scope != NULL) {
-    delete_scope(scope->next);
-    del_ref(scope->value);
-    free(scope);
-  }
-}
-
-NseVal scope_get(Scope *scope, const char *name) {
-  if (scope->name) {
-    if (strcmp(name, scope->name) == 0) {
-      return scope->value;
-    }
-    if (scope->next) {
-      return scope_get(scope->next, name);
-    }
-  }
-  if (scope->module) {
-    NseVal *value;
-    switch (scope->type) {
-      case VALUE_SCOPE:
-        value = namespace_lookup(scope->module->internal, name);
-        break;
-      case TYPE_SCOPE:
-        value = namespace_lookup(scope->module->internal_types, name);
-        break;
-    }
-    if (value) {
-      return *value;
-    }
-  }
-  raise_error("undefined name");
-  return undefined;
-}
-
-Module *create_module(const char *name) {
-  Module *module = malloc(sizeof(Module));
-  module->name = name;
-  module->internal = create_namespace();
-  module->internal_macros = create_namespace();
-  module->internal_types = create_namespace();
-  return module;
-}
-
-void delete_names(Namespace namespace) {
-  NamespaceIterator it = create_namespace_iterator(namespace);
-  for (NamespaceEntry entry = namespace_next(it); entry.key; entry = namespace_next(it)) {
-    if (entry.value) {
-      del_ref(*entry.value);
-      free(entry.value);
-    }
-  }
-  delete_namespace_iterator(it);
-  delete_namespace(namespace);
-}
-
-void delete_module(Module *module) {
-  delete_names(module->internal);
-  delete_names(module->internal_macros);
-  delete_names(module->internal_types);
-  free(module);
-}
-
-Scope *use_module(Module *module) {
-  Scope *scope = scope_push(NULL, NULL, undefined);
-  scope->module = module;
-  return scope;
-}
-
-Scope *use_module_types(Module *module) {
-  Scope *scope = scope_push(NULL, NULL, undefined);
-  scope->module = module;
-  scope->type = TYPE_SCOPE;
-  return scope;
-}
-
-void module_define(Module *module, const char *name, NseVal value) {
-  NseVal *existing = namespace_remove(module->internal, name);
-  if (existing) {
-    del_ref(*existing);
-    free(existing);
-  }
-  NseVal *copy = malloc(sizeof(NseVal));
-  memcpy(copy, &value, sizeof(NseVal));
-  namespace_add(module->internal, name, copy);
-  add_ref(value);
-}
-
-void module_define_macro(Module *module, const char *name, NseVal value) {
-  NseVal *existing = namespace_remove(module->internal_macros, name);
-  if (existing) {
-    del_ref(*existing);
-    free(existing);
-  }
-  NseVal *copy = malloc(sizeof(NseVal));
-  memcpy(copy, &value, sizeof(NseVal));
-  namespace_add(module->internal_macros, name, copy);
-  add_ref(value);
-}
-
-void module_define_type(Module *module, const char *name, NseVal value) {
-  NseVal *existing = namespace_remove(module->internal_types, name);
-  if (existing) {
-    del_ref(*existing);
-    free(existing);
-  }
-  NseVal *copy = malloc(sizeof(NseVal));
-  memcpy(copy, &value, sizeof(NseVal));
-  namespace_add(module->internal_types, name, copy);
-  add_ref(value);
-}
-
 NseVal eval_list(NseVal list, Scope *scope) {
   if (list.type == TYPE_SYNTAX) {
     Syntax *previous = push_debug_form(list.syntax);
@@ -500,9 +321,9 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
   }
   NseVal result = undefined;
   if (is_symbol(operator)) {
-    NseVal *macro_function = namespace_lookup(scope->module->internal_macros, to_symbol(operator));
-    if (macro_function) {
-      NseVal expanded = nse_apply(*macro_function, args);
+    NseVal macro_function = scope_get_macro(scope, to_symbol(operator));
+    if (RESULT_OK(macro_function)) {
+      NseVal expanded = nse_apply(macro_function, args);
       if (!RESULT_OK(expanded)) {
         return expanded;
       }
@@ -570,12 +391,12 @@ NseVal expand_macro_1(NseVal code, Scope *scope, int *expanded) {
     return code;
   }
   NseVal args = tail(code);
-  NseVal *function = namespace_lookup(scope->module->internal_macros, to_symbol(macro));
-  if (!function) {
+  NseVal function = scope_get_macro(scope, to_symbol(macro));
+  if (!RESULT_OK(function)) {
     return code;
   }
   *expanded = 1;
-  return nse_apply(*function, args);
+  return nse_apply(function, args);
 }
 
 NseVal expand_macro(NseVal code, Scope *scope) {

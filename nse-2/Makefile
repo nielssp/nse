@@ -49,8 +49,11 @@ read.o: read.c
 system.o: system.c
 	$(CC) -c -o $@ $<
 
-libnsert.a: nsert.o hash_map.o type.o error.o
+libnsert.a: nsert.o hash_map.o type.o error.o module.o
 	ar rcs $@ $^
+
+module.o: module.c module.h
+	$(CC) -c -o $@ $<
 
 nsert.o: nsert.c nsert.h
 	$(CC) -c -o $@ $<

@@ -15,17 +15,19 @@ struct reader {
   char la_buffer[MAX_LOOKAHEAD];
   size_t line;
   size_t column;
+  Module *module;
 };
 
 static Syntax *read_list(Reader *input);
 
-Reader *open_reader(Stream *stream, const char *file_name) {
+Reader *open_reader(Stream *stream, const char *file_name, Module *module) {
   Reader *s = malloc(sizeof(Reader));
   s->stream = stream;
   s->la = 0;
   s->line = 1;
   s->column = 1;
   s->file_name = file_name;
+  s->module = module;
   return s;
 }
 
@@ -210,7 +212,11 @@ static Syntax *read_symbol(Reader *input) {
       }
     }
     buffer[l] = '\0';
-    syntax->quoted = check_alloc(SYMBOL(create_symbol(buffer)));
+    if (qualified) {
+      syntax->quoted = check_alloc(SYMBOL(find_symbol(buffer)));
+    } else {
+      syntax->quoted = check_alloc(SYMBOL(module_intern_symbol(input->module, buffer)));
+    }
     if (!RESULT_OK(syntax->quoted)) {
       free(syntax);
       syntax = NULL;

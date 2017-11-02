@@ -5,10 +5,6 @@
 #include "nsert.h"
 #include "util/hash_map.h"
 
-DEFINE_PRIVATE_HASH_MAP(symmap, SymMap, char *, char *, string_hash, string_equals)
-
-static SymMap symbols;
-
 void delete_all(NseVal value);
 void delete(NseVal value);
 NseVal parse_list(char **input);
@@ -52,9 +48,8 @@ NseVal undefined = { .type = TYPE_UNDEFINED };
 NseVal nil = { .type = TYPE_NIL };
 
 Cons *create_cons(NseVal h, NseVal t) {
-  Cons *cons = malloc(sizeof(Cons));
+  Cons *cons = allocate(sizeof(Cons));
   if (!cons) {
-    raise_error("cons: could not allocate %zd bytes of memory", sizeof(Cons));
     return NULL;
   }
   cons->refs = 1;
@@ -66,9 +61,8 @@ Cons *create_cons(NseVal h, NseVal t) {
 }
 
 Quote *create_quote(NseVal quoted) {
-  Quote *quote = malloc(sizeof(Quote));
+  Quote *quote = allocate(sizeof(Quote));
   if (!quote) {
-    raise_error("quote: could not allocate %zd bytes of memory", sizeof(Quote));
     return NULL;
   }
   quote->refs = 1;
@@ -82,9 +76,8 @@ TypeQuote *create_type_quote(NseVal quoted) {
 }
 
 Syntax *create_syntax(NseVal quoted) {
-  Syntax *syntax = malloc(sizeof(Syntax));
+  Syntax *syntax = allocate(sizeof(Syntax));
   if (!syntax) {
-    raise_error("syntax: could not allocate %zd bytes of memory", sizeof(Syntax));
     return NULL;
   }
   syntax->refs = 1;
@@ -99,27 +92,13 @@ Syntax *create_syntax(NseVal quoted) {
 }
 
 Symbol *create_symbol(const char *s) {
-  if (symbols.map == NULL) {
-    symbols = create_symmap();
-    if (!symbols.map) {
-      raise_error("symbol: could not allocate symbol map");
-      return NULL;
-    }
-  } else {
-    Symbol *value = symmap_lookup(symbols, s);
-    if (value != NULL) {
-      return value;
-    }
-  }
   size_t len = strlen(s);
-  char *copy = malloc(len + 1);
+  char *copy = allocate(len + 1);
   if (!copy) {
-    raise_error("symbol: could not allocate %zd bytes of memory", len + 1);
     return NULL;
   }
   memcpy(copy, s, len);
   copy[len] = '\0';
-  symmap_add(symbols, copy, copy);
   return copy;
 }
 
@@ -129,9 +108,8 @@ Keyword *create_keyword(const char *s) {
 
 
 String *create_string(const char *s, size_t length) {
-  String *str = malloc(sizeof(String) + length);
+  String *str = allocate(sizeof(String) + length);
   if (!str) {
-    raise_error("string: could not allocate %zd bytes of memory", sizeof(String) + length);
     return NULL;
   }
   str->refs = 1;
@@ -141,9 +119,9 @@ String *create_string(const char *s, size_t length) {
 }
 
 Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], size_t env_size) {
-  Closure *closure = malloc(sizeof(Closure) + env_size * sizeof(NseVal));
+  Closure *closure = allocate(sizeof(Closure) + env_size * sizeof(NseVal));
   if (!closure) {
-    raise_error("closure: could not allocate %zd bytes of memory", sizeof(Closure) + env_size * sizeof(NseVal));
+    return NULL;
   }
   closure->refs = 1;
   closure->f = f;
@@ -159,9 +137,9 @@ Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], si
 }
 
 Reference *create_reference(void *pointer, void destructor(void *)) {
-  Reference *reference = malloc(sizeof(Reference));
+  Reference *reference = allocate(sizeof(Reference));
   if (!reference) {
-    raise_error("reference: could not allocate %zd bytes of memory", sizeof(Reference));
+    return NULL;
   }
   reference->refs = 1;
   reference->pointer = pointer;

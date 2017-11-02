@@ -22,6 +22,7 @@ const struct option long_options[] = {
   {0, 0, 0, 0}
 };
 
+Module *system_module = NULL;
 Scope *current_scope = NULL;
 
 void describe_option(const char *short_option, const char *long_option, const char *description) {
@@ -34,7 +35,7 @@ NseVal load(NseVal args) {
     if (is_symbol(name)) {
       Stream *f = stream_file(name.symbol, "r");
       if (f) {
-        Reader *reader = open_reader(f, name.symbol);
+        Reader *reader = open_reader(f, name.symbol, system_module);
         while (1) {
           Syntax *code = nse_read(reader);
           if (code != NULL) {
@@ -132,10 +133,10 @@ int main(int argc, char *argv[]) {
     puts("not implemented");
     return 1;
   }
-  Module *system = get_system_module();
-  module_define(system, "load", FUNC(load));
+  system_module = get_system_module();
+  module_define(system_module, "load", FUNC(load));
 
-  current_scope = use_module(system);
+  current_scope = use_module(system_module);
 
   rl_bind_key('\t', rl_insert); // TODO: autocomplete
   rl_bind_key('(', paren_start);
@@ -159,7 +160,7 @@ int main(int argc, char *argv[]) {
     }
     add_history(input);
     Stream *input_buffer = stream_buffer(input, strlen(input));
-    Reader *reader = open_reader(input_buffer, "(user)");
+    Reader *reader = open_reader(input_buffer, "(user)", system_module);
     NseVal code = check_alloc(SYNTAX(nse_read(reader)));
     if (RESULT_OK(code)) {
       NseVal result = eval(code, current_scope);
@@ -200,6 +201,6 @@ int main(int argc, char *argv[]) {
     printf("\n");
   }
   scope_pop(current_scope);
-  delete_module(system);
+  delete_module(system_module);
   return 0;
 }

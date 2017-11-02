@@ -3,6 +3,11 @@
 
 #include <stdlib.h>
 
+#define NULL_HASH_MAP {NULL}
+#define HASH_MAP_INITIALIZED(name) ((name).map != NULL)
+#define NULL_HASH_SET {NULL}
+#define HASH_SET_INITIALIZED(name) ((name).map != NULL)
+
 #define DECLARE_HASH_MAP(name, type_name, key_type, value_type)\
   typedef struct name type_name;\
   typedef struct name ## _entry type_name ## Entry;\

@@ -5,10 +5,12 @@
 #include <string.h>
 
 Syntax *read_int_string(const char *string) {
+  Module *module = create_module("test");
   Stream *stream = stream_string(string);
-  Reader *reader = open_reader(stream, "test");
+  Reader *reader = open_reader(stream, "test", module);
   Syntax *result = read_int(reader);
   close_reader(reader);
+  delete_module(module);
   return result;
 }
 
