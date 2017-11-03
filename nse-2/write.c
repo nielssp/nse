@@ -1,25 +1,25 @@
 #include "write.h"
 
-static void write_cons(Cons *cons, Stream *stream);
+static void write_cons(Cons *cons, Stream *stream, Module *module);
 
-static void write_cons_tail(NseVal tail, Stream *stream) {
+static void write_cons_tail(NseVal tail, Stream *stream, Module *module) {
   if (tail.type == TYPE_SYNTAX) {
-    write_cons_tail(tail.syntax->quoted, stream);
+    write_cons_tail(tail.syntax->quoted, stream, module);
   } else if (tail.type == TYPE_CONS) {
     stream_printf(stream, " ");
-    write_cons(tail.cons, stream);
+    write_cons(tail.cons, stream, module);
   } else if (tail.type != TYPE_NIL) {
     stream_printf(stream, " . ");
-    nse_write(tail, stream);
+    nse_write(tail, stream, module);
   }
 }
 
-static void write_cons(Cons *cons, Stream *stream) {
-  nse_write(cons->head, stream);
-  write_cons_tail(cons->tail, stream);
+static void write_cons(Cons *cons, Stream *stream, Module *module) {
+  nse_write(cons->head, stream, module);
+  write_cons_tail(cons->tail, stream, module);
 }
 
-static void write_type(Type *type, Stream *stream) {
+static void write_type(Type *type, Stream *stream, Module *module) {
   switch (type->type) {
     case BASE_TYPE_NOTHING:
     case BASE_TYPE_ANY:
@@ -53,7 +53,7 @@ static void write_type(Type *type, Stream *stream) {
       stream_printf(stream, "(");
       stream_printf(stream, base_type_to_string(type->type));
       stream_printf(stream, " ");
-      write_type(type->param_a, stream);
+      write_type(type->param_a, stream, module);
       stream_printf(stream, ")");
       break;
     case BASE_TYPE_CONS:
@@ -61,7 +61,7 @@ static void write_type(Type *type, Stream *stream) {
         stream_printf(stream, "(%s", base_type_to_string(BASE_TYPE_PRODUCT));
         while (type->type == BASE_TYPE_CONS) {
           stream_printf(stream, " ");
-          write_type(type->param_a, stream);
+          write_type(type->param_a, stream, module);
           type = type->param_b;
         }
         stream_printf(stream, ")");
@@ -72,9 +72,9 @@ static void write_type(Type *type, Stream *stream) {
       stream_printf(stream, "(");
       stream_printf(stream, base_type_to_string(type->type));
       stream_printf(stream, " ");
-      write_type(type->param_a, stream);
+      write_type(type->param_a, stream, module);
       stream_printf(stream, " ");
-      write_type(type->param_b, stream);
+      write_type(type->param_b, stream, module);
       stream_printf(stream, ")");
       break;
     case BASE_TYPE_PRODUCT:
@@ -82,7 +82,7 @@ static void write_type(Type *type, Stream *stream) {
       stream_printf(stream, base_type_to_string(type->type));
       for (size_t i = 0; i < type->num_operands; i++) {
         stream_printf(stream, " ");
-        write_type(type->operands[i], stream);
+        write_type(type->operands[i], stream, module);
       }
       stream_printf(stream, ")");
       break;
@@ -91,7 +91,7 @@ static void write_type(Type *type, Stream *stream) {
       stream_printf(stream, "(");
       stream_printf(stream, base_type_to_string(type->type));
       stream_printf(stream, " %s ", type->var_name);
-      write_type(type->param_b, stream);
+      write_type(type->param_b, stream, module);
       stream_printf(stream, ")");
       break;
     case BASE_TYPE_ALIAS:
@@ -100,14 +100,14 @@ static void write_type(Type *type, Stream *stream) {
   }
 }
 
-NseVal nse_write(NseVal value, Stream *stream) {
+NseVal nse_write(NseVal value, Stream *stream, Module *module) {
   switch (value.type) {
     case TYPE_NIL:
       stream_printf(stream, "()");
       break;
     case TYPE_CONS:
       stream_printf(stream, "(");
-      write_cons(value.cons, stream);
+      write_cons(value.cons, stream, module);
       stream_printf(stream, ")");
       break;
     case TYPE_STRING:
@@ -118,7 +118,7 @@ NseVal nse_write(NseVal value, Stream *stream) {
       stream_printf(stream, "\"");
       break;
     case TYPE_SYMBOL:
-      stream_printf(stream, "%s", value.symbol->name);
+      stream_printf(stream, "%s/%s", module_name(value.symbol->module), value.symbol->name);
       break;
     case TYPE_KEYWORD:
       stream_printf(stream, ":%s", value.symbol->name);
@@ -128,19 +128,19 @@ NseVal nse_write(NseVal value, Stream *stream) {
       break;
     case TYPE_QUOTE:
       stream_printf(stream, "'");
-      nse_write(value.quote->quoted, stream);
+      nse_write(value.quote->quoted, stream, module);
       break;
     case TYPE_TQUOTE:
       stream_printf(stream, "&");
-      nse_write(value.quote->quoted, stream);
+      nse_write(value.quote->quoted, stream, module);
       break;
     case TYPE_TYPE:
       stream_printf(stream, "&");
-      write_type(value.type_val, stream);
+      write_type(value.type_val, stream, module);
       break;
     case TYPE_SYNTAX:
       stream_printf(stream, "#<syntax ");
-      nse_write(value.syntax->quoted, stream);
+      nse_write(value.syntax->quoted, stream, module);
       stream_printf(stream, ">");
       break;
     case TYPE_FUNC:
@@ -158,11 +158,11 @@ NseVal nse_write(NseVal value, Stream *stream) {
   return nil;
 }
 
-char *nse_write_to_string(NseVal value) {
+char *nse_write_to_string(NseVal value, Module *module) {
   size_t size = 32;
   char *buffer = (char *)malloc(size);
   Stream *stream = stream_buffer(buffer, size);
-  nse_write(value, stream);
+  nse_write(value, stream, module);
   buffer = stream_get_content(stream);
   stream_close(stream);
   return buffer;

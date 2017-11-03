@@ -4,7 +4,7 @@
 #include "nsert.h"
 #include "util/stream.h"
 
-NseVal nse_write(NseVal value, Stream *stream);
-char *nse_write_to_string(NseVal value);
+NseVal nse_write(NseVal value, Stream *stream, Module *module);
+char *nse_write_to_string(NseVal value, Module *module);
 
 #endif

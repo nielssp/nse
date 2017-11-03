@@ -19,8 +19,8 @@ struct module {
 
 static ModuleMap loaded_modules = NULL_HASH_MAP;
 
-static Module *lang_module = NULL;
-static Module *keyword_module = NULL;
+Module *lang_module = NULL;
+Module *keyword_module = NULL;
 
 static void init_modules() {
   loaded_modules = create_module_map();
@@ -30,9 +30,9 @@ static void init_modules() {
   keyword_module = create_module("keyword");
 }
 
-Scope *scope_push(Scope *next, const char *name, NseVal value) {
+Scope *scope_push(Scope *next, Symbol *symbol, NseVal value) {
   Scope *scope = malloc(sizeof(Scope));
-  scope->name = name;
+  scope->symbol = symbol;
   scope->value = value;
   scope->next = next;
   scope->type = VALUE_SCOPE;
@@ -64,7 +64,7 @@ Scope *copy_scope(Scope *scope) {
     return NULL;
   }
   Scope *copy = malloc(sizeof(Scope));
-  copy->name = scope->name;
+  copy->symbol = scope->symbol;
   copy->value = scope->value;
   copy->type = scope->type;
   copy->next = copy_scope(scope->next);
@@ -81,23 +81,23 @@ void delete_scope(Scope *scope) {
   }
 }
 
-NseVal scope_get(Scope *scope, const char *name) {
-  if (scope->name) {
-    if (strcmp(name, scope->name) == 0) {
+NseVal scope_get(Scope *scope, Symbol *symbol) {
+  if (scope->symbol) {
+    if (scope->symbol == symbol) {
       return scope->value;
     }
     if (scope->next) {
-      return scope_get(scope->next, name);
+      return scope_get(scope->next, symbol);
     }
   }
-  if (scope->module) {
+  if (symbol->module) {
     NseVal *value;
     switch (scope->type) {
       case VALUE_SCOPE:
-        value = namespace_lookup(scope->module->defs, name);
+        value = namespace_lookup(symbol->module->defs, symbol->name);
         break;
       case TYPE_SCOPE:
-        value = namespace_lookup(scope->module->type_defs, name);
+        value = namespace_lookup(symbol->module->type_defs, symbol->name);
         break;
     }
     if (value) {
@@ -108,9 +108,9 @@ NseVal scope_get(Scope *scope, const char *name) {
   return undefined;
 }
 
-NseVal scope_get_macro(Scope *scope, const char *name) {
-  if (scope->module) {
-    NseVal *value = namespace_lookup(scope->module->macro_defs, name);
+NseVal scope_get_macro(Scope *scope, Symbol *symbol) {
+  if (symbol->module) {
+    NseVal *value = namespace_lookup(symbol->module->macro_defs, symbol->name);
     if (value) {
       return *value;
     }
@@ -168,6 +168,10 @@ void delete_module(Module *module) {
   delete_symbols(module->internal);
   delete_symbols(module->external);
   free(module);
+}
+
+const char *module_name(Module *module) {
+  return module->name;
 }
 
 Scope *use_module(Module *module) {
@@ -278,6 +282,15 @@ Symbol *module_intern_symbol(Module *module, const char *s) {
   return value;
 }
 
+void import_module(Module *dest, Module *src) {
+  SymMapIterator it = create_symmap_iterator(src->external);
+  for (SymMapEntry entry = symmap_next(it); entry.key; entry = symmap_next(it)) {
+    // TODO: detect conflict
+    symmap_add(dest->internal, entry.value->name, entry.value);
+  }
+  delete_symmap_iterator(it);
+}
+
 void module_define(Module *module, const char *name, NseVal value) {
   NseVal *existing = namespace_remove(module->defs, name);
   if (existing) {
@@ -312,5 +325,20 @@ void module_define_type(Module *module, const char *name, NseVal value) {
   memcpy(copy, &value, sizeof(NseVal));
   namespace_add(module->type_defs, name, copy);
   add_ref(value);
+}
+
+void module_ext_define(Module *module, const char *name, NseVal value) {
+  module_define(module, name, value);
+  module_extern_symbol(module, name);
+}
+
+void module_ext_define_macro(Module *module, const char *name, NseVal value) {
+  module_define_macro(module, name, value);
+  module_extern_symbol(module, name);
+}
+
+void module_ext_define_type(Module *module, const char *name, NseVal value) {
+  module_define_type(module, name, value);
+  module_extern_symbol(module, name);
 }
 

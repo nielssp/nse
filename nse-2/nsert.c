@@ -443,9 +443,9 @@ int is_type(NseVal v) {
   return 0;
 }
 
-char *to_symbol(NseVal v) {
+Symbol *to_symbol(NseVal v) {
   if (v.type == TYPE_SYMBOL) {
-    return v.symbol->name;
+    return v.symbol;
   } else if (v.type == TYPE_SYNTAX) {
     return to_symbol(v.syntax->quoted);
   }

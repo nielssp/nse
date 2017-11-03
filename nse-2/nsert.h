@@ -44,7 +44,7 @@
     args = tail(args);\
     name = convert(temp1);\
     if (name == NULL) {\
-      char *temp2 = nse_write_to_string(temp1);\
+      char *temp2 = nse_write_to_string(temp1, lang_module);\
       raise_error("%s is not %s", temp2, type_name);\
       free(temp2);\
       return undefined;\
@@ -165,7 +165,7 @@ Reference *create_reference(void *pointer, void destructor(void *));
 Syntax *copy_syntax(Syntax *syntax, NseVal quoted);
 NseVal check_alloc(NseVal v);
 
-char *to_symbol(NseVal v);
+Symbol *to_symbol(NseVal v);
 void *to_reference(NseVal v);
 Type *to_type(NseVal v);
 

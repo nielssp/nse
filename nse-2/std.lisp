@@ -48,7 +48,7 @@
 (def (zip xs ys) (zip-with list xs ys))
 
 (def-type (option t) (union-type (cons-type &'some (cons-type t &nil)) &'none))
-(def (some x) (list 'some y))
+(def (some x) (list 'some x))
 (def none 'none)
 (def (oget ('some x)) x)
 (def (defined? opt) (not (is-a opt &'none)))

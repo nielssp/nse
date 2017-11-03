@@ -179,7 +179,7 @@ static Syntax *read_string(Reader *input) {
 }
 
 
-static Syntax *read_symbol(Reader *input) {
+static Syntax *read_symbol(Reader *input, int keyword) {
   size_t l = 0;
   size_t size = 10;
   char *buffer = malloc(size);
@@ -212,7 +212,9 @@ static Syntax *read_symbol(Reader *input) {
       }
     }
     buffer[l] = '\0';
-    if (qualified) {
+    if (keyword) {
+      syntax->quoted = check_alloc(SYMBOL(intern_keyword(buffer)));
+    } else  if (qualified) {
       syntax->quoted = check_alloc(SYMBOL(find_symbol(buffer)));
     } else {
       syntax->quoted = check_alloc(SYMBOL(module_intern_symbol(input->module, buffer)));
@@ -248,7 +250,7 @@ Syntax *nse_read(Reader *input) {
   }
   if (c == ':') {
     pop(input);
-    Syntax *s = read_symbol(input);
+    Syntax *s = read_symbol(input, 1);
     if (s) {
       s->quoted.type = TYPE_KEYWORD;
     }
@@ -302,7 +304,7 @@ Syntax *nse_read(Reader *input) {
   if (c == '"') {
     return read_string(input);
   }
-  return read_symbol(input);
+  return read_symbol(input, 0);
 }
 
 static Syntax *read_list(Reader *input) {

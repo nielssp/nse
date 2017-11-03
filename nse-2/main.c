@@ -35,7 +35,7 @@ NseVal load(NseVal args) {
     if (is_symbol(name)) {
       Stream *f = stream_file(name.symbol->name, "r");
       if (f) {
-        Reader *reader = open_reader(f, name.symbol->name, system_module);
+        Reader *reader = open_reader(f, name.symbol->name, current_scope->module);
         while (1) {
           Syntax *code = nse_read(reader);
           if (code != NULL) {
@@ -136,20 +136,26 @@ int main(int argc, char *argv[]) {
   system_module = get_system_module();
   module_define(system_module, "load", FUNC(load));
 
-  current_scope = use_module(system_module);
+  Module *user_module = create_module("user");
+  import_module(user_module, lang_module);
+  import_module(user_module, system_module);
+
+  current_scope = use_module(user_module);
 
   rl_bind_key('\t', rl_insert); // TODO: autocomplete
   rl_bind_key('(', paren_start);
   rl_bind_key(')', paren_end);
 
   if (std) {
-    NseVal args = CONS(create_cons(SYMBOL(create_symbol("std.lisp", system_module)), nil));
+    NseVal args = CONS(create_cons(SYMBOL(intern_keyword("std.lisp")), nil));
     del_ref(load(args));
     del_ref(args);
   }
 
   while (1) {
-    char *input = readline("\001\033[1;32m\002>\001\033[0m\002 ");
+    char *prompt = string_printf("\001\033[1;32m\002%s>\001\033[0m\002 ", module_name(current_scope->module));
+    char *input = readline(prompt);
+    free(prompt);
     if (input == NULL) {
       // ^D
       printf("\nBye.\n");
@@ -160,20 +166,20 @@ int main(int argc, char *argv[]) {
     }
     add_history(input);
     Stream *input_buffer = stream_buffer(input, strlen(input));
-    Reader *reader = open_reader(input_buffer, "(user)", system_module);
+    Reader *reader = open_reader(input_buffer, "(user)", user_module);
     NseVal code = check_alloc(SYNTAX(nse_read(reader)));
     if (RESULT_OK(code)) {
       NseVal result = eval(code, current_scope);
       del_ref(code);
       if (RESULT_OK(result)) {
-        nse_write(result, stdout_stream);
+        nse_write(result, stdout_stream, user_module);
         del_ref(result);
       } else {
         printf("error: %s", current_error());
         if (error_form != NULL) {
           NseVal datum = syntax_to_datum(error_form->quoted);
           printf(": ");
-          nse_write(datum, stdout_stream);
+          nse_write(datum, stdout_stream, user_module);
           del_ref(datum);
           printf("\nIn %s on line %zd column %zd", error_form->file, error_form->start_line, error_form->start_column);
           if (error_form->start_line > 0) {
@@ -201,6 +207,7 @@ int main(int argc, char *argv[]) {
     printf("\n");
   }
   scope_pop(current_scope);
+  delete_module(user_module);
   delete_module(system_module);
   return 0;
 }

@@ -6,7 +6,7 @@ NseVal c_load(NseVal args) {
   NseVal name = head(args);
   if (RESULT_OK(name)) {
     if (is_symbol(name)) {
-      char *lib_name = to_symbol(name);
+      char *lib_name = to_symbol(name)->name;
       void *lib = dlopen(lib_name, RTLD_NOW);
       if (lib) {
         NseVal lib_ref = check_alloc(REFERENCE(create_reference(lib, (Destructor) dlclose)));
@@ -31,7 +31,7 @@ NseVal c_symbol(NseVal args) {
       NseVal ref = head(tail(args));
       if (RESULT_OK(ref)) {
         if (is_reference(ref)) {
-          char *symbol_name = to_symbol(name);
+          char *symbol_name = to_symbol(name)->name;
           void *lib = to_reference(ref);
           void *value = dlsym(lib, symbol_name);
           if (value) {

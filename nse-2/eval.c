@@ -63,7 +63,7 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
         return 0;
       }
     case TYPE_SYMBOL:
-      *scope = scope_push(*scope, formal.symbol->name, actual);
+      *scope = scope_push(*scope, formal.symbol, actual);
       return 1;
     case TYPE_QUOTE:
       if (!is_true(nse_equals(formal.quote->quoted, actual))) {
@@ -106,6 +106,7 @@ NseVal eval_anon(NseVal args, NseVal env[]) {
 
 NseVal eval_anon_type(NseVal args, NseVal env[]) {
   NseVal name = env[2];
+  Scope *scope = env[1].reference->pointer;
   NseVal name_cons = check_alloc(CONS(create_cons(name, args)));
   if (!RESULT_OK(name_cons)) {
     return undefined;
@@ -119,7 +120,7 @@ NseVal eval_anon_type(NseVal args, NseVal env[]) {
   if (RESULT_OK(result)) {
     if (is_type(result)) {
       Type *t = to_type(result);
-      char *type_name_str = nse_write_to_string(name_datum);
+      char *type_name_str = nse_write_to_string(name_datum, scope->module);
       Type *alias = create_alias_type(type_name_str, copy_type(t));
       free(type_name_str);
       del_ref(result);
@@ -189,8 +190,8 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
     NseVal h = head(args);
     if (RESULT_OK(h)) {
       if (is_cons(h)) {
-        char *name = to_symbol(head(h));
-        if (name) {
+        Symbol *symbol = to_symbol(head(h));
+        if (symbol) {
           Scope *fn_scope = copy_scope(scope);
           NseVal scope_ref = check_alloc(REFERENCE(create_reference(fn_scope, (Destructor) delete_scope)));
           if (RESULT_OK(scope_ref)) {
@@ -206,9 +207,9 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
                 del_ref(scope_ref);
                 del_ref(def);
                 if (RESULT_OK(func)) {
-                  module_define(scope->module, name, func);
+                  module_define(symbol->module, symbol->name, func);
                   del_ref(func);
-                  return check_alloc(SYMBOL(module_intern_symbol(scope->module, name)));
+                  return add_ref(SYMBOL(symbol));
                 }
               }
             }
@@ -217,13 +218,13 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           raise_error("name of function must be a symbol");
         }
       } else {
-        char *name = to_symbol(h);
-        if (name) {
+        Symbol *symbol = to_symbol(h);
+        if (symbol) {
           NseVal value = eval(head(tail(args)), scope);
           if (RESULT_OK(value)) {
-            module_define(scope->module, name, value);
+            module_define(symbol->module, symbol->name, value);
             del_ref(value);
-            return check_alloc(SYMBOL(module_intern_symbol(scope->module, name)));
+            return add_ref(SYMBOL(symbol));
           }
         } else {
           raise_error("name of constant must be a symbol");
@@ -235,8 +236,8 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
     NseVal h = head(args);
     if (RESULT_OK(h)) {
       if (is_cons(h)) {
-        char *name = to_symbol(head(h));
-        if (name) {
+        Symbol *symbol = to_symbol(head(h));
+        if (symbol) {
           Scope *fn_scope = copy_scope(scope);
           NseVal scope_ref = check_alloc(REFERENCE(create_reference(fn_scope, (Destructor) delete_scope)));
           if (RESULT_OK(scope_ref)) {
@@ -252,9 +253,9 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
                 del_ref(scope_ref);
                 del_ref(def);
                 if (RESULT_OK(func)) {
-                  module_define_type(scope->module, name, func);
+                  module_define_type(symbol->module, symbol->name, func);
                   del_ref(func);
-                  return check_alloc(SYMBOL(module_intern_symbol(scope->module, name)));
+                  return add_ref(SYMBOL(symbol));
                 }
               }
             }
@@ -263,18 +264,18 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           raise_error("name of type must be a symbol");
         }
       } else {
-        char *name = to_symbol(h);
-        if (name) {
+        Symbol *symbol = to_symbol(h);
+        if (symbol) {
           NseVal value = eval(head(tail(args)), scope);
           if (RESULT_OK(value)) {
             if (is_type(value)) {
               Type *t = to_type(value);
-              Type *alias = create_alias_type(name, t);
+              Type *alias = create_alias_type(symbol->name, t);
               value = TYPE(alias);
             }
-            module_define_type(scope->module, name, value);
+            module_define_type(symbol->module, symbol->name, value);
             del_ref(value);
-            return check_alloc(SYMBOL(module_intern_symbol(scope->module, name)));
+            return add_ref(SYMBOL(symbol));
           }
         } else {
           raise_error("name of type must be a symbol");
@@ -286,8 +287,8 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
     NseVal h = head(args);
     if (RESULT_OK(h)) {
       if (is_cons(h)) {
-        char *name = to_symbol(head(h));
-        if (name) {
+        Symbol *symbol = to_symbol(head(h));
+        if (symbol) {
           Scope *macro_scope = copy_scope(scope);
           NseVal scope_ref = check_alloc(REFERENCE(create_reference(macro_scope, (Destructor) delete_scope)));
           if (RESULT_OK(scope_ref)) {
@@ -303,9 +304,9 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
                 del_ref(scope_ref);
                 del_ref(def);
                 if (RESULT_OK(value)) {
-                  module_define_macro(scope->module, name, value);
+                  module_define_macro(symbol->module, symbol->name, value);
                   del_ref(value);
-                  return check_alloc(SYMBOL(module_intern_symbol(scope->module, name)));
+                  return add_ref(SYMBOL(symbol));
                 }
               }
             }
@@ -368,7 +369,7 @@ NseVal eval(NseVal code, Scope *scope) {
       return result;
     }
     case TYPE_SYMBOL:
-      return add_ref(scope_get(scope, code.symbol->name));
+      return add_ref(scope_get(scope, code.symbol));
     case TYPE_SYNTAX: {
       Syntax *previous = push_debug_form(code.syntax);
       return pop_debug_form(eval(code.syntax->quoted, scope), previous);
