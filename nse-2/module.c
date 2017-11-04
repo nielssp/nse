@@ -142,7 +142,7 @@ static void delete_symbols(SymMap symbols) {
   SymMapIterator it = create_symmap_iterator(symbols);
   for (SymMapEntry entry = symmap_next(it); entry.key; entry = symmap_next(it)) {
     if (entry.value) {
-      free(entry.value);
+      del_ref(SYMBOL(entry.value));
     }
   }
   delete_symmap_iterator(it);
