@@ -1,9 +1,9 @@
 
-(def-type bool (union-type &'t &'f))
-(def-type int (union-type &i8 (union-type &i16 (union-type &i32 &i64))))
-(def-type float (union-type &f32 &f64))
-(def-type number (union-type &int &float))
-(def-type (error t) (union-type (cons-type &'ok (cons-type t &nil)) (cons-type &'error (cons-type &string (cons-type &any &nil)))))
+(def-type bool (union-type ^'t ^'f))
+(def-type int (union-type ^i8 (union-type ^i16 (union-type ^i32 ^i64))))
+(def-type float (union-type ^f32 ^f64))
+(def-type number (union-type ^int ^float))
+(def-type (error t) (union-type (cons-type ^'ok (cons-type t ^nil)) (cons-type ^'error (cons-type ^string (cons-type ^any ^nil)))))
 
 (def nil '())
 (def (list . xs) xs)
@@ -47,9 +47,9 @@
 
 (def (zip xs ys) (zip-with list xs ys))
 
-(def-type (option t) (union-type (cons-type &'some (cons-type t &nil)) &'none))
+(def-type (option t) (union-type (cons-type ^'some (cons-type t ^nil)) ^'none))
 (def (some x) (list 'some x))
 (def none 'none)
 (def (oget ('some x)) x)
-(def (defined? opt) (not (is-a opt &'none)))
+(def (defined? opt) (not (is-a opt ^'none)))
 (def (omap f opt) (if (defined? opt) (some (f (oget opt))) none))

@@ -131,11 +131,11 @@ NseVal nse_write(NseVal value, Stream *stream, Module *module) {
       nse_write(value.quote->quoted, stream, module);
       break;
     case TYPE_TQUOTE:
-      stream_printf(stream, "&");
+      stream_printf(stream, "^");
       nse_write(value.quote->quoted, stream, module);
       break;
     case TYPE_TYPE:
-      stream_printf(stream, "&");
+      stream_printf(stream, "^");
       write_type(value.type_val, stream, module);
       break;
     case TYPE_SYNTAX:

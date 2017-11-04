@@ -256,13 +256,13 @@ Syntax *nse_read(Reader *input) {
     }
     return s;
   }
-  if (c == '\'' || c == '&') {
+  if (c == '\'' || c == '^') {
     Syntax *syntax = start_pos(create_syntax(undefined), input);
     if (syntax) {
       pop(input);
       NseVal quoted = check_alloc(SYNTAX(nse_read(input)));
       if (RESULT_OK(quoted)) {
-        if (c == '&') {
+        if (c == '^') {
           syntax->quoted = check_alloc(TQUOTE(create_type_quote(quoted)));
         } else {
           syntax->quoted = check_alloc(QUOTE(create_quote(quoted)));
