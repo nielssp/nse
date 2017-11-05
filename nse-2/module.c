@@ -19,14 +19,11 @@ struct module {
 
 static ModuleMap loaded_modules = NULL_HASH_MAP;
 
-Module *lang_module = NULL;
 Module *keyword_module = NULL;
 
 static void init_modules() {
   loaded_modules = create_module_map();
-  lang_module = create_module("lang");
-  intern_special("t");
-  intern_special("f");
+  init_lang_module();
   keyword_module = create_module("keyword");
 }
 
@@ -128,6 +125,9 @@ Module *create_module(const char *name) {
     return NULL;
   }
   Module *module = malloc(sizeof(Module));
+  if (!module) {
+    return NULL;
+  }
   module->name = name;
   module->internal = create_symmap();
   module->external = create_symmap();
@@ -162,6 +162,7 @@ static void delete_defs(Namespace namespace) {
 }
 
 void delete_module(Module *module) {
+  module_map_remove(loaded_modules, module->name);
   delete_defs(module->defs);
   delete_defs(module->macro_defs);
   delete_defs(module->type_defs);

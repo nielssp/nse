@@ -43,6 +43,7 @@ void module_ext_define_type(Module *module, const char *name, NseVal value);
 
 Symbol *find_symbol(const char *s);
 Symbol *module_intern_symbol(Module *module, const char *s);
+Symbol *module_extern_symbol(Module *module, const char *s);
 Symbol *intern_keyword(const char *s);
 Symbol *intern_special(const char *s);
 void import_module(Module *dest, Module *src);

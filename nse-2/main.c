@@ -207,7 +207,5 @@ int main(int argc, char *argv[]) {
     printf("\n");
   }
   scope_pop(current_scope);
-  delete_module(user_module);
-  delete_module(system_module);
   return 0;
 }

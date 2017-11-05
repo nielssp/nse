@@ -7,14 +7,6 @@
 #include "error.h"
 #include "type.h"
 
-#define SPECIAL_IF "if"
-#define SPECIAL_LET "let"
-#define SPECIAL_LAMBDA "fn"
-#define SPECIAL_TRY "try"
-#define SPECIAL_DEFINE "def"
-#define SPECIAL_DEFINE_MACRO "def-macro"
-#define SPECIAL_DEFINE_TYPE "def-type"
-
 #define I64(i) ((NseVal) { .type = TYPE_I64, .i64 = (i) })
 #define FUNC(f) ((NseVal) { .type = TYPE_FUNC, .func = (f) })
 
@@ -28,9 +20,6 @@
 #define TQUOTE(q) ((NseVal) { .type = TYPE_TQUOTE, .quote = (q) })
 #define TYPE(t) ((NseVal) { .type = TYPE_TYPE, .type_val = (t) })
 #define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
-
-#define TRUE (SYMBOL(intern_special("t")))
-#define FALSE (SYMBOL(intern_special("f")))
 
 #define RESULT_OK(value) ((value).type != TYPE_UNDEFINED)
 
@@ -150,6 +139,8 @@ struct symbol {
   char name[];
 };
 
+#include "lang.h"
+
 extern NseVal undefined;
 extern NseVal nil;
 Cons *create_cons(NseVal h, NseVal t);
@@ -166,6 +157,7 @@ Syntax *copy_syntax(Syntax *syntax, NseVal quoted);
 NseVal check_alloc(NseVal v);
 
 Symbol *to_symbol(NseVal v);
+Symbol *to_keyword(NseVal v);
 void *to_reference(NseVal v);
 Type *to_type(NseVal v);
 
@@ -199,7 +191,7 @@ int is_keyword(NseVal v);
 int is_type(NseVal v);
 int is_true(NseVal b);
 
-int match_symbol(NseVal v, const char *sym);
+int match_symbol(NseVal v, const Symbol *sym);
 int is_special_form(NseVal v);
 
 NseVal nse_apply(NseVal func, NseVal args);

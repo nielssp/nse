@@ -452,6 +452,15 @@ Symbol *to_symbol(NseVal v) {
   return NULL;
 }
 
+Symbol *to_keyword(NseVal v) {
+  if (v.type == TYPE_KEYWORD) {
+    return v.symbol;
+  } else if (v.type == TYPE_SYNTAX) {
+    return to_keyword(v.syntax->quoted);
+  }
+  return NULL;
+}
+
 void *to_reference(NseVal v) {
   if (v.type == TYPE_REFERENCE) {
     return v.reference->pointer;
@@ -470,12 +479,12 @@ Type *to_type(NseVal v) {
   return NULL;
 }
 
-int match_symbol(NseVal v, const char *sym) {
+int match_symbol(NseVal v, const Symbol *symbol) {
   int result = 0;
   if (v.type == TYPE_SYMBOL) {
-    result = strcmp(v.symbol->name, sym) == 0;
+    result = v.symbol == symbol;
   } else if (v.type == TYPE_SYNTAX) {
-    result = match_symbol(v.syntax->quoted, sym);
+    result = match_symbol(v.syntax->quoted, symbol);
   }
   return result;
 }
@@ -484,13 +493,13 @@ int is_special_form(NseVal v) {
   int result = 0;
   if (v.type == TYPE_SYMBOL) {
     // TODO: module should be system
-    result |= strcmp(v.symbol->name, SPECIAL_IF) == 0;
-    result |= strcmp(v.symbol->name, SPECIAL_LAMBDA) == 0;
-    result |= strcmp(v.symbol->name, SPECIAL_LET) == 0;
-    result |= strcmp(v.symbol->name, SPECIAL_TRY) == 0;
-    result |= strcmp(v.symbol->name, SPECIAL_DEFINE) == 0;
-    result |= strcmp(v.symbol->name, SPECIAL_DEFINE_MACRO) == 0;
-    result |= strcmp(v.symbol->name, SPECIAL_DEFINE_TYPE) == 0;
+    result |= v.symbol == if_symbol;
+    result |= v.symbol == fn_symbol;
+    result |= v.symbol == let_symbol;
+    result |= v.symbol == try_symbol;
+    result |= v.symbol == def_symbol;
+    result |= v.symbol == def_macro_symbol;
+    result |= v.symbol == def_type_symbol;
   } else if (v.type == TYPE_SYNTAX) {
     result = is_special_form(v.syntax->quoted);
   }
@@ -498,8 +507,7 @@ int is_special_form(NseVal v) {
 }
 
 int is_true(NseVal b) {
-  // TODO: module should be system
-  return match_symbol(b, "t");
+  return match_symbol(b, t_symbol);
 }
 
 size_t list_length(NseVal value) {
