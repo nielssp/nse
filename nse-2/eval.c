@@ -57,6 +57,8 @@ static Type *parameters_to_type(NseVal formal) {
 struct named_parameter {
   Symbol *keyword;
   Symbol *symbol;
+  NseVal default_value;
+  int seen;
   struct named_parameter *next;
 };
 
@@ -68,7 +70,7 @@ void delete_named_parameters(struct named_parameter *stack) {
   }
 }
 
-int push_named_parameter(struct named_parameter **stack, Symbol *keyword, Symbol *symbol) {
+int push_named_parameter(struct named_parameter **stack, Symbol *keyword, Symbol *symbol, NseVal default_value) {
   struct named_parameter *new = allocate(sizeof(struct named_parameter));
   if (!new) {
     delete_named_parameters(*stack);
@@ -77,6 +79,8 @@ int push_named_parameter(struct named_parameter **stack, Symbol *keyword, Symbol
   new->keyword = keyword;
   new->symbol = symbol;
   new->next = *stack;
+  new->default_value = default_value;
+  new->seen = 0;
   *stack = new;
   return 1;
 }
@@ -84,6 +88,7 @@ int push_named_parameter(struct named_parameter **stack, Symbol *keyword, Symbol
 Symbol *find_named_parameter(struct named_parameter *stack, Symbol *keyword) {
   while (stack) {
     if (stack->keyword == keyword) {
+      stack->seen = 1;
       return stack->symbol;
     }
     stack = stack->next;
@@ -95,19 +100,30 @@ int assign_named_parameters(Scope **scope, NseVal formal, NseVal actual) {
   int result = 1;
   struct named_parameter *params = NULL;
   while (is_cons(formal)) {
-    Symbol *symbol = to_symbol(head(formal));
+    Symbol *symbol;
+    NseVal default_value = undefined;
+    if (is_cons(head(formal))) {
+      symbol = to_symbol(head(head(formal)));
+      default_value = elem(1, head(formal));
+      if (!RESULT_OK(default_value)) {
+        raise_error("expected a default value");
+        result = 0;
+        break;
+      }
+    } else {
+      symbol = to_symbol(head(formal));
+    }
     if (!symbol) {
       raise_error("expected a symbol");
       result = 0;
       break;
     }
     Symbol *keyword = intern_keyword(symbol->name);
-    if (!push_named_parameter(&params, keyword, symbol)) {
+    if (!push_named_parameter(&params, keyword, symbol, default_value)) {
       result = 0;
       break;
     }
     formal = tail(formal);
-    *scope = scope_push(*scope, symbol, nil);
   }
   if (result) {
     while (is_cons(actual)) {
@@ -130,6 +146,22 @@ int assign_named_parameters(Scope **scope, NseVal formal, NseVal actual) {
       }
       *scope = scope_push(*scope, symbol, value);
       actual = tail(tail(actual));
+    }
+    if (result) {
+      for (struct named_parameter *stack = params; stack; stack = stack->next) {
+        if (!stack->seen) {
+          if (RESULT_OK(stack->default_value)) {
+            NseVal default_value = eval(stack->default_value, *scope);
+            if (!RESULT_OK(default_value)) {
+              result = 0;
+              break;
+            }
+            *scope = scope_push(*scope, stack->symbol, default_value);
+          } else {
+            *scope = scope_push(*scope, stack->symbol, nil);
+          }
+        }
+      }
     }
   }
   delete_named_parameters(params);
