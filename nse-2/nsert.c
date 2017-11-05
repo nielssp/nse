@@ -492,7 +492,6 @@ int match_symbol(NseVal v, const Symbol *symbol) {
 int is_special_form(NseVal v) {
   int result = 0;
   if (v.type == TYPE_SYMBOL) {
-    // TODO: module should be system
     result |= v.symbol == if_symbol;
     result |= v.symbol == fn_symbol;
     result |= v.symbol == let_symbol;

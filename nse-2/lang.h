@@ -1,8 +1,8 @@
 #ifndef LANG_H
 #define LANG_H
 
-#define TRUE (SYMBOL(t_symbol))
-#define FALSE (SYMBOL(f_symbol))
+#define TRUE (add_ref(SYMBOL(t_symbol)))
+#define FALSE (add_ref(SYMBOL(f_symbol)))
 
 extern Module *lang_module;
 

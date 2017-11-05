@@ -134,7 +134,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   system_module = get_system_module();
-  module_define(system_module, "load", FUNC(load));
+  module_ext_define(system_module, "load", FUNC(load));
 
   Module *user_module = create_module("user");
   import_module(user_module, lang_module);

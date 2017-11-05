@@ -128,13 +128,21 @@ static NseVal expand_type(NseVal args) {
   return undefined;
 }
 
+static NseVal apply(NseVal args) {
+  ARG_POP_ANY(func, args);
+  ARG_POP_ANY(func_args, args);
+  ARG_DONE(args);
+  return nse_apply(func, func_args);
+}
+
 Module *get_system_module() {
   Module *system = create_module("system");
   module_ext_define(system, "+", FUNC(sum));
   module_ext_define(system, "-", FUNC(subtract));
   module_ext_define(system, "=", FUNC(equals));
-  module_ext_define(system, "type-of", FUNC(type_of));
+  module_ext_define(system, "apply", FUNC(apply));
 
+  module_ext_define(system, "type-of", FUNC(type_of));
   module_ext_define(system, "is-a", FUNC(is_a));
   module_ext_define(system, "subtype-of?", FUNC(subtype_of));
   module_ext_define(system, "cons-type", FUNC(cons_type));

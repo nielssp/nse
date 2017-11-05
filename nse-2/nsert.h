@@ -23,6 +23,12 @@
 
 #define RESULT_OK(value) ((value).type != TYPE_UNDEFINED)
 
+#define ARG_POP_ANY(name, args) NseVal name = head(args);\
+  if (!RESULT_OK(name)) {\
+    raise_error("too few parameters for function");\
+    return undefined;\
+  }\
+  args = tail(args);
 #define ARG_POP_TYPE(type, name, args, convert, type_name) type name;\
   {\
     NseVal temp1 = head(args);\
