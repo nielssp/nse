@@ -1,4 +1,3 @@
-
 ; types
 (def-type bool (union-type ^'t ^'f))
 (def-type int (union-type ^i8 (union-type ^i16 (union-type ^i32 ^i64))))

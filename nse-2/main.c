@@ -102,6 +102,56 @@ char *get_line(size_t line, const char *text) {
   return line_buf;
 }
 
+char **symbols = NULL;
+
+char *symbol_generator(const char *text, int state) {
+  static int i, length;
+  static const char *ptr;
+  if (!state) {
+    i = 0;
+    length = strlen(text);
+    int offset;
+    for (offset = length - 1; offset >= 0; offset--) {
+      char c = text[offset];
+      if (iswhite(c) || c == '(' || c == ')' || c == '\'' || c == '"') {
+        break;
+      }
+      if (c == ';') {
+        // comment
+        break;
+      }
+      if (c == '^') {
+        // type
+        break;
+      }
+    }
+    ptr = text + (offset + 1);
+    length -= offset + 1;
+    if (symbols) {
+      for (char **entry = symbols; *entry; entry++) {
+        free(*entry);
+      }
+      free(symbols);
+    }
+    symbols = get_symbols(current_scope->module);
+  }
+  char *match;
+  while (1) {
+    match = symbols[i++];
+    if (!match) {
+      break;
+    } else if (strncmp(match, ptr, length) == 0) {
+      return string_printf(match);
+    }
+  }
+  return NULL;
+}
+
+char **symbol_completion(const char *text, int start, int end) {
+  rl_attempted_completion_over = 1;
+  return rl_completion_matches(text, symbol_generator);
+}
+
 int main(int argc, char *argv[]) {
   int opt;
   int option_index;
@@ -142,9 +192,11 @@ int main(int argc, char *argv[]) {
 
   current_scope = use_module(user_module);
 
-  rl_bind_key('\t', rl_insert); // TODO: autocomplete
+  rl_bind_key('\t', rl_complete);
   rl_bind_key('(', paren_start);
   rl_bind_key(')', paren_end);
+
+  rl_attempted_completion_function = symbol_completion;
 
   if (std) {
     NseVal args = CONS(create_cons(SYMBOL(intern_keyword("std.lisp")), nil));

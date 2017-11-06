@@ -141,6 +141,7 @@ typedef struct {
 
 HashMap *create_hash_map();
 void delete_hash_map(HashMap *map);
+size_t get_hash_map_size(HashMap *map);
 
 HashMapIterator *create_hash_map_iterator(HashMap *map);
 void delete_hash_map_iterator(HashMapIterator *iterator);

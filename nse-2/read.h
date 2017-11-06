@@ -12,4 +12,6 @@ void close_reader(Reader *reader);
 
 Syntax *nse_read(Reader *reader);
 
+int iswhite(int c);
+
 #endif

@@ -3,6 +3,7 @@
 #include "nsert.h"
 
 #include "util/hash_map.h"
+#include "util/stream.h"
 
 DEFINE_PRIVATE_HASH_MAP(namespace, Namespace, char *, NseVal *, string_hash, string_equals)
 DEFINE_PRIVATE_HASH_MAP(symmap, SymMap, char *, Symbol *, string_hash, string_equals)
@@ -281,6 +282,19 @@ Symbol *module_intern_symbol(Module *module, const char *s) {
   symmap_add(module->internal, value->name, value);
   value->refs++;
   return value;
+}
+
+char **get_symbols(Module *module) {
+  size_t entries = get_hash_map_size(module->internal.map);
+  char **symbols = malloc((entries + 1) * sizeof(char *));
+  size_t i = 0;
+  symbols[entries] = NULL;
+  SymMapIterator it = create_symmap_iterator(module->internal);
+  for (SymMapEntry entry = symmap_next(it); entry.key; entry = symmap_next(it)) {
+    symbols[i++] = string_printf(entry.value->name);
+  }
+  delete_symmap_iterator(it);
+  return symbols;
 }
 
 void import_module(Module *dest, Module *src) {

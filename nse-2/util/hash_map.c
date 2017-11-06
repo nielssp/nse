@@ -90,6 +90,10 @@ void delete_hash_map(HashMap *map) {
   free(map);
 }
 
+size_t get_hash_map_size(HashMap *map) {
+  return map->size;
+}
+
 HashMapIterator *create_hash_map_iterator(HashMap *map) {
   HashMapIterator *iterator = malloc(sizeof(HashMapIterator));
   iterator->map = map;

@@ -72,7 +72,7 @@ static char peek(Reader *s) {
   return peekn(1, s);
 }
 
-static int iswhite(int c) {
+int iswhite(int c) {
   return c == '\n' || c == '\r' || c == '\t' || c == ' ';
 }
 
