@@ -126,6 +126,9 @@ NseVal nse_write(NseVal value, Stream *stream, Module *module) {
     case TYPE_I64:
       stream_printf(stream, "%ld", value.i64);
       break;
+    case TYPE_F64:
+      stream_printf(stream, "%lf", value.f64);
+      break;
     case TYPE_QUOTE:
       stream_printf(stream, "'");
       nse_write(value.quote->quoted, stream, module);

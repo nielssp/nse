@@ -204,10 +204,16 @@ static char *get_symbol_module(const char **s) {
   size_t module_length = 0;
   const char *chars = *s;
   size_t i = 0;
+  int empty = 1;
   while (chars[i]) {
     i++;
     if (chars[i] == '/') {
-      module_length = i;
+      if (!empty) {
+        module_length = i;
+        empty = 1;
+      }
+    } else {
+      empty = 0;
     }
   }
   *s += module_length + 1;

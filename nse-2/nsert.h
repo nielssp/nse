@@ -8,6 +8,7 @@
 #include "type.h"
 
 #define I64(i) ((NseVal) { .type = TYPE_I64, .i64 = (i) })
+#define F64(i) ((NseVal) { .type = TYPE_F64, .f64 = (i) })
 #define FUNC(f) ((NseVal) { .type = TYPE_FUNC, .func = (f) })
 
 #define CONS(c) ((NseVal) { .type = TYPE_CONS, .cons = (c) })
@@ -55,6 +56,7 @@ typedef enum {
  TYPE_NIL,
  TYPE_CONS,
  TYPE_I64,
+ TYPE_F64,
  TYPE_SYMBOL,
  TYPE_KEYWORD,
  TYPE_STRING,
@@ -83,6 +85,7 @@ struct nse_val {
   NseValType type;
   union {
     int64_t i64;
+    double f64;
     Cons *cons;
     Syntax *syntax;
     Quote *quote;
@@ -188,6 +191,7 @@ int is_cons(NseVal v);
 int is_nil(NseVal v);
 int is_list(NseVal v);
 int is_i64(NseVal v);
+int is_f64(NseVal v);
 int is_quote(NseVal v);
 int is_type_quote(NseVal v);
 int is_function(NseVal v);

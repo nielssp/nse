@@ -380,6 +380,15 @@ int is_i64(NseVal v) {
   return 0;
 }
 
+int is_f64(NseVal v) {
+  if (v.type == TYPE_F64) {
+    return 1;
+  } else if (v.type == TYPE_SYNTAX) {
+    return is_f64(v.syntax->quoted);
+  }
+  return 0;
+}
+
 int is_function(NseVal v) {
   if (v.type == TYPE_FUNC || v.type == TYPE_CLOSURE) {
     return 1;
@@ -631,6 +640,8 @@ const char *nse_val_type_to_string(NseValType t) {
       return "cons";
     case TYPE_I64:
       return "i64";
+    case TYPE_F64:
+      return "f64";
     case TYPE_SYMBOL:
       return "symbol";
     case TYPE_KEYWORD:
@@ -664,6 +675,8 @@ Type *get_type(NseVal v) {
       return create_cons_type(get_type(v.cons->head), get_type(v.cons->tail));
     case TYPE_I64:
       return copy_type(i64_type);
+    case TYPE_F64:
+      return copy_type(f64_type);
     case TYPE_SYMBOL:
       return create_symbol_type(v.symbol->name); // TODO: get fqn
     case TYPE_KEYWORD:

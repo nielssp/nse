@@ -25,6 +25,28 @@ static NseVal subtract(NseVal args) {
   return I64(acc);
 }
 
+static NseVal product(NseVal args) {
+  int64_t acc = 1;
+  while (is_cons(args)) {
+    acc *= head(args).i64;
+    args = tail(args);
+  }
+  return I64(acc);
+}
+
+static NseVal divide(NseVal args) {
+  double acc = head(args).i64;
+  args = tail(args);
+  if (!is_cons(args)) {
+    return F64(1.0 / acc);
+  }
+  do {
+    acc /= head(args).i64;
+    args = tail(args);
+  } while (is_cons(args));
+  return F64(acc);
+}
+
 static NseVal type_of(NseVal args) {
   Type *t = get_type(head(args));
   return check_alloc(TYPE(t));
@@ -139,6 +161,8 @@ Module *get_system_module() {
   Module *system = create_module("system");
   module_ext_define(system, "+", FUNC(sum));
   module_ext_define(system, "-", FUNC(subtract));
+  module_ext_define(system, "*", FUNC(product));
+  module_ext_define(system, "/", FUNC(divide));
   module_ext_define(system, "=", FUNC(equals));
   module_ext_define(system, "apply", FUNC(apply));
 

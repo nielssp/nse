@@ -473,6 +473,7 @@ NseVal eval(NseVal code, Scope *scope) {
     case TYPE_CONS:
       return eval_cons(code.cons, scope);
     case TYPE_I64:
+    case TYPE_F64:
     case TYPE_STRING:
     case TYPE_KEYWORD:
       return add_ref(code);

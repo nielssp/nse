@@ -115,7 +115,18 @@ static Syntax *read_int(Reader *input) {
   while (isdigit(peek(input))) {
     value = value * 10 + pop(input) - '0';
   }
-  syntax->quoted = I64(sign * value);
+  if (peek(input) == '.') {
+    pop(input);
+    double fractional_part = 0;
+    double f = 0.1;
+    while (isdigit(peek(input))) {
+      fractional_part += (pop(input) - '0') * f;
+      f /= 10;
+    }
+    syntax->quoted = F64(sign * (value + fractional_part));
+  } else {
+    syntax->quoted = I64(sign * value);
+  }
   return end_pos(syntax, input);
 }
 
@@ -192,7 +203,7 @@ static Syntax *read_symbol(Reader *input, int keyword) {
   Syntax *syntax = start_pos(create_syntax(undefined), input);
   if (syntax) {
     while (c != EOF && !iswhite(c) && c != '(' && c != ')' && c != '"' && c != ';') {
-      if (c == '/') {
+      if (c == '/' && l != 0) {
         qualified = 1;
       }
       buffer[l++] = (char)c;
