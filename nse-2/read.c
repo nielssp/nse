@@ -133,9 +133,8 @@ static Syntax *read_int(Reader *input) {
 static Syntax *read_string(Reader *input) {
   size_t l = 0;
   size_t size = 10;
-  char *buffer = malloc(size);
+  char *buffer = allocate(size);
   if (!buffer) {
-    raise_error("out of memory");
     return NULL;
   }
   pop(input);
@@ -145,7 +144,7 @@ static Syntax *read_string(Reader *input) {
     int escape = 0;
     while (1) {
       if (c == EOF) {
-        raise_error("unexpected end of file, expected '\"'");
+        raise_error(syntax_error, "unexpected end of file, expected '\"'");
         // TODO: add start pos to error
         free(buffer);
         free(syntax);
@@ -172,7 +171,7 @@ static Syntax *read_string(Reader *input) {
         if (new_buffer) {
           buffer = new_buffer;
         } else {
-          raise_error("out of memory");
+          raise_error(out_of_memory_error, "out of memory");
           free(buffer);
           free(syntax);
           return NULL;
@@ -193,9 +192,8 @@ static Syntax *read_string(Reader *input) {
 static Syntax *read_symbol(Reader *input, int keyword) {
   size_t l = 0;
   size_t size = 10;
-  char *buffer = malloc(size);
+  char *buffer = allocate(size);
   if (!buffer) {
-    raise_error("out of memory");
     return NULL;
   }
   int c = peek(input);
@@ -215,7 +213,7 @@ static Syntax *read_symbol(Reader *input, int keyword) {
         if (new_buffer) {
           buffer = new_buffer;
         } else {
-          raise_error("out of memory");
+          raise_error(out_of_memory_error, "out of memory");
           free(buffer);
           free(syntax);
           return NULL;
@@ -244,7 +242,7 @@ Syntax *nse_read(Reader *input) {
   skip(input);
   c = peek(input);
   if (c == EOF) {
-    raise_error("%s:%zu:%zu: end of input", input->file_name, input->line, input->column);
+    raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name, input->line, input->column);
     return NULL;
   }
   if (c == ';') {
@@ -255,7 +253,7 @@ Syntax *nse_read(Reader *input) {
     return nse_read(input);
   }
   if (c == '.' || c == ')') {
-    raise_error("%s:%zu:%zu: unexpected '%c'", input->file_name, input->line, input->column, c);
+    raise_error(syntax_error, "%s:%zu:%zu: unexpected '%c'", input->file_name, input->line, input->column, c);
     pop(input);
     return NULL;
   }
@@ -299,7 +297,7 @@ Syntax *nse_read(Reader *input) {
           pop(input);
           return end_pos(syntax, input);
         }
-        raise_error("%s:%zu:%zu: missing ')'", input->file_name, input->line, input->column);
+        raise_error(syntax_error, "%s:%zu:%zu: missing ')'", input->file_name, input->line, input->column);
         del_ref(syntax->quoted);
       }
       free(syntax);

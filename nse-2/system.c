@@ -66,7 +66,7 @@ static NseVal equals(NseVal args) {
     args = tail(args);
   }
   if (!RESULT_OK(previous)) {
-    raise_error("too few arguments");
+    raise_error(domain_error, "too few arguments");
   }
   return TRUE;
 }

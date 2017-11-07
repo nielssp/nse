@@ -56,10 +56,10 @@ NseVal load(NseVal args) {
         close_reader(reader);
         return name;
       } else {
-        raise_error("could not open file: %s: %s", name.symbol, strerror(errno));
+        raise_error(io_error, "could not open file: %s: %s", name.symbol, strerror(errno));
       }
     } else {
-      raise_error("must be called with a symbol");
+      raise_error(domain_error, "must be called with a symbol");
     }
   }
   return undefined;
@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
         nse_write(result, stdout_stream, user_module);
         del_ref(result);
       } else {
-        printf("error: %s", current_error());
+        printf("error(%s): %s", current_error_type()->name, current_error());
         if (error_form != NULL) {
           NseVal datum = syntax_to_datum(error_form->quoted);
           printf(": ");
@@ -249,10 +249,22 @@ int main(int argc, char *argv[]) {
             }
             free(line);
           }
+          printf("\nStack trace:");
+          NseVal stack_trace = get_stack_trace();
+          for (NseVal it = stack_trace; is_cons(it); it = tail(it)) {
+            NseVal syntax = elem(2, head(it));
+            printf("\n  %s:%zd:%zd", error_form->file, error_form->start_line, error_form->start_column);
+            NseVal datum = syntax_to_datum(syntax.syntax->quoted);
+            printf(": ");
+            nse_write(datum, stdout_stream, user_module);
+            del_ref(datum);
+          }
+          del_ref(stack_trace);
+
         }
       }
     } else {
-      printf("error: %s: ", current_error());
+      printf("error: %s", current_error());
     }
     close_reader(reader);
     free(input);

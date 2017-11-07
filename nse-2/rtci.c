@@ -15,10 +15,10 @@ NseVal c_load(NseVal args) {
         }
         dlclose(lib);
       } else {
-        raise_error("cannot load library: %s", dlerror());
+        raise_error(io_error, "cannot load library: %s", dlerror());
       }
     } else {
-      raise_error("name of library must be a symbol");
+      raise_error(domain_error, "name of library must be a symbol");
     }
   }
   return undefined;
@@ -40,14 +40,14 @@ NseVal c_symbol(NseVal args) {
               return value_ref;
             }
           } else {
-            raise_error("cannot find symbol: %s", dlerror());
+            raise_error(name_error, "cannot find symbol: %s", dlerror());
           }
         } else {
-          raise_error("library must be a reference");
+          raise_error(domain_error, "library must be a reference");
         }
       }
     } else {
-      raise_error("name of library must be a symbol");
+      raise_error(domain_error, "name of library must be a symbol");
     }
   }
   return undefined;

@@ -6,6 +6,8 @@
 
 extern Module *lang_module;
 
+extern Symbol *out_of_memory_error;
+
 extern Symbol *t_symbol;
 extern Symbol *f_symbol;
 extern Symbol *if_symbol;

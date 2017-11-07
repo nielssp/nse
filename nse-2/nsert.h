@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "error.h"
 #include "type.h"
 
 #define I64(i) ((NseVal) { .type = TYPE_I64, .i64 = (i) })
@@ -26,7 +25,7 @@
 
 #define ARG_POP_ANY(name, args) NseVal name = head(args);\
   if (!RESULT_OK(name)) {\
-    raise_error("too few parameters for function");\
+    raise_error(domain_error, "too few parameters for function");\
     return undefined;\
   }\
   args = tail(args);
@@ -34,20 +33,20 @@
   {\
     NseVal temp1 = head(args);\
     if (!RESULT_OK(temp1)) {\
-      raise_error("too few parameters for function");\
+      raise_error(domain_error, "too few parameters for function");\
       return undefined;\
     }\
     args = tail(args);\
     name = convert(temp1);\
     if (name == NULL) {\
       char *temp2 = nse_write_to_string(temp1, lang_module);\
-      raise_error("%s is not %s", temp2, type_name);\
+      raise_error(domain_error, "%s is not %s", temp2, type_name);\
       free(temp2);\
       return undefined;\
     }\
   }
 #define ARG_DONE(args) if (!is_nil(args)) {\
-  raise_error("too many parameters for function");\
+  raise_error(domain_error, "too many parameters for function");\
   return undefined;\
 }
 
@@ -140,6 +139,7 @@ struct syntax {
   NseVal quoted;
 };
 
+#include "error.h"
 #include "module.h"
 
 struct symbol {
@@ -171,12 +171,10 @@ void *to_reference(NseVal v);
 Type *to_type(NseVal v);
 
 extern Syntax *error_form;
-extern char *error_string;
 void set_debug_form(Syntax *syntax);
 Syntax *push_debug_form(Syntax *syntax);
 NseVal pop_debug_form(NseVal result, Syntax *previous);
-void raise_error(const char *format, ...);
-void clear_error();
+NseVal get_stack_trace();
 
 NseVal add_ref(NseVal p);
 void del_ref(NseVal p);

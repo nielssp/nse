@@ -9,7 +9,12 @@ void delete_all(NseVal value);
 void delete(NseVal value);
 NseVal parse_list(char **input);
 
+NseVal undefined = { .type = TYPE_UNDEFINED };
+NseVal nil = { .type = TYPE_NIL };
+
 Syntax *error_form = NULL;
+
+NseVal stack_trace = { .type = TYPE_NIL };
 
 void set_debug_form(Syntax *syntax) {
   if (error_form) {
@@ -43,9 +48,6 @@ NseVal pop_debug_form(NseVal result, Syntax *previous) {
   error_form = previous;
   return result;
 }
-
-NseVal undefined = { .type = TYPE_UNDEFINED };
-NseVal nil = { .type = TYPE_NIL };
 
 Cons *create_cons(NseVal h, NseVal t) {
   Cons *cons = allocate(sizeof(Cons));
@@ -316,7 +318,7 @@ NseVal head(NseVal value) {
   } else if (value.type == TYPE_SYNTAX) {
     return head(value.syntax->quoted);
   } else {
-    raise_error("head of empty list");
+    raise_error(domain_error, "head of empty list");
   }
   return result;
 }
@@ -328,7 +330,7 @@ NseVal tail(NseVal value) {
   } else if (value.type == TYPE_SYNTAX) {
     return tail(value.syntax->quoted);
   } else {
-    raise_error("tail of empty list");
+    raise_error(domain_error, "tail of empty list");
   }
   return result;
 }
@@ -527,14 +529,59 @@ size_t list_length(NseVal value) {
   return count;
 }
 
+static int stack_trace_push(NseVal func, NseVal args) {
+  Cons *c1 = create_cons(SYNTAX(error_form), nil);
+  if (!c1) {
+    return 0;
+  }
+  Cons *c2 = create_cons(args, CONS(c1));
+  del_ref(CONS(c1));
+  if (!c2) {
+    return 0;
+  }
+  Cons *c3 = create_cons(func, CONS(c2));
+  del_ref(CONS(c2));
+  if (!c3) {
+    return 0;
+  }
+  NseVal old = stack_trace;
+  Cons *new_trace = create_cons(CONS(c3), old);
+  del_ref(CONS(c3));
+  if (!new_trace) {
+    return 0;
+  }
+  stack_trace = CONS(new_trace);
+  del_ref(old);
+  return 1;
+}
+
+static void stack_trace_pop() {
+  NseVal current = stack_trace;
+  stack_trace = add_ref(tail(current));
+  del_ref(current);
+}
+
+NseVal get_stack_trace() {
+  return add_ref(stack_trace);
+}
+
 NseVal nse_apply(NseVal func, NseVal args) {
   NseVal result = undefined;
   if (func.type == TYPE_FUNC) {
+    if (!stack_trace_push(func, args)) {
+      return undefined;
+    }
     result = func.func(args);
   } else if (func.type == TYPE_CLOSURE) {
+    if (!stack_trace_push(func, args)) {
+      return undefined;
+    }
     result = func.closure->f(args, func.closure->env);
   } else {
-    raise_error("not a function");
+    raise_error(domain_error, "not a function");
+  }
+  if (RESULT_OK(result)) {
+    stack_trace_pop();
   }
   return result;
 }

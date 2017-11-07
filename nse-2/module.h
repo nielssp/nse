@@ -42,6 +42,7 @@ void module_ext_define_macro(Module *module, const char *name, NseVal value);
 void module_ext_define_type(Module *module, const char *name, NseVal value);
 
 Symbol *find_symbol(const char *s);
+Symbol *module_find_internal(Module *module, const char *s);
 Symbol *module_intern_symbol(Module *module, const char *s);
 char **get_symbols(Module *module);
 Symbol *module_extern_symbol(Module *module, const char *s);

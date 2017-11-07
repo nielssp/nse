@@ -102,7 +102,7 @@ NseVal scope_get(Scope *scope, Symbol *symbol) {
       return *value;
     }
   }
-  raise_error("undefined name");
+  raise_error(name_error, "undefined name");
   return undefined;
 }
 
@@ -113,7 +113,7 @@ NseVal scope_get_macro(Scope *scope, Symbol *symbol) {
       return *value;
     }
   }
-  raise_error("undefined macro");
+  raise_error(name_error, "undefined macro");
   return undefined;
 }
 
@@ -122,7 +122,7 @@ Module *create_module(const char *name) {
     init_modules();
   }
   if (module_map_lookup(loaded_modules, name) != NULL) {
-    raise_error("module already defined: %s", name);
+    raise_error(name_error, "module already defined: %s", name);
     return NULL;
   }
   Module *module = malloc(sizeof(Module));
@@ -236,10 +236,10 @@ Symbol *find_symbol(const char *s) {
         value->refs++;
         return value;
       } else {
-        raise_error("module %s has no external symbol with name: %s", module_name, s);
+        raise_error(name_error, "module %s has no external symbol with name: %s", module_name, s);
       }
     } else {
-      raise_error("could not find module: %s", module_name);
+      raise_error(name_error, "could not find module: %s", module_name);
     }
     free(module_name);
   }
@@ -273,6 +273,15 @@ Symbol *intern_special(const char *s) {
     init_modules();
   }
   return module_extern_symbol(lang_module, s);
+}
+
+Symbol *module_find_internal(Module *module, const char *s) {
+  Symbol *value = symmap_lookup(module->internal, s);
+  if (value) {
+    value->refs++;
+    return value;
+  }
+  return NULL;
 }
 
 Symbol *module_intern_symbol(Module *module, const char *s) {

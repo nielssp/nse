@@ -117,9 +117,15 @@ NseVal nse_write(NseVal value, Stream *stream, Module *module) {
       }
       stream_printf(stream, "\"");
       break;
-    case TYPE_SYMBOL:
-      stream_printf(stream, "%s/%s", module_name(value.symbol->module), value.symbol->name);
+    case TYPE_SYMBOL: {
+      Symbol *internal = module_find_internal(module, value.symbol->name);
+      if (internal == value.symbol) {
+        stream_printf(stream, "%s", value.symbol->name);
+      } else {
+        stream_printf(stream, "%s/%s", module_name(value.symbol->module), value.symbol->name);
+      }
       break;
+    }
     case TYPE_KEYWORD:
       stream_printf(stream, ":%s", value.symbol->name);
       break;

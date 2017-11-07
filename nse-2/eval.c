@@ -49,7 +49,7 @@ static Type *parameters_to_type(NseVal formal) {
     case TYPE_SYNTAX:
       return parameters_to_type(formal.syntax->quoted);
     default:
-      raise_error("unexpected value type: %s", nse_val_type_to_string(formal.type));
+      raise_error(domain_error, "unexpected value type: %s", nse_val_type_to_string(formal.type));
       return NULL;
   }
 }
@@ -106,7 +106,7 @@ int assign_named_parameters(Scope **scope, NseVal formal, NseVal actual) {
       symbol = to_symbol(head(head(formal)));
       default_value = elem(1, head(formal));
       if (!RESULT_OK(default_value)) {
-        raise_error("expected a default value");
+        raise_error(domain_error, "expected a default value");
         result = 0;
         break;
       }
@@ -114,7 +114,7 @@ int assign_named_parameters(Scope **scope, NseVal formal, NseVal actual) {
       symbol = to_symbol(head(formal));
     }
     if (!symbol) {
-      raise_error("expected a symbol");
+      raise_error(domain_error, "expected a symbol");
       result = 0;
       break;
     }
@@ -129,13 +129,13 @@ int assign_named_parameters(Scope **scope, NseVal formal, NseVal actual) {
     while (is_cons(actual)) {
       Symbol *keyword = to_keyword(head(actual));
       if (!keyword) {
-        raise_error("expected a keyword");
+        raise_error(domain_error, "expected a keyword");
         result = 0;
         break;
       }
       Symbol *symbol = find_named_parameter(params, keyword);
       if (!symbol) {
-        raise_error("unknown named parameter: %s", keyword->name);
+        raise_error(domain_error, "unknown named parameter: %s", keyword->name);
         result = 0;
         break;
       }
@@ -181,7 +181,7 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
       return 1;
     case TYPE_QUOTE:
       if (!is_true(nse_equals(formal.quote->quoted, actual))) {
-        raise_error("pattern match failed");
+        raise_error(domain_error, "pattern match failed");
         return 0;
       }
       return 1;
@@ -193,7 +193,7 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
         }
       }
       if (!is_cons(actual)) {
-        raise_error("too few parameters for function");
+        raise_error(domain_error, "too few parameters for function");
         return 0;
       }
       return assign_parameters(scope, head(formal), head(actual))
@@ -201,7 +201,7 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
     }
     case TYPE_NIL:
       if (!is_nil(actual)) {
-        raise_error("too many parameters for function");
+        raise_error(domain_error, "too many parameters for function");
         return 0;
       }
       return 1;
@@ -295,16 +295,18 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           del_ref(tail);
           return output;
         } else {
-          NseVal tag = check_alloc(SYMBOL(intern_special("error")));
+          NseVal tag = add_ref(SYMBOL(current_error_type()));
           NseVal msg = check_alloc(STRING(create_string(current_error(), strlen(current_error()))));
           NseVal form = check_alloc(SYNTAX(error_form));
-          NseVal tail1 = check_alloc(CONS(create_cons(form, nil)));
-          NseVal tail2 = check_alloc(CONS(create_cons(msg, tail1)));
+          NseVal tail1 = check_alloc(CONS(create_cons(get_stack_trace(), nil)));
+          NseVal tail2 = check_alloc(CONS(create_cons(form, tail1)));
+          NseVal tail3 = check_alloc(CONS(create_cons(msg, tail2)));
           del_ref(msg);
           del_ref(tail1);
-          NseVal output = check_alloc(CONS(create_cons(tag, tail2))); 
-          del_ref(tag);
           del_ref(tail2);
+          NseVal output = check_alloc(CONS(create_cons(tag, tail3))); 
+          del_ref(tag);
+          del_ref(tail3);
           return output;
         }
       }
@@ -338,7 +340,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
               }
             }
           } else {
-            raise_error("name of function must be a symbol");
+            raise_error(syntax_error, "name of function must be a symbol");
           }
         } else {
           Symbol *symbol = to_symbol(h);
@@ -350,7 +352,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
               return add_ref(SYMBOL(symbol));
             }
           } else {
-            raise_error("name of constant must be a symbol");
+            raise_error(syntax_error, "name of constant must be a symbol");
           }
         }
       }
@@ -384,7 +386,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
               }
             }
           } else {
-            raise_error("name of type must be a symbol");
+            raise_error(syntax_error, "name of type must be a symbol");
           }
         } else {
           Symbol *symbol = to_symbol(h);
@@ -401,7 +403,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
               return add_ref(SYMBOL(symbol));
             }
           } else {
-            raise_error("name of type must be a symbol");
+            raise_error(syntax_error, "name of type must be a symbol");
           }
         }
       }
@@ -435,10 +437,10 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
               }
             }
           } else {
-            raise_error("name of macro must be a symbol");
+            raise_error(syntax_error, "name of macro must be a symbol");
           }
         } else {
-          raise_error("macro must be a function");
+          raise_error(syntax_error, "macro must be a function");
         }
       }
       return undefined;
@@ -499,7 +501,7 @@ NseVal eval(NseVal code, Scope *scope) {
       return pop_debug_form(eval(code.syntax->quoted, scope), previous);
     }
     default:
-      raise_error("unexpected value type: %s", nse_val_type_to_string(code.type));
+      raise_error(domain_error, "unexpected value type: %s", nse_val_type_to_string(code.type));
       return undefined;
   }
 }

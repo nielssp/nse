@@ -15,7 +15,10 @@ Symbol *key_symbol = NULL;
 Module *lang_module = NULL;
 
 void init_lang_module() {
+  init_error_module();
+
   lang_module = create_module("lang");
+
   t_symbol = module_extern_symbol(lang_module, "t");
   f_symbol = module_extern_symbol(lang_module, "f");
   if_symbol = module_extern_symbol(lang_module, "if");
