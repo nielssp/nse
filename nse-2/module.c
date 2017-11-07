@@ -234,6 +234,7 @@ Symbol *find_symbol(const char *s) {
       Symbol *value = symmap_lookup(module->external, s);
       if (value) {
         value->refs++;
+        free(module_name);
         return value;
       } else {
         raise_error(name_error, "module %s has no external symbol with name: %s", module_name, s);

@@ -253,7 +253,7 @@ int main(int argc, char *argv[]) {
           NseVal stack_trace = get_stack_trace();
           for (NseVal it = stack_trace; is_cons(it); it = tail(it)) {
             NseVal syntax = elem(2, head(it));
-            printf("\n  %s:%zd:%zd", error_form->file, error_form->start_line, error_form->start_column);
+            printf("\n  %s:%zd:%zd", syntax.syntax->file, syntax.syntax->start_line, syntax.syntax->start_column);
             NseVal datum = syntax_to_datum(syntax.syntax->quoted);
             printf(": ");
             nse_write(datum, stdout_stream, user_module);
