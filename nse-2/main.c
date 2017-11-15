@@ -65,6 +65,24 @@ NseVal load(NseVal args) {
   return undefined;
 }
 
+NseVal in_module(NseVal args) {
+  NseVal name = head(args);
+  if (RESULT_OK(name)) {
+    if (is_symbol(name)) {
+      Module *m = find_module(name.symbol->name);
+      if (m) {
+        current_scope->module = m;
+        return name;
+      } else {
+        raise_error(name_error, "could not find module: %s", name.symbol->name);
+      }
+    } else {
+      raise_error(domain_error, "must be called with a symbol");
+    }
+  }
+  return undefined;
+}
+
 int paren_start(int count, int key) {
   rl_insert_text("()");
   rl_point--;
@@ -185,6 +203,7 @@ int main(int argc, char *argv[]) {
   }
   system_module = get_system_module();
   module_ext_define(system_module, "load", FUNC(load));
+  module_ext_define(system_module, "in-module", FUNC(in_module));
 
   Module *user_module = create_module("user");
   import_module(user_module, lang_module);
@@ -260,7 +279,8 @@ int main(int argc, char *argv[]) {
             del_ref(datum);
           }
           del_ref(stack_trace);
-
+          clear_error();
+          clear_stack_trace();
         }
       }
     } else {

@@ -565,6 +565,11 @@ NseVal get_stack_trace() {
   return add_ref(stack_trace);
 }
 
+void clear_stack_trace() {
+  del_ref(stack_trace);
+  stack_trace = nil;
+}
+
 NseVal nse_apply(NseVal func, NseVal args) {
   NseVal result = undefined;
   if (func.type == TYPE_FUNC) {

@@ -175,6 +175,7 @@ void set_debug_form(Syntax *syntax);
 Syntax *push_debug_form(Syntax *syntax);
 NseVal pop_debug_form(NseVal result, Syntax *previous);
 NseVal get_stack_trace();
+void clear_stack_trace();
 
 NseVal add_ref(NseVal p);
 void del_ref(NseVal p);
