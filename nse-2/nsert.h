@@ -22,6 +22,7 @@
 #define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
 
 #define RESULT_OK(value) ((value).type != TYPE_UNDEFINED)
+#define THEN(previous, next) ((RESULT_OK(previous)) ? (next) : undefined)
 
 #define ARG_POP_ANY(name, args) NseVal name = head(args);\
   if (!RESULT_OK(name)) {\
@@ -125,6 +126,7 @@ struct string {
 
 struct reference {
   size_t refs;
+  Symbol *tag;
   void *pointer;
   Destructor destructor;
 };
@@ -160,7 +162,7 @@ Symbol *create_symbol(const char *s, Module *module);
 Symbol *create_keyword(const char *s, Module *module);
 String *create_string(const char *s, size_t length);
 Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], size_t env_size);
-Reference *create_reference(void *pointer, void destructor(void *));
+Reference *create_reference(Symbol *tag, void *pointer, void destructor(void *));
 
 Syntax *copy_syntax(Syntax *syntax, NseVal quoted);
 NseVal check_alloc(NseVal v);

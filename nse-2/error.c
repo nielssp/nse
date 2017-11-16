@@ -8,6 +8,7 @@
 
 Symbol *out_of_memory_error = NULL;
 Symbol *domain_error = NULL;
+Symbol *pattern_error = NULL;
 Symbol *name_error = NULL;
 Symbol *io_error = NULL;
 Symbol *syntax_error = NULL;
@@ -23,6 +24,7 @@ void init_error_module() {
 
   out_of_memory_error = module_extern_symbol(error_module, "out-of-memory-error");
   domain_error = module_extern_symbol(error_module, "domain-error");
+  pattern_error = module_extern_symbol(error_module, "pattern-error");
   name_error = module_extern_symbol(error_module, "name-error");
   io_error = module_extern_symbol(error_module, "io-error");
   syntax_error = module_extern_symbol(error_module, "syntax-error");

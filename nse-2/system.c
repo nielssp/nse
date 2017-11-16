@@ -177,7 +177,7 @@ Module *get_system_module() {
   module_ext_define_type(system, "nothing", TYPE(nothing_type));
   module_ext_define_type(system, "any", TYPE(any_type));
   module_ext_define_type(system, "nil", TYPE(nil_type));
-  module_ext_define_type(system, "ref", TYPE(ref_type));
+  module_ext_define_type(system, "any-ref", TYPE(any_ref_type));
   module_ext_define_type(system, "i8", TYPE(i8_type));
   module_ext_define_type(system, "i16", TYPE(i16_type));
   module_ext_define_type(system, "i32", TYPE(i32_type));

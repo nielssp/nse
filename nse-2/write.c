@@ -24,7 +24,7 @@ static void write_type(Type *type, Stream *stream, Module *module) {
     case BASE_TYPE_NOTHING:
     case BASE_TYPE_ANY:
     case BASE_TYPE_NIL:
-    case BASE_TYPE_REF:
+    case BASE_TYPE_ANY_REF:
     case BASE_TYPE_I8:
     case BASE_TYPE_I16:
     case BASE_TYPE_I32:
@@ -42,7 +42,13 @@ static void write_type(Type *type, Stream *stream, Module *module) {
       stream_printf(stream, base_type_to_string(type->type));
       break;
     case BASE_TYPE_SYMBOL:
-      stream_printf(stream, "'%s", type->var_name);
+      stream_printf(stream, "'");
+      nse_write(SYMBOL(type->symbol), stream, module);
+      break;
+    case BASE_TYPE_REF:
+      stream_printf(stream, "(ref ");
+      nse_write(SYMBOL(type->symbol), stream, module);
+      stream_printf(stream, ")");
       break;
     case BASE_TYPE_TYPE_VAR:
       stream_printf(stream, "%s", type->var_name);

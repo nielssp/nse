@@ -140,12 +140,14 @@ Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], si
   return closure;
 }
 
-Reference *create_reference(void *pointer, void destructor(void *)) {
+Reference *create_reference(Symbol *tag, void *pointer, void destructor(void *)) {
   Reference *reference = allocate(sizeof(Reference));
   if (!reference) {
     return NULL;
   }
   reference->refs = 1;
+  reference->tag = tag;
+  add_ref(SYMBOL(tag));
   reference->pointer = pointer;
   reference->destructor = destructor;
   return reference;
@@ -304,6 +306,7 @@ void delete(NseVal value) {
       if (value.reference->destructor) {
         value.reference->destructor(value.reference->pointer);
       }
+      del_ref(SYMBOL(value.reference->tag));
       free(value.reference);
       return;
     default:
@@ -530,6 +533,9 @@ size_t list_length(NseVal value) {
 }
 
 static int stack_trace_push(NseVal func, NseVal args) {
+  if (!error_form) {
+    return 1;
+  }
   Cons *c1 = create_cons(SYNTAX(error_form), nil);
   if (!c1) {
     return 0;
@@ -730,7 +736,7 @@ Type *get_type(NseVal v) {
     case TYPE_F64:
       return copy_type(f64_type);
     case TYPE_SYMBOL:
-      return create_symbol_type(v.symbol->name); // TODO: get fqn
+      return create_symbol_type(v.symbol);
     case TYPE_KEYWORD:
       return copy_type(keyword_type);
     case TYPE_STRING:
@@ -746,7 +752,7 @@ Type *get_type(NseVal v) {
     case TYPE_CLOSURE:
       return copy_type(v.closure->type);
     case TYPE_REFERENCE:
-      return copy_type(ref_type);
+      return create_ref_type(v.reference->tag);
     case TYPE_TYPE:
       return copy_type(type_type);
   }

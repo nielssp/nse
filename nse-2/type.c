@@ -3,7 +3,7 @@
 
 #include "error.h"
 
-#include "type.h"
+#include "nsert.h"
 
 typedef struct subst Subst;
 
@@ -16,7 +16,7 @@ struct subst {
 Type *nothing_type = &(Type){ .refs = 1, .type = BASE_TYPE_NOTHING };
 Type *any_type = &(Type){ .refs = 1, .type = BASE_TYPE_ANY };
 Type *nil_type = &(Type){ .refs = 1, .type = BASE_TYPE_NIL };
-Type *ref_type = &(Type){ .refs = 1, .type = BASE_TYPE_REF };
+Type *any_ref_type = &(Type){ .refs = 1, .type = BASE_TYPE_ANY_REF };
 Type *i8_type = &(Type){ .refs = 1, .type = BASE_TYPE_I8 };
 Type *i16_type = &(Type){ .refs = 1, .type = BASE_TYPE_I16 };
 Type *i32_type = &(Type){ .refs = 1, .type = BASE_TYPE_I32 };
@@ -104,6 +104,8 @@ int type_equals(const Type *a, const Type *b) {
         return 0;
       }
     case BASE_TYPE_SYMBOL:
+    case BASE_TYPE_REF:
+      return a->symbol == b->symbol;
     case BASE_TYPE_TYPE_VAR:
       return strcmp(a->var_name, b->var_name) == 0;
     default:
@@ -135,8 +137,8 @@ static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
       return 1;
     case BASE_TYPE_NIL:
       return a->type == BASE_TYPE_NIL || (a->type == BASE_TYPE_PRODUCT && a->num_operands == 0);
-    case BASE_TYPE_REF:
-      return a->type == BASE_TYPE_REF;
+    case BASE_TYPE_ANY_REF:
+      return a->type == BASE_TYPE_REF || a->type == BASE_TYPE_ANY_REF;
     case BASE_TYPE_I64:
       if (a->type == BASE_TYPE_I64 || a->type == BASE_TYPE_U32) {
         return 1;
@@ -180,7 +182,9 @@ static int is_subtype_of_s(const Type *a, const Type *b, Subst *s) {
     case BASE_TYPE_TYPE:
       return a->type == BASE_TYPE_TYPE;
     case BASE_TYPE_SYMBOL:
-      return a->type == BASE_TYPE_SYMBOL && strcmp(a->var_name, b->var_name) == 0;
+      return a->type == BASE_TYPE_SYMBOL && a->symbol == b->symbol;
+    case BASE_TYPE_REF:
+      return a->type == BASE_TYPE_REF && a->symbol == b->symbol;
     case BASE_TYPE_TYPE_VAR: {
       const Type *replacement = apply_substitution(b->var_name, s);
       if (replacement) {
@@ -280,6 +284,21 @@ static Type *create_unary_type(BaseType type, Type *param_a) {
   return NULL;
 }
 
+static Type *create_unary_type_symbol(BaseType type, Symbol *symbol) {
+  if (symbol) {
+    Type *t = allocate(sizeof(Type));
+    if (t) {
+      t->refs = 1;
+      t->type = type;
+      t->symbol = symbol;
+      t->param_b = NULL;
+      return t;
+    }
+  }
+  del_ref(SYMBOL(symbol));
+  return NULL;
+}
+
 static Type *create_unary_type_name(BaseType type, const char *name) {
   if (name) {
     Type *t = allocate(sizeof(Type));
@@ -338,8 +357,12 @@ static Type *create_binary_type_name(BaseType type, const char *name, Type *body
   return NULL;
 }
 
-Type *create_symbol_type(const char *symbol) {
-  return create_unary_type_name(BASE_TYPE_SYMBOL, symbol);
+Type *create_symbol_type(Symbol *symbol) {
+  return create_unary_type_symbol(BASE_TYPE_SYMBOL, symbol);
+}
+
+Type *create_ref_type(Symbol *symbol) {
+  return create_unary_type_symbol(BASE_TYPE_REF, symbol);
 }
 
 Type *create_type_var(const char *var_name) {
@@ -442,6 +465,9 @@ void delete_type(Type *t) {
       case BASE_TYPE_ALIAS:
         delete_type(t->param_b);
       case BASE_TYPE_SYMBOL:
+      case BASE_TYPE_REF:
+        del_ref(SYMBOL(t->symbol));
+        break;
       case BASE_TYPE_TYPE_VAR:
         free(t->var_name);
         break;
@@ -460,8 +486,8 @@ const char *base_type_to_string(BaseType t) {
       return "any";
     case BASE_TYPE_NIL:
       return "nil";
-    case BASE_TYPE_REF:
-      return "ref";
+    case BASE_TYPE_ANY_REF:
+      return "any-ref";
     case BASE_TYPE_I8:
       return "i8";
     case BASE_TYPE_I16:
@@ -492,6 +518,8 @@ const char *base_type_to_string(BaseType t) {
       return "type";
     case BASE_TYPE_SYMBOL:
       return "symbol";
+    case BASE_TYPE_REF:
+      return "ref";
     case BASE_TYPE_TYPE_VAR:
       return "type-var";
     case BASE_TYPE_QUOTE:

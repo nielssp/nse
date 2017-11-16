@@ -16,6 +16,7 @@ struct module {
   Namespace defs;
   Namespace macro_defs;
   Namespace type_defs;
+  Namespace read_macro_defs;
 };
 
 static ModuleMap loaded_modules = NULL_HASH_MAP;
@@ -117,6 +118,17 @@ NseVal scope_get_macro(Scope *scope, Symbol *symbol) {
   return undefined;
 }
 
+NseVal get_read_macro(Symbol *symbol) {
+  if (symbol->module) {
+    NseVal *value = namespace_lookup(symbol->module->read_macro_defs, symbol->name);
+    if (value) {
+      return *value;
+    }
+  }
+  raise_error(name_error, "undefined read macro: %s", symbol->name);
+  return undefined;
+}
+
 Module *create_module(const char *name) {
   if (!HASH_MAP_INITIALIZED(loaded_modules)) {
     init_modules();
@@ -135,6 +147,7 @@ Module *create_module(const char *name) {
   module->defs = create_namespace();
   module->macro_defs = create_namespace();
   module->type_defs = create_namespace();
+  module->read_macro_defs = create_namespace();
   module_map_add(loaded_modules, name, module);
   return module;
 }
@@ -167,6 +180,7 @@ void delete_module(Module *module) {
   delete_defs(module->defs);
   delete_defs(module->macro_defs);
   delete_defs(module->type_defs);
+  delete_defs(module->read_macro_defs);
   delete_symbols(module->internal);
   delete_symbols(module->external);
   free(module);
@@ -355,6 +369,18 @@ void module_define_type(Module *module, const char *name, NseVal value) {
   NseVal *copy = malloc(sizeof(NseVal));
   memcpy(copy, &value, sizeof(NseVal));
   namespace_add(module->type_defs, name, copy);
+  add_ref(value);
+}
+
+void module_define_read_macro(Module *module, const char *name, NseVal value) {
+  NseVal *existing = namespace_remove(module->read_macro_defs, name);
+  if (existing) {
+    del_ref(*existing);
+    free(existing);
+  }
+  NseVal *copy = malloc(sizeof(NseVal));
+  memcpy(copy, &value, sizeof(NseVal));
+  namespace_add(module->read_macro_defs, name, copy);
   add_ref(value);
 }
 

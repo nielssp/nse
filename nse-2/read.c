@@ -31,6 +31,11 @@ Reader *open_reader(Stream *stream, const char *file_name, Module *module) {
   return s;
 }
 
+void set_reader_position(Reader *reader, size_t line, size_t column) {
+  reader->line = line;
+  reader->column = column;
+}
+
 void close_reader(Reader *reader) {
   stream_close(reader->stream);
   free(reader);
@@ -201,7 +206,16 @@ static Syntax *read_symbol(Reader *input, int keyword) {
   Syntax *syntax = start_pos(create_syntax(undefined), input);
   if (syntax) {
     while (c != EOF && !iswhite(c) && c != '(' && c != ')' && c != '"' && c != ';') {
-      if (c == '/' && l != 0) {
+      if (c == '\\') {
+        pop(input);
+        c = peek(input);
+        if (c == EOF) {
+          raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name, input->line, input->column);
+          free(buffer);
+          free(syntax);
+          return NULL;
+        }
+      } else if (c == '/' && l != 0) {
         qualified = 1;
       }
       buffer[l++] = (char)c;
@@ -285,6 +299,31 @@ Syntax *nse_read(Reader *input) {
     }
     return NULL;
   }
+  if (c == '#') {
+    Syntax *syntax = start_pos(create_syntax(undefined), input);
+    if (syntax) {
+      pop(input);
+      c = peek(input);
+      if (c == EOF) {
+        raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name, input->line, input->column);
+        return NULL;
+      } else {
+        Symbol *s = module_intern_symbol(input->module, (char[]){ c, 0 });
+        if (s) {
+          NseVal macro = get_read_macro(s);
+          if (RESULT_OK(macro)) {
+            syntax->quoted = execute_read(input, macro);
+            if (RESULT_OK(syntax->quoted)) {
+              return end_pos(syntax, input);
+            }
+          }
+        }
+        return NULL;
+      }
+      free(syntax);
+    }
+    return NULL;
+  }
   if (c == '(') {
     Syntax *syntax = start_pos(create_syntax(undefined), input);
     if (syntax) {
@@ -354,3 +393,59 @@ static Syntax *read_list(Reader *input) {
   }
 }
 
+NseVal execute_read(Reader *reader, NseVal read) {
+  Symbol *action = to_symbol(read);
+  if (action) {
+    if (action == read_char_symbol) {
+      int c = pop(reader);
+      return I64(c);
+    } else if (action == read_string_symbol) {
+      return check_alloc(SYNTAX(read_string(reader)));
+    } else if (action == read_symbol_symbol) {
+      return check_alloc(SYNTAX(read_symbol(reader, 0)));
+    } else if (action == read_int_symbol) {
+      return check_alloc(SYNTAX(read_int(reader)));
+    } else if (action == read_list_symbol) {
+      return check_alloc(SYNTAX(read_list(reader)));
+    } else if (action == read_any_symbol) {
+      return check_alloc(SYNTAX(nse_read(reader)));
+    } else {
+      raise_error(domain_error, "invalid read action");
+    }
+  } else if (is_cons(read)) {
+    action = to_symbol(head(read));
+    if (action) {
+      if (action == read_bind_symbol) {
+        NseVal result = undefined;
+        NseVal action_a = elem(1, read);
+        NseVal transform = THEN(action_a, elem(2, read));
+        if (RESULT_OK(transform)) {
+          NseVal value = execute_read(reader, action_a);
+          if (RESULT_OK(value)) {
+            NseVal transform_args = check_alloc(CONS(create_cons(value, nil)));
+            if (RESULT_OK(transform_args)) {
+              NseVal transform_result = nse_apply(transform, transform_args);
+              if (RESULT_OK(transform_result)) {
+                result = execute_read(reader, transform_result);
+                add_ref(result);
+                del_ref(transform_result);
+              }
+              del_ref(transform_args);
+            }
+            del_ref(value);
+          }
+        }
+        return result;
+      } else if (action == read_return_symbol) {
+        return elem(1, read);
+      } else {
+        raise_error(domain_error, "invalid read action");
+      }
+    } else {
+      raise_error(domain_error, "invalid read action");
+    }
+  } else {
+    raise_error(domain_error, "invalid read action");
+  }
+  return undefined;
+}

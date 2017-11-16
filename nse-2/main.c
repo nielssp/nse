@@ -223,6 +223,8 @@ int main(int argc, char *argv[]) {
     del_ref(args);
   }
 
+  size_t line = 1;
+
   while (1) {
     char *prompt = string_printf("\001\033[1;32m\002%s>\001\033[0m\002 ", module_name(current_scope->module));
     char *input = readline(prompt);
@@ -238,8 +240,10 @@ int main(int argc, char *argv[]) {
     add_history(input);
     Stream *input_buffer = stream_buffer(input, strlen(input));
     Reader *reader = open_reader(input_buffer, "(user)", user_module);
+    set_reader_position(reader, line, 1);
     NseVal code = check_alloc(SYNTAX(nse_read(reader)));
     if (RESULT_OK(code)) {
+      line = code.syntax->end_line + 1;
       NseVal result = eval(code, current_scope);
       del_ref(code);
       if (RESULT_OK(result)) {

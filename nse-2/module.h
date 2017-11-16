@@ -28,6 +28,7 @@ Scope *copy_scope(Scope *scope);
 void delete_scope(Scope *scope);
 NseVal scope_get(Scope *scope, Symbol *symbol);
 NseVal scope_get_macro(Scope *scope, Symbol *symbol);
+NseVal get_read_macro(Symbol *symbol);
 
 Module *create_module(const char *name);
 void delete_module(Module *module);
@@ -37,6 +38,7 @@ Scope *use_module_types(Module *module);
 void module_define(Module *module, const char *name, NseVal value);
 void module_define_macro(Module *module, const char *name, NseVal value);
 void module_define_type(Module *module, const char *name, NseVal value);
+void module_define_read_macro(Module *module, const char *name, NseVal value);
 void module_ext_define(Module *module, const char *name, NseVal value);
 void module_ext_define_macro(Module *module, const char *name, NseVal value);
 void module_ext_define_type(Module *module, const char *name, NseVal value);

@@ -75,3 +75,14 @@
 (def (oget ('some x)) x)
 (def (defined? opt) (not (is-a opt ^'none)))
 (def (omap f opt) (if (defined? opt) (some (f (oget opt))) none))
+
+; read monad
+(def read-char 'read-char)
+(def read-string 'read-string)
+(def read-symbol 'read-symbol)
+(def read-int 'read-int)
+(def read-list 'read-list)
+(def read-any 'read-any)
+(def (read-return v) (list 'read-return v))
+(def (read>>= r f) (list 'read-bind r f))
+(def (read>> r1 r2) (list 'read-bind r1 (fn (v) r2)))
