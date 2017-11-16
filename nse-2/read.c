@@ -306,7 +306,6 @@ Syntax *nse_read(Reader *input) {
       c = peek(input);
       if (c == EOF) {
         raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name, input->line, input->column);
-        return NULL;
       } else {
         Symbol *s = module_intern_symbol(input->module, (char[]){ c, 0 });
         if (s) {
@@ -318,7 +317,6 @@ Syntax *nse_read(Reader *input) {
             }
           }
         }
-        return NULL;
       }
       free(syntax);
     }
@@ -427,7 +425,6 @@ NseVal execute_read(Reader *reader, NseVal read) {
               NseVal transform_result = nse_apply(transform, transform_args);
               if (RESULT_OK(transform_result)) {
                 result = execute_read(reader, transform_result);
-                add_ref(result);
                 del_ref(transform_result);
               }
               del_ref(transform_args);
@@ -437,7 +434,7 @@ NseVal execute_read(Reader *reader, NseVal read) {
         }
         return result;
       } else if (action == read_return_symbol) {
-        return elem(1, read);
+        return add_ref(elem(1, read));
       } else {
         raise_error(domain_error, "invalid read action");
       }
