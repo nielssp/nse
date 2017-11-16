@@ -101,12 +101,12 @@ int paren_end(int count, int key) {
 char *get_line(size_t line, const char *text) {
   size_t lines = 1;
   size_t length = 0;
-  while (*(text++)) {
+  for (; *text; text++) {
     if (line == lines) {
-      length++;
       if (*text == '\n') {
         break;
       }
+      length++;
     } else if (*text == '\n') {
       lines++;
     }
@@ -116,7 +116,34 @@ char *get_line(size_t line, const char *text) {
   if (length == 0) {
     return line_buf;
   }
-  memcpy(line_buf, text - length - 1, length);
+  memcpy(line_buf, text - length, length);
+  return line_buf;
+}
+
+char *get_line_in_file(size_t line, FILE *f) {
+  size_t lines = 1;
+  size_t length = 0;
+  long offset = 0;
+  int c = getc(f);
+  while (c != EOF) {
+    if (line == lines) {
+      if (c == '\n') {
+        break;
+      }
+      length++;
+    } else if (c == '\n') {
+      lines++;
+      offset = ftell(f);
+    }
+    c = getc(f);
+  }
+  char *line_buf = malloc(length + 1);
+  if (length == 0) {
+    return line_buf;
+  }
+  fseek(f, offset, SEEK_SET);
+  size_t r = fread(line_buf, 1, length, f);
+  line_buf[r] = 0;
   return line_buf;
 }
 
@@ -224,6 +251,7 @@ int main(int argc, char *argv[]) {
   }
 
   size_t line = 1;
+  char *line_history = NULL;
 
   while (1) {
     char *prompt = string_printf("\001\033[1;32m\002%s>\001\033[0m\002 ", module_name(current_scope->module));
@@ -239,11 +267,18 @@ int main(int argc, char *argv[]) {
     }
     add_history(input);
     Stream *input_buffer = stream_buffer(input, strlen(input));
-    Reader *reader = open_reader(input_buffer, "(user)", user_module);
+    Reader *reader = open_reader(input_buffer, "(repl)", current_scope->module);
     set_reader_position(reader, line, 1);
     NseVal code = check_alloc(SYNTAX(nse_read(reader)));
     if (RESULT_OK(code)) {
       line = code.syntax->end_line + 1;
+      if (line_history) {
+        char *new_line_history = string_printf("%s\n%s", line_history, input);
+        free(line_history);
+        line_history = new_line_history;
+      } else {
+        line_history = string_printf("%s", input);
+      }
       NseVal result = eval(code, current_scope);
       del_ref(code);
       if (RESULT_OK(result)) {
@@ -258,19 +293,30 @@ int main(int argc, char *argv[]) {
           del_ref(datum);
           printf("\nIn %s on line %zd column %zd", error_form->file, error_form->start_line, error_form->start_column);
           if (error_form->start_line > 0) {
-            char *line = get_line(error_form->start_line, input);
-            printf("\n%s\n", line);
-            for (size_t i = 1; i < error_form->start_column; i++) {
-              printf(" ");
-            }
-            printf("^");
-            if (error_form->start_line == error_form->end_line) {
-              size_t length = error_form->end_column - error_form->start_column - 1;
-              for (size_t i = 0; i < length; i++) {
-                printf("^");
+            char *line = NULL;
+            if (strcmp(error_form->file, "(repl)") == 0) {
+              line = get_line(error_form->start_line, line_history);
+            } else {
+              FILE *f = fopen(error_form->file, "r");
+              if (f) {
+                line = get_line_in_file(error_form->start_line, f);
+                fclose(f);
               }
             }
-            free(line);
+            if (line) {
+              printf("\n%s\n", line);
+              for (size_t i = 1; i < error_form->start_column; i++) {
+                printf(" ");
+              }
+              printf("^");
+              if (error_form->start_line == error_form->end_line) {
+                size_t length = error_form->end_column - error_form->start_column - 1;
+                for (size_t i = 0; i < length; i++) {
+                  printf("^");
+                }
+              }
+              free(line);
+            }
           }
           printf("\nStack trace:");
           NseVal stack_trace = get_stack_trace();
@@ -293,6 +339,9 @@ int main(int argc, char *argv[]) {
     close_reader(reader);
     free(input);
     printf("\n");
+  }
+  if (line_history) {
+    free(line_history);
   }
   scope_pop(current_scope);
   return 0;
