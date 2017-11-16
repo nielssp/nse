@@ -112,13 +112,14 @@ Symbol *create_keyword(const char *s, Module *module) {
 
 
 String *create_string(const char *s, size_t length) {
-  String *str = allocate(sizeof(String) + length);
+  String *str = allocate(sizeof(String) + length + 1);
   if (!str) {
     return NULL;
   }
   str->refs = 1;
   str->length = length;
   memcpy(str->chars, s, length);
+  str->chars[length] = '\0';
   return str;
 }
 
@@ -161,6 +162,9 @@ Syntax *copy_syntax(Syntax *syntax, NseVal quoted) {
     copy->end_line = syntax->end_line;
     copy->end_column = syntax->end_column;
     copy->file = syntax->file;
+    if (copy->file) {
+      add_ref(STRING(copy->file));
+    }
   }
   return copy;
 }
@@ -275,6 +279,9 @@ void delete_all(NseVal value) {
     }
   }
   if (value.type == TYPE_SYNTAX) {
+    if (value.syntax->file) {
+      del_ref(STRING(value.syntax->file));
+    }
     del_ref(value.syntax->quoted);
   }
   delete(value);
@@ -480,6 +487,17 @@ Symbol *to_keyword(NseVal v) {
     return v.symbol;
   } else if (v.type == TYPE_SYNTAX) {
     return to_keyword(v.syntax->quoted);
+  }
+  return NULL;
+}
+
+const char *to_string_constant(NseVal v) {
+  if (v.type == TYPE_SYMBOL || v.type == TYPE_KEYWORD) {
+    return v.symbol->name;
+  } else if (v.type == TYPE_STRING) {
+    return v.string->chars;
+  } else if (v.type == TYPE_SYNTAX) {
+    return to_string_constant(v.syntax->quoted);
   }
   return NULL;
 }

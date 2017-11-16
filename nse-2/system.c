@@ -50,7 +50,9 @@ static NseVal divide(NseVal args) {
 }
 
 static NseVal type_of(NseVal args) {
-  Type *t = get_type(head(args));
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  Type *t = get_type(arg);
   return check_alloc(TYPE(t));
 }
 

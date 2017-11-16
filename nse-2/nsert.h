@@ -152,7 +152,7 @@ struct syntax {
   size_t start_column;
   size_t end_line;
   size_t end_column;
-  const char *file;
+  String *file;
   NseVal quoted;
 };
 
@@ -185,6 +185,7 @@ NseVal check_alloc(NseVal v);
 Symbol *to_symbol(NseVal v);
 String *to_string(NseVal v);
 Symbol *to_keyword(NseVal v);
+const char *to_string_constant(NseVal v);
 void *to_reference(NseVal v);
 Type *to_type(NseVal v);
 

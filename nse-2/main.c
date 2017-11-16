@@ -30,55 +30,56 @@ void describe_option(const char *short_option, const char *long_option, const ch
 }
 
 NseVal load(NseVal args) {
-  NseVal name = head(args);
-  if (RESULT_OK(name)) {
-    if (is_symbol(name)) {
-      Stream *f = stream_file(name.symbol->name, "r");
-      if (f) {
-        Reader *reader = open_reader(f, name.symbol->name, current_scope->module);
-        while (1) {
-          Syntax *code = nse_read(reader);
-          if (code != NULL) {
-            NseVal result = eval(SYNTAX(code), current_scope);
-            del_ref(SYNTAX(code));
-            if (RESULT_OK(result)) {
-              del_ref(result);
-            } else {
-              name = undefined;
-              break;
-            }
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  const char *name = to_string_constant(arg);
+  if (name) {
+    Stream *f = stream_file(name, "r");
+    if (f) {
+      Reader *reader = open_reader(f, name, current_scope->module);
+      NseVal return_value = nil;
+      while (1) {
+        Syntax *code = nse_read(reader);
+        if (code != NULL) {
+          NseVal result = eval(SYNTAX(code), current_scope);
+          del_ref(SYNTAX(code));
+          if (RESULT_OK(result)) {
+            del_ref(result);
           } else {
-            // TODO: check type of error
-            clear_error();
+            return_value = undefined;
             break;
           }
+        } else {
+          // TODO: check type of error
+          clear_error();
+          break;
         }
-        close_reader(reader);
-        return name;
-      } else {
-        raise_error(io_error, "could not open file: %s: %s", name.symbol, strerror(errno));
       }
+      close_reader(reader);
+      return return_value;
     } else {
-      raise_error(domain_error, "must be called with a symbol");
+      raise_error(io_error, "could not open file: %s: %s", name, strerror(errno));
     }
+  } else {
+    raise_error(domain_error, "must be called with a symbol");
   }
   return undefined;
 }
 
 NseVal in_module(NseVal args) {
-  NseVal name = head(args);
-  if (RESULT_OK(name)) {
-    if (is_symbol(name)) {
-      Module *m = find_module(name.symbol->name);
-      if (m) {
-        current_scope->module = m;
-        return name;
-      } else {
-        raise_error(name_error, "could not find module: %s", name.symbol->name);
-      }
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  const char *name = to_string_constant(arg);
+  if (name) {
+    Module *m = find_module(name);
+    if (m) {
+      current_scope->module = m;
+      return nil;
     } else {
-      raise_error(domain_error, "must be called with a symbol");
+      raise_error(name_error, "could not find module: %s", name);
     }
+  } else {
+    raise_error(domain_error, "must be called with a symbol");
   }
   return undefined;
 }
@@ -291,13 +292,13 @@ int main(int argc, char *argv[]) {
           printf(": ");
           nse_write(datum, stdout_stream, user_module);
           del_ref(datum);
-          printf("\nIn %s on line %zd column %zd", error_form->file, error_form->start_line, error_form->start_column);
+          printf("\nIn %s on line %zd column %zd", error_form->file->chars, error_form->start_line, error_form->start_column);
           if (error_form->start_line > 0) {
             char *line = NULL;
-            if (strcmp(error_form->file, "(repl)") == 0) {
+            if (strcmp(error_form->file->chars, "(repl)") == 0) {
               line = get_line(error_form->start_line, line_history);
             } else {
-              FILE *f = fopen(error_form->file, "r");
+              FILE *f = fopen(error_form->file->chars, "r");
               if (f) {
                 line = get_line_in_file(error_form->start_line, f);
                 fclose(f);
@@ -322,7 +323,7 @@ int main(int argc, char *argv[]) {
           NseVal stack_trace = get_stack_trace();
           for (NseVal it = stack_trace; is_cons(it); it = tail(it)) {
             NseVal syntax = elem(2, head(it));
-            printf("\n  %s:%zd:%zd", syntax.syntax->file, syntax.syntax->start_line, syntax.syntax->start_column);
+            printf("\n  %s:%zd:%zd", syntax.syntax->file->chars, syntax.syntax->start_line, syntax.syntax->start_column);
             NseVal datum = syntax_to_datum(syntax.syntax->quoted);
             printf(": ");
             nse_write(datum, stdout_stream, user_module);

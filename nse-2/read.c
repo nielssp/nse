@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 
 #include "nsert.h"
 #include "read.h"
@@ -10,7 +11,7 @@
 struct reader {
   char type;
   Stream *stream;
-  const char *file_name;
+  String *file_name;
   size_t la;
   char la_buffer[MAX_LOOKAHEAD];
   size_t line;
@@ -26,7 +27,7 @@ Reader *open_reader(Stream *stream, const char *file_name, Module *module) {
   s->la = 0;
   s->line = 1;
   s->column = 1;
-  s->file_name = file_name;
+  s->file_name = create_string(file_name, strlen(file_name));
   s->module = module;
   return s;
 }
@@ -38,6 +39,7 @@ void set_reader_position(Reader *reader, size_t line, size_t column) {
 
 void close_reader(Reader *reader) {
   stream_close(reader->stream);
+  del_ref(STRING(reader->file_name));
   free(reader);
 }
 
@@ -87,9 +89,17 @@ static void skip(Reader *input) {
   }
 }
 
+static void delete_syntax(Syntax *syntax) {
+  if (syntax->file) {
+    del_ref(STRING(syntax->file));
+  }
+  free(syntax);
+}
+
 static Syntax *start_pos(Syntax *syntax, Reader *input) {
   if (syntax) {
     syntax->file = input->file_name;
+    add_ref(STRING(input->file_name));
     syntax->start_line = input->line;
     syntax->start_column = input->column;
     syntax->end_line = input->line;
@@ -152,7 +162,7 @@ static Syntax *read_string(Reader *input) {
         raise_error(syntax_error, "unexpected end of file, expected '\"'");
         // TODO: add start pos to error
         free(buffer);
-        free(syntax);
+        delete_syntax(syntax);
         return NULL;
       }
       if (escape) {
@@ -178,14 +188,14 @@ static Syntax *read_string(Reader *input) {
         } else {
           raise_error(out_of_memory_error, "out of memory");
           free(buffer);
-          free(syntax);
+          delete_syntax(syntax);
           return NULL;
         }
       }
     }
     syntax->quoted = check_alloc(STRING(create_string(buffer, l)));
     if (!RESULT_OK(syntax->quoted)) {
-      free(syntax);
+      delete_syntax(syntax);
       syntax = NULL;
     }
   }
@@ -210,9 +220,9 @@ static Syntax *read_symbol(Reader *input, int keyword) {
         pop(input);
         c = peek(input);
         if (c == EOF) {
-          raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name, input->line, input->column);
+          raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name->chars, input->line, input->column);
           free(buffer);
-          free(syntax);
+          delete_syntax(syntax);
           return NULL;
         }
       } else if (c == '/' && l != 0) {
@@ -229,7 +239,7 @@ static Syntax *read_symbol(Reader *input, int keyword) {
         } else {
           raise_error(out_of_memory_error, "out of memory");
           free(buffer);
-          free(syntax);
+          delete_syntax(syntax);
           return NULL;
         }
       }
@@ -243,7 +253,7 @@ static Syntax *read_symbol(Reader *input, int keyword) {
       syntax->quoted = check_alloc(SYMBOL(module_intern_symbol(input->module, buffer)));
     }
     if (!RESULT_OK(syntax->quoted)) {
-      free(syntax);
+      delete_syntax(syntax);
       syntax = NULL;
     }
   }
@@ -256,7 +266,7 @@ Syntax *nse_read(Reader *input) {
   skip(input);
   c = peek(input);
   if (c == EOF) {
-    raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name, input->line, input->column);
+    raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name->chars, input->line, input->column);
     return NULL;
   }
   if (c == ';') {
@@ -267,7 +277,7 @@ Syntax *nse_read(Reader *input) {
     return nse_read(input);
   }
   if (c == '.' || c == ')') {
-    raise_error(syntax_error, "%s:%zu:%zu: unexpected '%c'", input->file_name, input->line, input->column, c);
+    raise_error(syntax_error, "%s:%zu:%zu: unexpected '%c'", input->file_name->chars, input->line, input->column, c);
     pop(input);
     return NULL;
   }
@@ -295,7 +305,7 @@ Syntax *nse_read(Reader *input) {
           return end_pos(syntax, input);
         }
       }
-      free(syntax);
+      delete_syntax(syntax);
     }
     return NULL;
   }
@@ -305,7 +315,7 @@ Syntax *nse_read(Reader *input) {
       pop(input);
       c = peek(input);
       if (c == EOF) {
-        raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name, input->line, input->column);
+        raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name->chars, input->line, input->column);
       } else {
         Symbol *s = module_intern_symbol(input->module, (char[]){ c, 0 });
         if (s) {
@@ -318,7 +328,7 @@ Syntax *nse_read(Reader *input) {
           }
         }
       }
-      free(syntax);
+      delete_syntax(syntax);
     }
     return NULL;
   }
@@ -329,15 +339,15 @@ Syntax *nse_read(Reader *input) {
       Syntax *list = read_list(input);
       if (list){
         syntax->quoted = list->quoted;
-        free(list);
+        delete_syntax(list);
         if (peek(input) == ')') {
           pop(input);
           return end_pos(syntax, input);
         }
-        raise_error(syntax_error, "%s:%zu:%zu: missing ')'", input->file_name, input->line, input->column);
+        raise_error(syntax_error, "%s:%zu:%zu: missing ')'", input->file_name->chars, input->line, input->column);
         del_ref(syntax->quoted);
       }
-      free(syntax);
+      delete_syntax(syntax);
     }
     return NULL;
   }
@@ -386,7 +396,7 @@ static Syntax *read_list(Reader *input) {
       }
       del_ref(head);
     }
-    free(syntax);
+    delete_syntax(syntax);
     return NULL;
   }
 }
