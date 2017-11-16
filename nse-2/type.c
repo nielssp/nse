@@ -460,14 +460,14 @@ void delete_type(Type *t) {
       case BASE_TYPE_SYNTAX:
         delete_type(t->param_a);
         break;
-      case BASE_TYPE_FORALL:
-      case BASE_TYPE_RECUR:
-      case BASE_TYPE_ALIAS:
-        delete_type(t->param_b);
       case BASE_TYPE_SYMBOL:
       case BASE_TYPE_REF:
         del_ref(SYMBOL(t->symbol));
         break;
+      case BASE_TYPE_FORALL:
+      case BASE_TYPE_RECUR:
+      case BASE_TYPE_ALIAS:
+        delete_type(t->param_b);
       case BASE_TYPE_TYPE_VAR:
         free(t->var_name);
         break;

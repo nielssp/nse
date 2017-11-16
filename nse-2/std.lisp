@@ -81,8 +81,22 @@
 (def read-string 'read-string)
 (def read-symbol 'read-symbol)
 (def read-int 'read-int)
-(def read-list 'read-list)
 (def read-any 'read-any)
 (def (read-return v) (list 'read-return v))
 (def (read>>= r f) (list 'read-bind r f))
 (def (read>> r1 r2) (list 'read-bind r1 (fn (v) r2)))
+
+; partial function application
+(def (ascii c) (byte-at 0 c))
+(def (find-params code)
+     (if (is-a code ^any-symbol)
+       (if (= (ascii "%") (byte-at 0 (symbol-name code)))
+         (list code)
+         nil)
+       (if (is-a code ^(cons any any))
+         (++ (find-params (head code)) (find-params (tail code)))
+         nil)))
+
+(def-read-macro \(
+  (read>>= read-any (fn (xs)
+  (read-return (list 'fn (find-params (syntax->datum xs)) xs)))))

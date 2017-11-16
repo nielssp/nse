@@ -25,7 +25,6 @@ extern Symbol *read_char_symbol;
 extern Symbol *read_string_symbol;
 extern Symbol *read_symbol_symbol;
 extern Symbol *read_int_symbol;
-extern Symbol *read_list_symbol;
 extern Symbol *read_any_symbol;
 extern Symbol *read_bind_symbol;
 extern Symbol *read_return_symbol;

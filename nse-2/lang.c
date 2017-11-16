@@ -17,7 +17,6 @@ Symbol *read_char_symbol = NULL;
 Symbol *read_string_symbol = NULL;
 Symbol *read_symbol_symbol = NULL;
 Symbol *read_int_symbol = NULL;
-Symbol *read_list_symbol = NULL;
 Symbol *read_any_symbol = NULL;
 Symbol *read_bind_symbol = NULL;
 Symbol *read_return_symbol = NULL;
@@ -48,7 +47,6 @@ void init_lang_module() {
   read_string_symbol = module_extern_symbol(lang_module, "read-string");
   read_symbol_symbol = module_extern_symbol(lang_module, "read-symbol");
   read_int_symbol = module_extern_symbol(lang_module, "read-int");
-  read_list_symbol = module_extern_symbol(lang_module, "read-list");
   read_any_symbol = module_extern_symbol(lang_module, "read-any");
   read_bind_symbol = module_extern_symbol(lang_module, "read-bind");
   read_return_symbol = module_extern_symbol(lang_module, "read-return");

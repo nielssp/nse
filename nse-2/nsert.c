@@ -466,6 +466,15 @@ Symbol *to_symbol(NseVal v) {
   return NULL;
 }
 
+String *to_string(NseVal v) {
+  if (v.type == TYPE_STRING) {
+    return v.string;
+  } else if (v.type == TYPE_SYNTAX) {
+    return to_string(v.syntax->quoted);
+  }
+  return NULL;
+}
+
 Symbol *to_keyword(NseVal v) {
   if (v.type == TYPE_KEYWORD) {
     return v.symbol;
@@ -736,7 +745,7 @@ Type *get_type(NseVal v) {
     case TYPE_F64:
       return copy_type(f64_type);
     case TYPE_SYMBOL:
-      return create_symbol_type(v.symbol);
+      return create_symbol_type(add_ref(v).symbol);
     case TYPE_KEYWORD:
       return copy_type(keyword_type);
     case TYPE_STRING:

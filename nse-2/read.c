@@ -403,8 +403,6 @@ NseVal execute_read(Reader *reader, NseVal read) {
       return check_alloc(SYNTAX(read_symbol(reader, 0)));
     } else if (action == read_int_symbol) {
       return check_alloc(SYNTAX(read_int(reader)));
-    } else if (action == read_list_symbol) {
-      return check_alloc(SYNTAX(read_list(reader)));
     } else if (action == read_any_symbol) {
       return check_alloc(SYNTAX(nse_read(reader)));
     } else {
