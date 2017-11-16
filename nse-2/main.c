@@ -84,6 +84,43 @@ NseVal in_module(NseVal args) {
   return undefined;
 }
 
+NseVal export(NseVal args) {
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  const char *name = to_string_constant(arg);
+  if (name) {
+    return check_alloc(SYMBOL(module_extern_symbol(current_scope->module, name)));
+  } else {
+    raise_error(domain_error, "must be called with a symbol");
+  }
+  return undefined;
+}
+
+NseVal import(NseVal args) {
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  const char *name = to_string_constant(arg);
+  if (name) {
+    Module *m = find_module(name);
+    if (m) {
+      import_module(current_scope->module, m);
+      return nil;
+    } else {
+      raise_error(name_error, "could not find module: %s", name);
+    }
+  } else {
+    raise_error(domain_error, "must be called with a symbol");
+  }
+  return undefined;
+}
+
+NseVal intern(NseVal args) {
+  ARG_POP_TYPE(Symbol *, symbol, args, to_symbol, "a symbol");
+  ARG_DONE(args);
+  import_module_symbol(current_scope->module, symbol);
+  return nil;
+}
+
 int paren_start(int count, int key) {
   rl_insert_text("()");
   rl_point--;
@@ -232,6 +269,9 @@ int main(int argc, char *argv[]) {
   system_module = get_system_module();
   module_ext_define(system_module, "load", FUNC(load));
   module_ext_define(system_module, "in-module", FUNC(in_module));
+  module_ext_define(system_module, "export", FUNC(export));
+  module_ext_define(system_module, "import", FUNC(import));
+  module_ext_define(system_module, "intern", FUNC(intern));
 
   Module *user_module = create_module("user");
   import_module(user_module, lang_module);

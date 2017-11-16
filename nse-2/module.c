@@ -336,6 +336,10 @@ void import_module(Module *dest, Module *src) {
   delete_symmap_iterator(it);
 }
 
+void import_module_symbol(Module *dest, Symbol *symbol) {
+  symmap_add(dest->internal, symbol->name, symbol);
+}
+
 void module_define(Module *module, const char *name, NseVal value) {
   NseVal *existing = namespace_remove(module->defs, name);
   if (existing) {

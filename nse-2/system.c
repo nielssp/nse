@@ -167,6 +167,13 @@ static NseVal symbol_name(NseVal args) {
   return check_alloc(STRING(create_string(symbol->name, strlen(symbol->name))));
 }
 
+static NseVal symbol_module(NseVal args) {
+  ARG_POP_TYPE(Symbol *, symbol, args, to_symbol, "a symbol");
+  ARG_DONE(args);
+  const char *name = module_name(symbol->module);
+  return check_alloc(STRING(create_string(name, strlen(name))));
+}
+
 static NseVal byte_length(NseVal args) {
   ARG_POP_TYPE(String *, string, args, to_string, "a string");
   ARG_DONE(args);
@@ -199,6 +206,7 @@ Module *get_system_module() {
   module_ext_define(system, "=", FUNC(equals));
   module_ext_define(system, "apply", FUNC(apply));
   module_ext_define(system, "symbol-name", FUNC(symbol_name));
+  module_ext_define(system, "symbol-module", FUNC(symbol_module));
   module_ext_define(system, "byte-length", FUNC(byte_length));
   module_ext_define(system, "byte-at", FUNC(byte_at));
   module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_));

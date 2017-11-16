@@ -52,5 +52,6 @@ Symbol *module_extern_symbol(Module *module, const char *s);
 Symbol *intern_keyword(const char *s);
 Symbol *intern_special(const char *s);
 void import_module(Module *dest, Module *src);
+void import_module_symbol(Module *dest, Symbol *symbol);
 
 #endif
