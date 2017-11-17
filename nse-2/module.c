@@ -267,7 +267,7 @@ Symbol *module_extern_symbol(Module *module, const char *s) {
     value->refs++;
     return value;
   }
-  value = create_symbol(s, module);
+  value = module_intern_symbol(module, s);
   if (!s) {
     return NULL;
   }
