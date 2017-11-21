@@ -14,6 +14,8 @@ extern Symbol *if_symbol;
 extern Symbol *let_symbol;
 extern Symbol *fn_symbol;
 extern Symbol *try_symbol;
+extern Symbol *loop_symbol;
+extern Symbol *continue_symbol;
 extern Symbol *def_symbol;
 extern Symbol *def_macro_symbol;
 extern Symbol *def_type_symbol;

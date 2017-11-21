@@ -77,6 +77,10 @@ TypeQuote *create_type_quote(NseVal quoted) {
   return create_quote(quoted);
 }
 
+Continue *create_continue(NseVal args) {
+  return create_quote(args);
+}
+
 Syntax *create_syntax(NseVal quoted) {
   Syntax *syntax = allocate(sizeof(Syntax));
   if (!syntax) {
@@ -234,6 +238,7 @@ void del_ref(NseVal value) {
       break;
     case TYPE_TQUOTE:
     case TYPE_QUOTE:
+    case TYPE_CONTINUE:
       refs = &value.quote->refs;
       break;
     case TYPE_SYMBOL:
@@ -269,7 +274,7 @@ void delete_all(NseVal value) {
     del_ref(value.cons->head);
     del_ref(value.cons->tail);
   }
-  if (value.type == TYPE_QUOTE || value.type == TYPE_TQUOTE) {
+  if (value.type == TYPE_QUOTE || value.type == TYPE_TQUOTE || value.type == TYPE_CONTINUE) {
     del_ref(value.quote->quoted);
   }
   if (value.type == TYPE_CLOSURE) {
@@ -298,6 +303,7 @@ void delete(NseVal value) {
       return;
     case TYPE_QUOTE:
     case TYPE_TQUOTE:
+    case TYPE_CONTINUE:
       free(value.quote);
       return;
     case TYPE_STRING:
@@ -462,6 +468,15 @@ int is_type(NseVal v) {
     return is_type(v.syntax->quoted);
   }
   return 0;
+}
+
+Cons *to_cons(NseVal v) {
+  if (v.type == TYPE_CONS) {
+    return v.cons;
+  } else if (v.type == TYPE_SYNTAX) {
+    return to_cons(v.syntax->quoted);
+  }
+  return NULL;
 }
 
 Symbol *to_symbol(NseVal v) {
@@ -662,6 +677,7 @@ NseVal nse_equals(NseVal a, NseVal b) {
       return FALSE;
     case TYPE_QUOTE:
     case TYPE_TQUOTE:
+    case TYPE_CONTINUE:
       return nse_equals(a.quote->quoted, b.quote->quoted);
     case TYPE_I64:
       if (a.i64 == b.i64) {
@@ -710,6 +726,15 @@ NseVal syntax_to_datum(NseVal v) {
       }
       return quote;
     }
+    case TYPE_CONTINUE: {
+      NseVal quote = undefined;
+      NseVal quoted = syntax_to_datum(v.quote->quoted);
+      if (RESULT_OK(quoted)) {
+        quote = check_alloc(CONTINUE(create_continue(quoted)));
+        del_ref(quoted);
+      }
+      return quote;
+    }
     default:
       return add_ref(v);
   }
@@ -737,6 +762,8 @@ const char *nse_val_type_to_string(NseValType t) {
       return "quote";
     case TYPE_TQUOTE:
       return "type-quote";
+    case TYPE_CONTINUE:
+      return "continue";
     case TYPE_SYNTAX:
       return "syntax";
     case TYPE_FUNC:

@@ -18,6 +18,7 @@
 #define STRING(s) ((NseVal) { .type = TYPE_STRING, .string = (s) })
 #define QUOTE(q) ((NseVal) { .type = TYPE_QUOTE, .quote = (q) })
 #define TQUOTE(q) ((NseVal) { .type = TYPE_TQUOTE, .quote = (q) })
+#define CONTINUE(q) ((NseVal) { .type = TYPE_CONTINUE, .quote = (q) })
 #define TYPE(t) ((NseVal) { .type = TYPE_TYPE, .type_val = (t) })
 #define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
 
@@ -81,6 +82,7 @@ typedef enum {
  TYPE_FUNC,
  TYPE_CLOSURE,
  TYPE_REFERENCE,
+ TYPE_CONTINUE,
  TYPE_TYPE
 } NseValType;
 
@@ -89,6 +91,7 @@ typedef struct cons Cons;
 typedef struct closure Closure;
 typedef struct quote Quote;
 typedef struct quote TypeQuote;
+typedef struct quote Continue;
 typedef struct syntax Syntax;
 typedef struct reference Reference;
 typedef struct string String;
@@ -104,7 +107,6 @@ struct nse_val {
     Cons *cons;
     Syntax *syntax;
     Quote *quote;
-    Quote *type_quote;
     Symbol *symbol;
     String *string;
     NseVal (*func)(NseVal);
@@ -172,6 +174,7 @@ extern NseVal nil;
 Cons *create_cons(NseVal h, NseVal t);
 Quote *create_quote(NseVal quoted);
 TypeQuote *create_type_quote(NseVal quoted);
+Continue *create_continue(NseVal args);
 Syntax *create_syntax(NseVal quoted);
 Symbol *create_symbol(const char *s, Module *module);
 Symbol *create_keyword(const char *s, Module *module);
@@ -182,6 +185,7 @@ Reference *create_reference(Symbol *tag, void *pointer, void destructor(void *))
 Syntax *copy_syntax(Syntax *syntax, NseVal quoted);
 NseVal check_alloc(NseVal v);
 
+Cons *to_cons(NseVal v);
 Symbol *to_symbol(NseVal v);
 String *to_string(NseVal v);
 Symbol *to_keyword(NseVal v);

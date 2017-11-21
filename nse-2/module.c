@@ -103,7 +103,7 @@ NseVal scope_get(Scope *scope, Symbol *symbol) {
       return *value;
     }
   }
-  raise_error(name_error, "undefined name");
+  raise_error(name_error, "undefined name: %s", symbol->name);
   return undefined;
 }
 

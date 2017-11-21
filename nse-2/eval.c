@@ -256,6 +256,86 @@ NseVal eval_anon_type(NseVal args, NseVal env[]) {
   return result;
 }
 
+NseVal optimize_tail_call_any(NseVal code, Symbol *name);
+
+NseVal optimize_tail_call_cons(Cons *cons, Symbol *name) {
+  NseVal operator = cons->head;
+  NseVal args = cons->tail;
+  Symbol *macro_name = to_symbol(operator);
+  if (macro_name) {
+    if (macro_name == name) {
+      printf("optimizing tail call: %s\n", name->name);
+      cons->head = add_ref(SYMBOL(continue_symbol));
+      del_ref(operator);
+      return TRUE;
+    } else if (macro_name == if_symbol) {
+      NseVal consequent = optimize_tail_call_any(elem(1, args), name);
+      NseVal alternative = THEN(consequent, optimize_tail_call_any(elem(2, args), name));
+      if (RESULT_OK(alternative)) {
+        return is_true(consequent) ? TRUE : alternative;
+      }
+      return alternative;
+    }
+  }
+  return FALSE;
+}
+
+NseVal optimize_tail_call_any(NseVal code, Symbol *name) {
+  switch (code.type) {
+    case TYPE_CONS:
+      return optimize_tail_call_cons(code.cons, name);
+    case TYPE_I64:
+    case TYPE_F64:
+    case TYPE_STRING:
+    case TYPE_KEYWORD:
+    case TYPE_QUOTE:
+    case TYPE_TQUOTE:
+    case TYPE_SYMBOL:
+      return FALSE;
+    case TYPE_SYNTAX: {
+      Syntax *previous = push_debug_form(code.syntax);
+      return pop_debug_form(optimize_tail_call_any(code.syntax->quoted, name), previous);
+    }
+    case TYPE_UNDEFINED:
+      return code;
+    default:
+      raise_error(domain_error, "unexpected value type: %s", nse_val_type_to_string(code.type));
+      return undefined;
+  }
+}
+
+Closure *optimize_tail_call(Closure *closure, Symbol *name) {
+  if (closure->env_size != 2) { // FIXME
+    return closure;
+  }
+  Cons *definition = to_cons(closure->env[0]);
+  if (!definition) {
+    return closure;
+  }
+  NseVal body = head(definition->tail);
+  NseVal result = optimize_tail_call_any(body, name);
+  if (RESULT_OK(result)) {
+    if (is_true(result)) {
+      NseVal loop1 = check_alloc(CONS(create_cons(body, nil)));
+      NseVal loop2 = THEN(loop1, check_alloc(CONS(create_cons(definition->head, loop1))));
+      del_ref(loop1);
+      NseVal loop3 = THEN(loop2, check_alloc(CONS(create_cons(SYMBOL(loop_symbol), loop2))));
+      del_ref(loop2);
+      NseVal new_tail = THEN(loop3, check_alloc(CONS(create_cons(loop3, nil))));
+      del_ref(loop3);
+      if (RESULT_OK(new_tail)) {
+        NseVal old_tail = definition->tail;
+        definition->tail = new_tail;
+        del_ref(old_tail);
+      } else {
+        del_ref(CLOSURE(closure));
+        return NULL;
+      }
+    }
+  }
+  return closure;
+}
+
 NseVal eval_cons(Cons *cons, Scope *scope) {
   NseVal operator = cons->head;
   NseVal args = cons->tail;
@@ -290,6 +370,13 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           if (!RESULT_OK(assignment)) {
             ok = 0;
             break;
+          }
+          if (assignment.type == TYPE_CLOSURE && is_symbol(pattern)) {
+            assignment.closure = optimize_tail_call(assignment.closure, to_symbol(pattern));
+            if (!assignment.closure) {
+              ok = 0;
+              break;
+            }
           }
           if (!assign_parameters(&let_scope, pattern, assignment)) {
             ok = 0;
@@ -344,6 +431,38 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
         }
       }
       return undefined;
+    } else if (macro_name == continue_symbol) {
+      NseVal result = undefined;
+      NseVal arg_list = eval_list(args, scope);
+      if (RESULT_OK(arg_list)) {
+        result = check_alloc(CONTINUE(create_continue(arg_list)));
+        del_ref(arg_list);
+      }
+      return result;
+    } else if (macro_name == loop_symbol) {
+      NseVal pattern = head(args);
+      NseVal body = THEN(pattern, elem(1, args));
+      Scope *loop_scope = scope;
+      if (RESULT_OK(body)) {
+        NseVal result = undefined;
+        while (1) {
+          result = eval(body, loop_scope);
+          if (!RESULT_OK(result) || result.type != TYPE_CONTINUE) {
+            break;
+          }
+          scope_pop_until(loop_scope, scope);
+          loop_scope = scope;
+          if (!assign_parameters(&loop_scope, pattern, result.quote->quoted)) {
+            del_ref(result);
+            result = undefined;
+            break;
+          }
+          del_ref(result);
+        }
+        scope_pop_until(loop_scope, scope);
+        return result;
+      }
+      return undefined;
     } else if (macro_name == def_symbol) {
       NseVal h = head(args);
       if (RESULT_OK(h)) {
@@ -365,9 +484,12 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
                   del_ref(scope_ref);
                   del_ref(def);
                   if (RESULT_OK(func)) {
-                    module_define(symbol->module, symbol->name, func);
-                    del_ref(func);
-                    return add_ref(SYMBOL(symbol));
+                    func.closure = optimize_tail_call(func.closure, symbol);
+                    if (func.closure) {
+                      module_define(symbol->module, symbol->name, func);
+                      del_ref(func);
+                      return add_ref(SYMBOL(symbol));
+                    }
                   }
                 }
               }
