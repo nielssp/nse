@@ -47,8 +47,9 @@ Binding *copy_binding(Binding *binding) {
 }
 
 void set_binding(Binding *binding, NseVal value) {
-  del_ref(binding->value);
+  NseVal old = binding->value;
   binding->value = add_ref(value);
+  del_ref(old);
 }
 
 void delete_binding(Binding *binding) {

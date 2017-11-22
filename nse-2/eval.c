@@ -387,12 +387,15 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           if (assignment.type == TYPE_CLOSURE && is_symbol(pattern)) {
             assignment.closure = optimize_tail_call(assignment.closure, to_symbol(pattern));
             if (!assignment.closure) {
+              del_ref(assignment);
               ok = 0;
               break;
             }
           }
           Symbol *symbol = to_symbol(pattern);
           if (symbol) {
+            // TODO: this is bad.. creates circular reference in closures,
+            // e.g.(let ((f (fn (x) x))) f)
             scope_set(let_scope, symbol, assignment);
           } else if (!assign_parameters(&let_scope, pattern, assignment)) {
             ok = 0;
