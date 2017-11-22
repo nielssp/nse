@@ -30,6 +30,7 @@ extern Symbol *read_int_symbol;
 extern Symbol *read_any_symbol;
 extern Symbol *read_bind_symbol;
 extern Symbol *read_return_symbol;
+extern Symbol *read_ignore_symbol;
 
 extern Symbol *key_symbol;
 

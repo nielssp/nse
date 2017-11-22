@@ -19,6 +19,11 @@ struct module {
   Namespace read_macro_defs;
 };
 
+struct binding {
+  size_t refs;
+  NseVal value;
+};
+
 static ModuleMap loaded_modules = NULL_HASH_MAP;
 
 Module *keyword_module = NULL;
@@ -29,22 +34,53 @@ static void init_modules() {
   keyword_module = create_module("keyword");
 }
 
+Binding *create_binding(NseVal value) {
+  Binding *binding = malloc(sizeof(Binding));
+  binding->refs = 1;
+  binding->value = add_ref(value);
+  return  binding;
+}
+
+Binding *copy_binding(Binding *binding) {
+  binding->refs++;
+  return binding;
+}
+
+void set_binding(Binding *binding, NseVal value) {
+  del_ref(binding->value);
+  binding->value = add_ref(value);
+}
+
+void delete_binding(Binding *binding) {
+  if (binding->refs > 1) {
+    binding->refs--;
+  } else {
+    del_ref(binding->value);
+    free(binding);
+  }
+}
+
 Scope *scope_push(Scope *next, Symbol *symbol, NseVal value) {
   Scope *scope = malloc(sizeof(Scope));
+  if (symbol) {
+    add_ref(SYMBOL(symbol));
+  }
   scope->symbol = symbol;
-  scope->value = value;
+  scope->binding = create_binding(value);
   scope->next = next;
   scope->type = VALUE_SCOPE;
   if (next) {
     scope->module = next->module;
   }
-  add_ref(value);
   return scope;
 }
 
 Scope *scope_pop(Scope *scope) {
   Scope *next = scope->next;
-  del_ref(scope->value);
+  if (scope->symbol) {
+    del_ref(SYMBOL(scope->symbol));
+  }
+  delete_binding(scope->binding);
   free(scope);
   return next;
 }
@@ -52,7 +88,10 @@ Scope *scope_pop(Scope *scope) {
 void scope_pop_until(Scope *start, Scope *end) {
   while (start != end) {
     Scope *next = start->next;
-    del_ref(start->value);
+    if (start->symbol) {
+      del_ref(SYMBOL(start->symbol));
+    }
+    delete_binding(start->binding);
     free(start);
     start = next;
   }
@@ -63,27 +102,48 @@ Scope *copy_scope(Scope *scope) {
     return NULL;
   }
   Scope *copy = malloc(sizeof(Scope));
+  if (scope->symbol) {
+    add_ref(SYMBOL(scope->symbol));
+  }
   copy->symbol = scope->symbol;
-  copy->value = scope->value;
+  copy->binding = copy_binding(scope->binding);
   copy->type = scope->type;
   copy->next = copy_scope(scope->next);
   copy->module = scope->module;
-  add_ref(copy->value);
   return copy;
 }
 
 void delete_scope(Scope *scope) {
   if (scope != NULL) {
     delete_scope(scope->next);
-    del_ref(scope->value);
+    if (scope->symbol) {
+      del_ref(SYMBOL(scope->symbol));
+    }
+    delete_binding(scope->binding);
     free(scope);
   }
+}
+
+int scope_set(Scope *scope, Symbol *symbol, NseVal value) {
+  if (scope->symbol) {
+    if (scope->symbol == symbol) {
+      set_binding(scope->binding, value);
+      return 1;
+    }
+    if (scope->next) {
+      return scope_set(scope->next, symbol, value);
+    }
+  }
+  return 0;
 }
 
 NseVal scope_get(Scope *scope, Symbol *symbol) {
   if (scope->symbol) {
     if (scope->symbol == symbol) {
-      return scope->value;
+      if (!RESULT_OK(scope->binding->value)) {
+        raise_error(name_error, "undefined name: %s", symbol->name);
+      }
+      return scope->binding->value;
     }
     if (scope->next) {
       return scope_get(scope->next, symbol);

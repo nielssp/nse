@@ -100,6 +100,7 @@
 (def read-symbol 'read-symbol)
 (def read-int 'read-int)
 (def read-any 'read-any)
+(def read-ignore 'read-ignore)
 (def (read-return v) (list 'read-return v))
 (def (read>>= r f) (list 'read-bind r f))
 (def (read>> r1 r2) (list 'read-bind r1 (fn (v) r2)))
@@ -107,7 +108,7 @@
 ; multiline comment
 
 (def-read-macro |
-  (let ((read-bars (read>>= read-char (fn (c) (if (= c (ascii "#")) (read-return 'nil) (if (= c (ascii "|")) read-bars read-until-bar)))))
+  (let ((read-bars (read>>= read-char (fn (c) (if (= c (ascii "#")) read-ignore (if (= c (ascii "|")) read-bars read-until-bar)))))
         (read-until-bar (read>>= read-char (fn (c) (if (= c (ascii "|")) read-bars read-until-bar)))))
     (read>> read-char read-until-bar)))
 
@@ -126,3 +127,4 @@
 (def-read-macro \(
   (read>>= read-any (fn (xs)
   (read-return (list 'fn (find-params (syntax->datum xs)) xs)))))
+

@@ -310,6 +310,7 @@ Syntax *nse_read(Reader *input) {
     return NULL;
   }
   if (c == '#') {
+    int skip = 0;
     Syntax *syntax = start_pos(create_syntax(undefined), input);
     if (syntax) {
       pop(input);
@@ -321,7 +322,7 @@ Syntax *nse_read(Reader *input) {
         if (s) {
           NseVal macro = get_read_macro(s);
           if (RESULT_OK(macro)) {
-            syntax->quoted = execute_read(input, macro);
+            syntax->quoted = execute_read(input, macro, &skip);
             if (RESULT_OK(syntax->quoted)) {
               return end_pos(syntax, input);
             }
@@ -330,7 +331,10 @@ Syntax *nse_read(Reader *input) {
       }
       delete_syntax(syntax);
     }
-    return NULL;
+    if (!skip) {
+      return NULL;
+    }
+    return nse_read(input);
   }
   if (c == '(') {
     Syntax *syntax = start_pos(create_syntax(undefined), input);
@@ -401,12 +405,18 @@ static Syntax *read_list(Reader *input) {
   }
 }
 
-NseVal execute_read(Reader *reader, NseVal read) {
+NseVal execute_read(Reader *reader, NseVal read, int *skip) {
   Symbol *action = to_symbol(read);
   if (action) {
     if (action == read_char_symbol) {
-      int c = pop(reader);
-      return I64(c);
+      int c = peek(reader);
+      if (c != EOF) {
+        pop(reader);
+        return I64(c);
+      } else {
+        raise_error(syntax_error, "%s:%zu:%zu: end of input", reader->file_name->chars, reader->line, reader->column);
+        return undefined;
+      }
     } else if (action == read_string_symbol) {
       return check_alloc(SYNTAX(read_string(reader)));
     } else if (action == read_symbol_symbol) {
@@ -415,6 +425,9 @@ NseVal execute_read(Reader *reader, NseVal read) {
       return check_alloc(SYNTAX(read_int(reader)));
     } else if (action == read_any_symbol) {
       return check_alloc(SYNTAX(nse_read(reader)));
+    } else if (action == read_ignore_symbol) {
+      *skip = 1;
+      return undefined;
     } else {
       raise_error(domain_error, "invalid read action");
     }
@@ -426,13 +439,13 @@ NseVal execute_read(Reader *reader, NseVal read) {
         NseVal action_a = elem(1, read);
         NseVal transform = THEN(action_a, elem(2, read));
         if (RESULT_OK(transform)) {
-          NseVal value = execute_read(reader, action_a);
+          NseVal value = execute_read(reader, action_a, skip);
           if (RESULT_OK(value)) {
             NseVal transform_args = check_alloc(CONS(create_cons(value, nil)));
             if (RESULT_OK(transform_args)) {
               NseVal transform_result = nse_apply(transform, transform_args);
               if (RESULT_OK(transform_result)) {
-                result = execute_read(reader, transform_result);
+                result = execute_read(reader, transform_result, skip);
                 del_ref(transform_result);
               }
               del_ref(transform_args);

@@ -10,10 +10,12 @@ typedef enum {
 
 typedef struct scope Scope;
 
+typedef struct binding Binding;
+
 struct scope {
   Module *module;
   Symbol *symbol;
-  NseVal value;
+  Binding *binding;
   Scope *next;
   ScopeType type;
 };
@@ -26,6 +28,7 @@ Scope *scope_pop(Scope *scope);
 void scope_pop_until(Scope *start, Scope *end);
 Scope *copy_scope(Scope *scope);
 void delete_scope(Scope *scope);
+int scope_set(Scope *scope, Symbol *symbol, NseVal value);
 NseVal scope_get(Scope *scope, Symbol *symbol);
 NseVal scope_get_macro(Scope *scope, Symbol *symbol);
 NseVal get_read_macro(Symbol *symbol);

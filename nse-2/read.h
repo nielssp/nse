@@ -15,6 +15,6 @@ Syntax *nse_read(Reader *reader);
 
 int iswhite(int c);
 
-NseVal execute_read(Reader *reader, NseVal read);
+NseVal execute_read(Reader *reader, NseVal read, int *skip);
 
 #endif

@@ -264,7 +264,7 @@ NseVal optimize_tail_call_cons(Cons *cons, Symbol *name) {
   Symbol *macro_name = to_symbol(operator);
   if (macro_name) {
     if (macro_name == name) {
-      printf("optimizing tail call: %s\n", name->name);
+      //printf("optimizing tail call: %s\n", name->name);
       cons->head = add_ref(SYMBOL(continue_symbol));
       del_ref(operator);
       return TRUE;
@@ -366,6 +366,19 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
             ok = 0;
             break;
           }
+          Symbol *symbol = to_symbol(pattern);
+          if (symbol) {
+            let_scope = scope_push(let_scope, symbol, undefined);
+          }
+          defs = tail(defs);
+        }
+        defs = head(args);
+        while (is_cons(defs)) {
+          NseVal pattern = head(head(defs));
+          if (!RESULT_OK(pattern)) {
+            ok = 0;
+            break;
+          }
           NseVal assignment = eval(elem(1, head(defs)), let_scope);
           if (!RESULT_OK(assignment)) {
             ok = 0;
@@ -378,7 +391,10 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
               break;
             }
           }
-          if (!assign_parameters(&let_scope, pattern, assignment)) {
+          Symbol *symbol = to_symbol(pattern);
+          if (symbol) {
+            scope_set(let_scope, symbol, assignment);
+          } else if (!assign_parameters(&let_scope, pattern, assignment)) {
             ok = 0;
           }
           del_ref(assignment);

@@ -22,6 +22,7 @@ Symbol *read_int_symbol = NULL;
 Symbol *read_any_symbol = NULL;
 Symbol *read_bind_symbol = NULL;
 Symbol *read_return_symbol = NULL;
+Symbol *read_ignore_symbol = NULL;
 
 Symbol *key_symbol = NULL;
 
@@ -54,6 +55,7 @@ void init_lang_module() {
   read_any_symbol = module_extern_symbol(lang_module, "read-any");
   read_bind_symbol = module_extern_symbol(lang_module, "read-bind");
   read_return_symbol = module_extern_symbol(lang_module, "read-return");
+  read_ignore_symbol = module_extern_symbol(lang_module, "read-ignore");
 
   key_symbol = module_extern_symbol(lang_module, "&key");
 }
