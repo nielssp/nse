@@ -40,8 +40,8 @@ static void test_simple_is_subtype_of() {
 }
 
 static void test_symbol_subtype() {
-  Type *t1 = create_symbol_type("t");
-  Type *t2 = create_symbol_type("f");
+  Type *t1 = create_symbol_type(intern_special("t"));
+  Type *t2 = create_symbol_type(intern_special("f"));
   assert(is_subtype_of(t1, any_type));
   assert(is_subtype_of(t1, any_symbol_type));
   assert(is_subtype_of(t1, t1));
@@ -51,10 +51,10 @@ static void test_symbol_subtype() {
 }
 
 static void test_union_subtype() {
-  Type *t1 = create_symbol_type("foo");
-  Type *t2 = create_symbol_type("bar");
-  Type *t3 = create_symbol_type("baz");
-  Type *t4 = create_symbol_type("bar");
+  Type *t1 = create_symbol_type(intern_special("bar"));
+  Type *t2 = create_symbol_type(intern_keyword("bar"));
+  Type *t3 = create_symbol_type(intern_special("baz"));
+  Type *t4 = create_symbol_type(intern_special("bar"));
   Type *t5 = create_union_type(copy_type(t1), copy_type(t2));
   assert(is_subtype_of(t1, t5));
   assert(is_subtype_of(t2, t5));

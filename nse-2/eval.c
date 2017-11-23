@@ -396,8 +396,9 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           if (symbol) {
             // TODO: this is bad.. creates circular reference in closures,
             // e.g.(let ((f (fn (x) x))) f)
-            scope_set(let_scope, symbol, assignment);
-          } else if (!assign_parameters(&let_scope, pattern, assignment)) {
+            scope_set(let_scope, symbol, assignment, 1);
+          }
+          if (!assign_parameters(&let_scope, pattern, assignment)) {
             ok = 0;
           }
           del_ref(assignment);

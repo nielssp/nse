@@ -13,7 +13,7 @@ read-test: read-test.c ../libnsert.a ../stream.o
 hash_map-test: hash_map-test.c
 	$(CC) -o $@ $^
 
-type-test: type-test.c ../libnsert.a
+type-test: type-test.c ../libnsert.a ../stream.o
 	$(CC) -o $@ $^
 
 stream-test: stream-test.c

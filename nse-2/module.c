@@ -21,6 +21,7 @@ struct module {
 
 struct binding {
   size_t refs;
+  int weak;
   NseVal value;
 };
 
@@ -38,6 +39,7 @@ Binding *create_binding(NseVal value) {
   Binding *binding = malloc(sizeof(Binding));
   binding->refs = 1;
   binding->value = add_ref(value);
+  binding->weak = 0;
   return  binding;
 }
 
@@ -46,9 +48,13 @@ Binding *copy_binding(Binding *binding) {
   return binding;
 }
 
-void set_binding(Binding *binding, NseVal value) {
+void set_binding(Binding *binding, NseVal value, int weak) {
   NseVal old = binding->value;
-  binding->value = add_ref(value);
+  if (!weak) {
+    add_ref(value);
+  }
+  binding->weak = weak;
+  binding->value = value;
   del_ref(old);
 }
 
@@ -56,7 +62,9 @@ void delete_binding(Binding *binding) {
   if (binding->refs > 1) {
     binding->refs--;
   } else {
-    del_ref(binding->value);
+    if (!binding->weak) {
+      del_ref(binding->value);
+    }
     free(binding);
   }
 }
@@ -125,14 +133,14 @@ void delete_scope(Scope *scope) {
   }
 }
 
-int scope_set(Scope *scope, Symbol *symbol, NseVal value) {
+int scope_set(Scope *scope, Symbol *symbol, NseVal value, int weak) {
   if (scope->symbol) {
     if (scope->symbol == symbol) {
-      set_binding(scope->binding, value);
+      set_binding(scope->binding, value, weak);
       return 1;
     }
     if (scope->next) {
-      return scope_set(scope->next, symbol, value);
+      return scope_set(scope->next, symbol, value, weak);
     }
   }
   return 0;
