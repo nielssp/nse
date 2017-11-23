@@ -179,6 +179,7 @@ NseVal check_alloc(NseVal v) {
     case TYPE_CLOSURE:
     case TYPE_QUOTE:
     case TYPE_TQUOTE:
+    case TYPE_CONTINUE:
     case TYPE_SYNTAX:
     case TYPE_REFERENCE:
     case TYPE_SYMBOL:
@@ -203,6 +204,7 @@ NseVal add_ref(NseVal value) {
       break;
     case TYPE_TQUOTE:
     case TYPE_QUOTE:
+    case TYPE_CONTINUE:
       value.quote->refs++;
       break;
     case TYPE_SYMBOL:
@@ -799,6 +801,8 @@ Type *get_type(NseVal v) {
       return create_quote_type(get_type(v.quote->quoted));
     case TYPE_TQUOTE:
       return create_type_quote_type(get_type(v.quote->quoted));
+    case TYPE_CONTINUE:
+      return copy_type(any_type);
     case TYPE_SYNTAX:
       return create_syntax_type(get_type(v.syntax->quoted));
     case TYPE_FUNC:
