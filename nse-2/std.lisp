@@ -10,6 +10,7 @@
 (def (curry f . curried) (fn args (apply f (++ curried args))))
 (def (flip f) (fn (x y) (f y x)))
 (def (negate f) (fn args (not (apply f args))))
+(def-macro (pipe x . funcs) (foldl list x funcs))
 
 ; list fundamentals
 (def nil '())
