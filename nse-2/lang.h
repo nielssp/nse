@@ -14,9 +14,23 @@ extern Symbol *if_symbol;
 extern Symbol *let_symbol;
 extern Symbol *fn_symbol;
 extern Symbol *try_symbol;
+extern Symbol *loop_symbol;
+extern Symbol *continue_symbol;
 extern Symbol *def_symbol;
 extern Symbol *def_macro_symbol;
 extern Symbol *def_type_symbol;
+extern Symbol *def_read_macro_symbol;
+
+extern Symbol *scope_symbol;
+
+extern Symbol *read_char_symbol;
+extern Symbol *read_string_symbol;
+extern Symbol *read_symbol_symbol;
+extern Symbol *read_int_symbol;
+extern Symbol *read_any_symbol;
+extern Symbol *read_bind_symbol;
+extern Symbol *read_return_symbol;
+extern Symbol *read_ignore_symbol;
 
 extern Symbol *key_symbol;
 

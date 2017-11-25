@@ -16,6 +16,13 @@ struct module {
   Namespace defs;
   Namespace macro_defs;
   Namespace type_defs;
+  Namespace read_macro_defs;
+};
+
+struct binding {
+  size_t refs;
+  int weak;
+  NseVal value;
 };
 
 static ModuleMap loaded_modules = NULL_HASH_MAP;
@@ -28,22 +35,61 @@ static void init_modules() {
   keyword_module = create_module("keyword");
 }
 
+Binding *create_binding(NseVal value) {
+  Binding *binding = malloc(sizeof(Binding));
+  binding->refs = 1;
+  binding->value = add_ref(value);
+  binding->weak = 0;
+  return  binding;
+}
+
+Binding *copy_binding(Binding *binding) {
+  binding->refs++;
+  return binding;
+}
+
+void set_binding(Binding *binding, NseVal value, int weak) {
+  NseVal old = binding->value;
+  if (!weak) {
+    add_ref(value);
+  }
+  binding->weak = weak;
+  binding->value = value;
+  del_ref(old);
+}
+
+void delete_binding(Binding *binding) {
+  if (binding->refs > 1) {
+    binding->refs--;
+  } else {
+    if (!binding->weak) {
+      del_ref(binding->value);
+    }
+    free(binding);
+  }
+}
+
 Scope *scope_push(Scope *next, Symbol *symbol, NseVal value) {
   Scope *scope = malloc(sizeof(Scope));
+  if (symbol) {
+    add_ref(SYMBOL(symbol));
+  }
   scope->symbol = symbol;
-  scope->value = value;
+  scope->binding = create_binding(value);
   scope->next = next;
   scope->type = VALUE_SCOPE;
   if (next) {
     scope->module = next->module;
   }
-  add_ref(value);
   return scope;
 }
 
 Scope *scope_pop(Scope *scope) {
   Scope *next = scope->next;
-  del_ref(scope->value);
+  if (scope->symbol) {
+    del_ref(SYMBOL(scope->symbol));
+  }
+  delete_binding(scope->binding);
   free(scope);
   return next;
 }
@@ -51,7 +97,10 @@ Scope *scope_pop(Scope *scope) {
 void scope_pop_until(Scope *start, Scope *end) {
   while (start != end) {
     Scope *next = start->next;
-    del_ref(start->value);
+    if (start->symbol) {
+      del_ref(SYMBOL(start->symbol));
+    }
+    delete_binding(start->binding);
     free(start);
     start = next;
   }
@@ -62,27 +111,48 @@ Scope *copy_scope(Scope *scope) {
     return NULL;
   }
   Scope *copy = malloc(sizeof(Scope));
+  if (scope->symbol) {
+    add_ref(SYMBOL(scope->symbol));
+  }
   copy->symbol = scope->symbol;
-  copy->value = scope->value;
+  copy->binding = copy_binding(scope->binding);
   copy->type = scope->type;
   copy->next = copy_scope(scope->next);
   copy->module = scope->module;
-  add_ref(copy->value);
   return copy;
 }
 
 void delete_scope(Scope *scope) {
   if (scope != NULL) {
     delete_scope(scope->next);
-    del_ref(scope->value);
+    if (scope->symbol) {
+      del_ref(SYMBOL(scope->symbol));
+    }
+    delete_binding(scope->binding);
     free(scope);
   }
+}
+
+int scope_set(Scope *scope, Symbol *symbol, NseVal value, int weak) {
+  if (scope->symbol) {
+    if (scope->symbol == symbol) {
+      set_binding(scope->binding, value, weak);
+      return 1;
+    }
+    if (scope->next) {
+      return scope_set(scope->next, symbol, value, weak);
+    }
+  }
+  return 0;
 }
 
 NseVal scope_get(Scope *scope, Symbol *symbol) {
   if (scope->symbol) {
     if (scope->symbol == symbol) {
-      return scope->value;
+      if (!RESULT_OK(scope->binding->value)) {
+        raise_error(name_error, "undefined name: %s", symbol->name);
+      }
+      return scope->binding->value;
     }
     if (scope->next) {
       return scope_get(scope->next, symbol);
@@ -102,7 +172,7 @@ NseVal scope_get(Scope *scope, Symbol *symbol) {
       return *value;
     }
   }
-  raise_error(name_error, "undefined name");
+  raise_error(name_error, "undefined name: %s", symbol->name);
   return undefined;
 }
 
@@ -114,6 +184,17 @@ NseVal scope_get_macro(Scope *scope, Symbol *symbol) {
     }
   }
   raise_error(name_error, "undefined macro");
+  return undefined;
+}
+
+NseVal get_read_macro(Symbol *symbol) {
+  if (symbol->module) {
+    NseVal *value = namespace_lookup(symbol->module->read_macro_defs, symbol->name);
+    if (value) {
+      return *value;
+    }
+  }
+  raise_error(name_error, "undefined read macro: %s", symbol->name);
   return undefined;
 }
 
@@ -135,6 +216,7 @@ Module *create_module(const char *name) {
   module->defs = create_namespace();
   module->macro_defs = create_namespace();
   module->type_defs = create_namespace();
+  module->read_macro_defs = create_namespace();
   module_map_add(loaded_modules, name, module);
   return module;
 }
@@ -167,6 +249,7 @@ void delete_module(Module *module) {
   delete_defs(module->defs);
   delete_defs(module->macro_defs);
   delete_defs(module->type_defs);
+  delete_defs(module->read_macro_defs);
   delete_symbols(module->internal);
   delete_symbols(module->external);
   free(module);
@@ -253,7 +336,7 @@ Symbol *module_extern_symbol(Module *module, const char *s) {
     value->refs++;
     return value;
   }
-  value = create_symbol(s, module);
+  value = module_intern_symbol(module, s);
   if (!s) {
     return NULL;
   }
@@ -322,6 +405,10 @@ void import_module(Module *dest, Module *src) {
   delete_symmap_iterator(it);
 }
 
+void import_module_symbol(Module *dest, Symbol *symbol) {
+  symmap_add(dest->internal, symbol->name, symbol);
+}
+
 void module_define(Module *module, const char *name, NseVal value) {
   NseVal *existing = namespace_remove(module->defs, name);
   if (existing) {
@@ -355,6 +442,18 @@ void module_define_type(Module *module, const char *name, NseVal value) {
   NseVal *copy = malloc(sizeof(NseVal));
   memcpy(copy, &value, sizeof(NseVal));
   namespace_add(module->type_defs, name, copy);
+  add_ref(value);
+}
+
+void module_define_read_macro(Module *module, const char *name, NseVal value) {
+  NseVal *existing = namespace_remove(module->read_macro_defs, name);
+  if (existing) {
+    del_ref(*existing);
+    free(existing);
+  }
+  NseVal *copy = malloc(sizeof(NseVal));
+  memcpy(copy, &value, sizeof(NseVal));
+  namespace_add(module->read_macro_defs, name, copy);
   add_ref(value);
 }
 

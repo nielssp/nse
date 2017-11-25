@@ -18,10 +18,12 @@
 #define STRING(s) ((NseVal) { .type = TYPE_STRING, .string = (s) })
 #define QUOTE(q) ((NseVal) { .type = TYPE_QUOTE, .quote = (q) })
 #define TQUOTE(q) ((NseVal) { .type = TYPE_TQUOTE, .quote = (q) })
+#define CONTINUE(q) ((NseVal) { .type = TYPE_CONTINUE, .quote = (q) })
 #define TYPE(t) ((NseVal) { .type = TYPE_TYPE, .type_val = (t) })
 #define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
 
 #define RESULT_OK(value) ((value).type != TYPE_UNDEFINED)
+#define THEN(previous, next) ((RESULT_OK(previous)) ? (next) : undefined)
 
 #define ARG_POP_ANY(name, args) NseVal name = head(args);\
   if (!RESULT_OK(name)) {\
@@ -29,6 +31,21 @@
     return undefined;\
   }\
   args = tail(args);
+#define ARG_POP_I64(name, args) int64_t name;\
+  {\
+    NseVal temp1 = head(args);\
+    if (!RESULT_OK(temp1)) {\
+      raise_error(domain_error, "too few parameters for function");\
+      return undefined;\
+    }\
+    args = tail(args);\
+    if (!is_i64(temp1)) {\
+      char *temp2 = nse_write_to_string(temp1, lang_module);\
+      raise_error(domain_error, "%s is not an integer", temp2);\
+      free(temp2);\
+    }\
+    name = temp1.i64;\
+  }
 #define ARG_POP_TYPE(type, name, args, convert, type_name) type name;\
   {\
     NseVal temp1 = head(args);\
@@ -65,6 +82,7 @@ typedef enum {
  TYPE_FUNC,
  TYPE_CLOSURE,
  TYPE_REFERENCE,
+ TYPE_CONTINUE,
  TYPE_TYPE
 } NseValType;
 
@@ -73,6 +91,7 @@ typedef struct cons Cons;
 typedef struct closure Closure;
 typedef struct quote Quote;
 typedef struct quote TypeQuote;
+typedef struct quote Continue;
 typedef struct syntax Syntax;
 typedef struct reference Reference;
 typedef struct string String;
@@ -88,7 +107,6 @@ struct nse_val {
     Cons *cons;
     Syntax *syntax;
     Quote *quote;
-    Quote *type_quote;
     Symbol *symbol;
     String *string;
     NseVal (*func)(NseVal);
@@ -125,6 +143,7 @@ struct string {
 
 struct reference {
   size_t refs;
+  Symbol *tag;
   void *pointer;
   Destructor destructor;
 };
@@ -135,7 +154,7 @@ struct syntax {
   size_t start_column;
   size_t end_line;
   size_t end_column;
-  const char *file;
+  String *file;
   NseVal quoted;
 };
 
@@ -155,18 +174,22 @@ extern NseVal nil;
 Cons *create_cons(NseVal h, NseVal t);
 Quote *create_quote(NseVal quoted);
 TypeQuote *create_type_quote(NseVal quoted);
+Continue *create_continue(NseVal args);
 Syntax *create_syntax(NseVal quoted);
 Symbol *create_symbol(const char *s, Module *module);
 Symbol *create_keyword(const char *s, Module *module);
 String *create_string(const char *s, size_t length);
 Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], size_t env_size);
-Reference *create_reference(void *pointer, void destructor(void *));
+Reference *create_reference(Symbol *tag, void *pointer, void destructor(void *));
 
 Syntax *copy_syntax(Syntax *syntax, NseVal quoted);
 NseVal check_alloc(NseVal v);
 
+Cons *to_cons(NseVal v);
 Symbol *to_symbol(NseVal v);
+String *to_string(NseVal v);
 Symbol *to_keyword(NseVal v);
+const char *to_string_constant(NseVal v);
 void *to_reference(NseVal v);
 Type *to_type(NseVal v);
 
@@ -175,6 +198,7 @@ void set_debug_form(Syntax *syntax);
 Syntax *push_debug_form(Syntax *syntax);
 NseVal pop_debug_form(NseVal result, Syntax *previous);
 NseVal get_stack_trace();
+void clear_stack_trace();
 
 NseVal add_ref(NseVal p);
 void del_ref(NseVal p);

@@ -77,6 +77,10 @@ TypeQuote *create_type_quote(NseVal quoted) {
   return create_quote(quoted);
 }
 
+Continue *create_continue(NseVal args) {
+  return create_quote(args);
+}
+
 Syntax *create_syntax(NseVal quoted) {
   Syntax *syntax = allocate(sizeof(Syntax));
   if (!syntax) {
@@ -112,13 +116,14 @@ Symbol *create_keyword(const char *s, Module *module) {
 
 
 String *create_string(const char *s, size_t length) {
-  String *str = allocate(sizeof(String) + length);
+  String *str = allocate(sizeof(String) + length + 1);
   if (!str) {
     return NULL;
   }
   str->refs = 1;
   str->length = length;
   memcpy(str->chars, s, length);
+  str->chars[length] = '\0';
   return str;
 }
 
@@ -140,12 +145,14 @@ Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], si
   return closure;
 }
 
-Reference *create_reference(void *pointer, void destructor(void *)) {
+Reference *create_reference(Symbol *tag, void *pointer, void destructor(void *)) {
   Reference *reference = allocate(sizeof(Reference));
   if (!reference) {
     return NULL;
   }
   reference->refs = 1;
+  reference->tag = tag;
+  add_ref(SYMBOL(tag));
   reference->pointer = pointer;
   reference->destructor = destructor;
   return reference;
@@ -159,6 +166,9 @@ Syntax *copy_syntax(Syntax *syntax, NseVal quoted) {
     copy->end_line = syntax->end_line;
     copy->end_column = syntax->end_column;
     copy->file = syntax->file;
+    if (copy->file) {
+      add_ref(STRING(copy->file));
+    }
   }
   return copy;
 }
@@ -169,6 +179,7 @@ NseVal check_alloc(NseVal v) {
     case TYPE_CLOSURE:
     case TYPE_QUOTE:
     case TYPE_TQUOTE:
+    case TYPE_CONTINUE:
     case TYPE_SYNTAX:
     case TYPE_REFERENCE:
     case TYPE_SYMBOL:
@@ -193,6 +204,7 @@ NseVal add_ref(NseVal value) {
       break;
     case TYPE_TQUOTE:
     case TYPE_QUOTE:
+    case TYPE_CONTINUE:
       value.quote->refs++;
       break;
     case TYPE_SYMBOL:
@@ -228,6 +240,7 @@ void del_ref(NseVal value) {
       break;
     case TYPE_TQUOTE:
     case TYPE_QUOTE:
+    case TYPE_CONTINUE:
       refs = &value.quote->refs;
       break;
     case TYPE_SYMBOL:
@@ -263,7 +276,7 @@ void delete_all(NseVal value) {
     del_ref(value.cons->head);
     del_ref(value.cons->tail);
   }
-  if (value.type == TYPE_QUOTE || value.type == TYPE_TQUOTE) {
+  if (value.type == TYPE_QUOTE || value.type == TYPE_TQUOTE || value.type == TYPE_CONTINUE) {
     del_ref(value.quote->quoted);
   }
   if (value.type == TYPE_CLOSURE) {
@@ -273,6 +286,9 @@ void delete_all(NseVal value) {
     }
   }
   if (value.type == TYPE_SYNTAX) {
+    if (value.syntax->file) {
+      del_ref(STRING(value.syntax->file));
+    }
     del_ref(value.syntax->quoted);
   }
   delete(value);
@@ -289,6 +305,7 @@ void delete(NseVal value) {
       return;
     case TYPE_QUOTE:
     case TYPE_TQUOTE:
+    case TYPE_CONTINUE:
       free(value.quote);
       return;
     case TYPE_STRING:
@@ -304,6 +321,7 @@ void delete(NseVal value) {
       if (value.reference->destructor) {
         value.reference->destructor(value.reference->pointer);
       }
+      del_ref(SYMBOL(value.reference->tag));
       free(value.reference);
       return;
     default:
@@ -454,6 +472,15 @@ int is_type(NseVal v) {
   return 0;
 }
 
+Cons *to_cons(NseVal v) {
+  if (v.type == TYPE_CONS) {
+    return v.cons;
+  } else if (v.type == TYPE_SYNTAX) {
+    return to_cons(v.syntax->quoted);
+  }
+  return NULL;
+}
+
 Symbol *to_symbol(NseVal v) {
   if (v.type == TYPE_SYMBOL) {
     return v.symbol;
@@ -463,11 +490,31 @@ Symbol *to_symbol(NseVal v) {
   return NULL;
 }
 
+String *to_string(NseVal v) {
+  if (v.type == TYPE_STRING) {
+    return v.string;
+  } else if (v.type == TYPE_SYNTAX) {
+    return to_string(v.syntax->quoted);
+  }
+  return NULL;
+}
+
 Symbol *to_keyword(NseVal v) {
   if (v.type == TYPE_KEYWORD) {
     return v.symbol;
   } else if (v.type == TYPE_SYNTAX) {
     return to_keyword(v.syntax->quoted);
+  }
+  return NULL;
+}
+
+const char *to_string_constant(NseVal v) {
+  if (v.type == TYPE_SYMBOL || v.type == TYPE_KEYWORD) {
+    return v.symbol->name;
+  } else if (v.type == TYPE_STRING) {
+    return v.string->chars;
+  } else if (v.type == TYPE_SYNTAX) {
+    return to_string_constant(v.syntax->quoted);
   }
   return NULL;
 }
@@ -530,6 +577,9 @@ size_t list_length(NseVal value) {
 }
 
 static int stack_trace_push(NseVal func, NseVal args) {
+  if (!error_form) {
+    return 1;
+  }
   Cons *c1 = create_cons(SYNTAX(error_form), nil);
   if (!c1) {
     return 0;
@@ -563,6 +613,11 @@ static void stack_trace_pop() {
 
 NseVal get_stack_trace() {
   return add_ref(stack_trace);
+}
+
+void clear_stack_trace() {
+  del_ref(stack_trace);
+  stack_trace = nil;
 }
 
 NseVal nse_apply(NseVal func, NseVal args) {
@@ -624,6 +679,7 @@ NseVal nse_equals(NseVal a, NseVal b) {
       return FALSE;
     case TYPE_QUOTE:
     case TYPE_TQUOTE:
+    case TYPE_CONTINUE:
       return nse_equals(a.quote->quoted, b.quote->quoted);
     case TYPE_I64:
       if (a.i64 == b.i64) {
@@ -672,6 +728,15 @@ NseVal syntax_to_datum(NseVal v) {
       }
       return quote;
     }
+    case TYPE_CONTINUE: {
+      NseVal quote = undefined;
+      NseVal quoted = syntax_to_datum(v.quote->quoted);
+      if (RESULT_OK(quoted)) {
+        quote = check_alloc(CONTINUE(create_continue(quoted)));
+        del_ref(quoted);
+      }
+      return quote;
+    }
     default:
       return add_ref(v);
   }
@@ -699,6 +764,8 @@ const char *nse_val_type_to_string(NseValType t) {
       return "quote";
     case TYPE_TQUOTE:
       return "type-quote";
+    case TYPE_CONTINUE:
+      return "continue";
     case TYPE_SYNTAX:
       return "syntax";
     case TYPE_FUNC:
@@ -725,7 +792,7 @@ Type *get_type(NseVal v) {
     case TYPE_F64:
       return copy_type(f64_type);
     case TYPE_SYMBOL:
-      return create_symbol_type(v.symbol->name); // TODO: get fqn
+      return create_symbol_type(add_ref(v).symbol);
     case TYPE_KEYWORD:
       return copy_type(keyword_type);
     case TYPE_STRING:
@@ -734,6 +801,8 @@ Type *get_type(NseVal v) {
       return create_quote_type(get_type(v.quote->quoted));
     case TYPE_TQUOTE:
       return create_type_quote_type(get_type(v.quote->quoted));
+    case TYPE_CONTINUE:
+      return copy_type(any_type);
     case TYPE_SYNTAX:
       return create_syntax_type(get_type(v.syntax->quoted));
     case TYPE_FUNC:
@@ -741,7 +810,7 @@ Type *get_type(NseVal v) {
     case TYPE_CLOSURE:
       return copy_type(v.closure->type);
     case TYPE_REFERENCE:
-      return copy_type(ref_type);
+      return create_ref_type(v.reference->tag);
     case TYPE_TYPE:
       return copy_type(type_type);
   }

@@ -5,7 +5,7 @@ typedef enum {
   BASE_TYPE_NOTHING,
   BASE_TYPE_ANY,
   BASE_TYPE_NIL,
-  BASE_TYPE_REF,
+  BASE_TYPE_ANY_REF,
   BASE_TYPE_I8,
   BASE_TYPE_I16,
   BASE_TYPE_I32,
@@ -20,6 +20,7 @@ typedef enum {
   BASE_TYPE_ANY_SYMBOL,
   BASE_TYPE_TYPE,
   BASE_TYPE_SYMBOL,
+  BASE_TYPE_REF,
   BASE_TYPE_KEYWORD,
   BASE_TYPE_TYPE_VAR,
   BASE_TYPE_QUOTE,
@@ -35,12 +36,14 @@ typedef enum {
 } BaseType;
 
 typedef struct type Type;
+typedef struct symbol Symbol;
 
 struct type {
   size_t refs;
   BaseType type;
   union {
     char *var_name;
+    Symbol *symbol;
     Type *param_a;
     size_t num_operands;
   };
@@ -53,7 +56,7 @@ struct type {
 extern Type *nothing_type;
 extern Type *any_type;
 extern Type *nil_type;
-extern Type *ref_type;
+extern Type *any_ref_type;
 extern Type *i8_type;
 extern Type *i16_type;
 extern Type *i32_type;
@@ -69,7 +72,8 @@ extern Type *any_symbol_type;
 extern Type *keyword_type;
 extern Type *type_type;
 
-Type *create_symbol_type(const char *symbol);
+Type *create_symbol_type(Symbol *symbol);
+Type *create_ref_type(Symbol *tag);
 Type *create_type_var(const char *var_name);
 Type *create_quote_type(Type *quoted_type);
 Type *create_type_quote_type(Type *quoted_type);

@@ -28,7 +28,17 @@
 (def (not a) (if a 'f 't))
 (def != (negate =))
 
+(def-macro (cond . cases) (if (nil? cases) ''nil (list 'if (head (head cases)) (elem 1 (head cases)) (cons 'cond (tail cases)))))
+
 ; list operations
+(def (length xs)
+  (let ((rec (fn (xs acc) (if (nil? xs) acc (rec (tail xs) (+ 1 acc))))))
+    (rec xs 0)))
+
+(def (reverse xs)
+     (let ((rec (fn (xs acc) (if (nil? xs) acc (rec (tail xs) (cons (head xs) acc))))))
+       (rec xs nil)))
+
 (def (elem n xs) (if (= n 0) (head xs) (elem (- n 1) (tail xs))))
 
 (def (drop n xs) (if (= n 0) xs (drop (- n 1) (tail xs))))
@@ -40,9 +50,9 @@
 (def (map f xs) (if (nil? xs) nil (cons (f (head xs)) (map f (tail xs)))))
 
 (def (++ xs ys)
-     (if (nil? xs) ys
-       (if (nil? ys) xs
-         (cons (head xs) (++ (tail xs) ys)))))
+  (if (nil? ys) xs
+    (let ((rec (fn (xs acc) (if (nil? xs) acc (rec (tail xs) (cons (head xs) acc))))))
+      (rec (reverse xs) ys))))
 
 (def (filter f xs)
      (if (nil? xs) '()
@@ -57,7 +67,11 @@
 (def (sum xs) (foldl + 0 xs))
 
 (def (range start end)
-  (if (= start end) (cons end nil) (cons start (range (+ start 1) end))))
+  (let ((acc '()))
+    (loop (start end acc)
+      (if (= start end)
+        (cons start acc)
+        (continue start (- end 1) (cons end acc))))))
 
 (def iota (curry range 1))
 
@@ -69,6 +83,10 @@
 
 (def (flatten xs) (foldr ++ nil xs))
 
+(def (flatten' xs)
+  (let ((rec (fn (xs rec) (if (nil? xs) rec (rec (tail xs) (++ rec (head xs)))))))
+    (rec xs '())))
+
 ; option type
 (def-type (option t) (union-type (cons-type ^'some (cons-type t ^nil)) ^'none))
 (def (some x) (list 'some x))
@@ -76,3 +94,38 @@
 (def (oget ('some x)) x)
 (def (defined? opt) (not (is-a opt ^'none)))
 (def (omap f opt) (if (defined? opt) (some (f (oget opt))) none))
+
+; read monad
+(def read-char 'read-char)
+(def read-string 'read-string)
+(def read-symbol 'read-symbol)
+(def read-int 'read-int)
+(def read-any 'read-any)
+(def read-ignore 'read-ignore)
+(def (read-return v) (list 'read-return v))
+(def (read>>= r f) (list 'read-bind r f))
+(def (read>> r1 r2) (list 'read-bind r1 (fn (v) r2)))
+
+; multiline comment
+
+(def-read-macro |
+  (let ((read-bars (read>>= read-char (fn (c) (if (= c (ascii "#")) read-ignore (if (= c (ascii "|")) read-bars read-until-bar)))))
+        (read-until-bar (read>>= read-char (fn (c) (if (= c (ascii "|")) read-bars read-until-bar)))))
+    (read>> read-char read-until-bar)))
+
+
+; partial function application
+(def (ascii c) (byte-at 0 c))
+(def (find-params code)
+     (if (is-a code ^any-symbol)
+       (if (= (ascii "%") (byte-at 0 (symbol-name code)))
+         (list code)
+         nil)
+       (if (is-a code ^(cons any any))
+         (++ (find-params (head code)) (find-params (tail code)))
+         nil)))
+
+(def-read-macro \(
+  (read>>= read-any (fn (xs)
+  (read-return (list 'fn (find-params (syntax->datum xs)) xs)))))
+

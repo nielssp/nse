@@ -170,18 +170,22 @@ int assign_named_parameters(Scope **scope, NseVal formal, NseVal actual) {
 
 int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
   switch (formal.type) {
-    case TYPE_SYNTAX:
+    case TYPE_SYNTAX: {
+      Syntax *previous = push_debug_form(formal.syntax);
       if (assign_parameters(scope, formal.syntax->quoted, actual)) {
+        pop_debug_form(nil, previous);
         return 1;
       } else {
+        pop_debug_form(undefined, previous);
         return 0;
       }
+    }
     case TYPE_SYMBOL:
       *scope = scope_push(*scope, formal.symbol, actual);
       return 1;
     case TYPE_QUOTE:
       if (!is_true(nse_equals(formal.quote->quoted, actual))) {
-        raise_error(domain_error, "pattern match failed");
+        raise_error(pattern_error, "pattern match failed");
         return 0;
       }
       return 1;
@@ -193,7 +197,7 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
         }
       }
       if (!is_cons(actual)) {
-        raise_error(domain_error, "too few parameters for function");
+        raise_error(pattern_error, "expected more parameters");
         return 0;
       }
       return assign_parameters(scope, head(formal), head(actual))
@@ -201,7 +205,7 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
     }
     case TYPE_NIL:
       if (!is_nil(actual)) {
-        raise_error(domain_error, "too many parameters for function");
+        raise_error(pattern_error, "too many parameters for function");
         return 0;
       }
       return 1;
@@ -252,6 +256,86 @@ NseVal eval_anon_type(NseVal args, NseVal env[]) {
   return result;
 }
 
+NseVal optimize_tail_call_any(NseVal code, Symbol *name);
+
+NseVal optimize_tail_call_cons(Cons *cons, Symbol *name) {
+  NseVal operator = cons->head;
+  NseVal args = cons->tail;
+  Symbol *macro_name = to_symbol(operator);
+  if (macro_name) {
+    if (macro_name == name) {
+      //printf("optimizing tail call: %s\n", name->name);
+      cons->head = add_ref(SYMBOL(continue_symbol));
+      del_ref(operator);
+      return TRUE;
+    } else if (macro_name == if_symbol) {
+      NseVal consequent = optimize_tail_call_any(elem(1, args), name);
+      NseVal alternative = THEN(consequent, optimize_tail_call_any(elem(2, args), name));
+      if (RESULT_OK(alternative)) {
+        return is_true(consequent) ? TRUE : alternative;
+      }
+      return alternative;
+    }
+  }
+  return FALSE;
+}
+
+NseVal optimize_tail_call_any(NseVal code, Symbol *name) {
+  switch (code.type) {
+    case TYPE_CONS:
+      return optimize_tail_call_cons(code.cons, name);
+    case TYPE_I64:
+    case TYPE_F64:
+    case TYPE_STRING:
+    case TYPE_KEYWORD:
+    case TYPE_QUOTE:
+    case TYPE_TQUOTE:
+    case TYPE_SYMBOL:
+      return FALSE;
+    case TYPE_SYNTAX: {
+      Syntax *previous = push_debug_form(code.syntax);
+      return pop_debug_form(optimize_tail_call_any(code.syntax->quoted, name), previous);
+    }
+    case TYPE_UNDEFINED:
+      return code;
+    default:
+      raise_error(domain_error, "unexpected value type: %s", nse_val_type_to_string(code.type));
+      return undefined;
+  }
+}
+
+Closure *optimize_tail_call(Closure *closure, Symbol *name) {
+  if (closure->env_size != 2) { // FIXME
+    return closure;
+  }
+  Cons *definition = to_cons(closure->env[0]);
+  if (!definition) {
+    return closure;
+  }
+  NseVal body = head(definition->tail);
+  NseVal result = optimize_tail_call_any(body, name);
+  if (RESULT_OK(result)) {
+    if (is_true(result)) {
+      NseVal loop1 = check_alloc(CONS(create_cons(body, nil)));
+      NseVal loop2 = THEN(loop1, check_alloc(CONS(create_cons(definition->head, loop1))));
+      del_ref(loop1);
+      NseVal loop3 = THEN(loop2, check_alloc(CONS(create_cons(SYMBOL(loop_symbol), loop2))));
+      del_ref(loop2);
+      NseVal new_tail = THEN(loop3, check_alloc(CONS(create_cons(loop3, nil))));
+      del_ref(loop3);
+      if (RESULT_OK(new_tail)) {
+        NseVal old_tail = definition->tail;
+        definition->tail = new_tail;
+        del_ref(old_tail);
+      } else {
+        del_ref(CLOSURE(closure));
+        return NULL;
+      }
+    }
+  }
+  return closure;
+}
+
 NseVal eval_cons(Cons *cons, Scope *scope) {
   NseVal operator = cons->head;
   NseVal args = cons->tail;
@@ -270,10 +354,66 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       }
       return result;
     } else if (macro_name == let_symbol) {
+      Scope *let_scope = scope;
+      NseVal result = undefined;
+      NseVal defs = head(args);
+      NseVal body = THEN(defs, elem(1, args));
+      if (RESULT_OK(body)) {
+        int ok = 1;
+        while (is_cons(defs)) {
+          NseVal pattern = head(head(defs));
+          if (!RESULT_OK(pattern)) {
+            ok = 0;
+            break;
+          }
+          Symbol *symbol = to_symbol(pattern);
+          if (symbol) {
+            let_scope = scope_push(let_scope, symbol, undefined);
+          }
+          defs = tail(defs);
+        }
+        defs = head(args);
+        while (is_cons(defs)) {
+          NseVal pattern = head(head(defs));
+          if (!RESULT_OK(pattern)) {
+            ok = 0;
+            break;
+          }
+          NseVal assignment = eval(elem(1, head(defs)), let_scope);
+          if (!RESULT_OK(assignment)) {
+            ok = 0;
+            break;
+          }
+          if (assignment.type == TYPE_CLOSURE && is_symbol(pattern)) {
+            assignment.closure = optimize_tail_call(assignment.closure, to_symbol(pattern));
+            if (!assignment.closure) {
+              del_ref(assignment);
+              ok = 0;
+              break;
+            }
+          }
+          Symbol *symbol = to_symbol(pattern);
+          if (symbol) {
+            // TODO: this is bad.. creates circular reference in closures,
+            // e.g.(let ((f (fn (x) x))) f)
+            scope_set(let_scope, symbol, assignment, 1);
+          }
+          if (!assign_parameters(&let_scope, pattern, assignment)) {
+            ok = 0;
+          }
+          del_ref(assignment);
+          defs = tail(defs);
+        }
+        if (ok) {
+          result = eval(body, let_scope);
+        }
+        scope_pop_until(let_scope, scope);
+      }
+      return result;
     } else if (macro_name == fn_symbol) {
       Scope *fn_scope = copy_scope(scope);
       NseVal result = undefined;
-      NseVal scope_ref = check_alloc(REFERENCE(create_reference(fn_scope, (Destructor) delete_scope)));
+      NseVal scope_ref = check_alloc(REFERENCE(create_reference(scope_symbol, fn_scope, (Destructor) delete_scope)));
       if (RESULT_OK(scope_ref)) {
         NseVal env[] = {args, scope_ref};
         Type *arg_type = parameters_to_type(head(args));
@@ -311,6 +451,38 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
         }
       }
       return undefined;
+    } else if (macro_name == continue_symbol) {
+      NseVal result = undefined;
+      NseVal arg_list = eval_list(args, scope);
+      if (RESULT_OK(arg_list)) {
+        result = check_alloc(CONTINUE(create_continue(arg_list)));
+        del_ref(arg_list);
+      }
+      return result;
+    } else if (macro_name == loop_symbol) {
+      NseVal pattern = head(args);
+      NseVal body = THEN(pattern, elem(1, args));
+      Scope *loop_scope = scope;
+      if (RESULT_OK(body)) {
+        NseVal result = undefined;
+        while (1) {
+          result = eval(body, loop_scope);
+          if (!RESULT_OK(result) || result.type != TYPE_CONTINUE) {
+            break;
+          }
+          scope_pop_until(loop_scope, scope);
+          loop_scope = scope;
+          if (!assign_parameters(&loop_scope, pattern, result.quote->quoted)) {
+            del_ref(result);
+            result = undefined;
+            break;
+          }
+          del_ref(result);
+        }
+        scope_pop_until(loop_scope, scope);
+        return result;
+      }
+      return undefined;
     } else if (macro_name == def_symbol) {
       NseVal h = head(args);
       if (RESULT_OK(h)) {
@@ -318,7 +490,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           Symbol *symbol = to_symbol(head(h));
           if (symbol) {
             Scope *fn_scope = copy_scope(scope);
-            NseVal scope_ref = check_alloc(REFERENCE(create_reference(fn_scope, (Destructor) delete_scope)));
+            NseVal scope_ref = check_alloc(REFERENCE(create_reference(scope_symbol, fn_scope, (Destructor) delete_scope)));
             if (RESULT_OK(scope_ref)) {
               NseVal body = tail(args);
               NseVal formal = tail(h);
@@ -332,9 +504,12 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
                   del_ref(scope_ref);
                   del_ref(def);
                   if (RESULT_OK(func)) {
-                    module_define(symbol->module, symbol->name, func);
-                    del_ref(func);
-                    return add_ref(SYMBOL(symbol));
+                    func.closure = optimize_tail_call(func.closure, symbol);
+                    if (func.closure) {
+                      module_define(symbol->module, symbol->name, func);
+                      del_ref(func);
+                      return add_ref(SYMBOL(symbol));
+                    }
                   }
                 }
               }
@@ -357,6 +532,22 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
         }
       }
       return undefined;
+    } else if (macro_name == def_read_macro_symbol) {
+      NseVal h = head(args);
+      if (RESULT_OK(h)) {
+        Symbol *symbol = to_symbol(h);
+        if (symbol) {
+          NseVal value = eval(head(tail(args)), scope);
+          if (RESULT_OK(value)) {
+            module_define_read_macro(symbol->module, symbol->name, value);
+            del_ref(value);
+            return add_ref(SYMBOL(symbol));
+          }
+        } else {
+          raise_error(syntax_error, "name of read macro must be a symbol");
+        }
+      }
+      return undefined;
     } else if (macro_name == def_type_symbol) {
       NseVal h = head(args);
       if (RESULT_OK(h)) {
@@ -364,7 +555,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           Symbol *symbol = to_symbol(head(h));
           if (symbol) {
             Scope *fn_scope = copy_scope(scope);
-            NseVal scope_ref = check_alloc(REFERENCE(create_reference(fn_scope, (Destructor) delete_scope)));
+            NseVal scope_ref = check_alloc(REFERENCE(create_reference(scope_symbol, fn_scope, (Destructor) delete_scope)));
             if (RESULT_OK(scope_ref)) {
               NseVal body = tail(args);
               NseVal formal = tail(h);
@@ -415,7 +606,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           Symbol *symbol = to_symbol(head(h));
           if (symbol) {
             Scope *macro_scope = copy_scope(scope);
-            NseVal scope_ref = check_alloc(REFERENCE(create_reference(macro_scope, (Destructor) delete_scope)));
+            NseVal scope_ref = check_alloc(REFERENCE(create_reference(scope_symbol, macro_scope, (Destructor) delete_scope)));
             if (RESULT_OK(scope_ref)) {
               NseVal body = tail(args);
               NseVal formal = tail(h);

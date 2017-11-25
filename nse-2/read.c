@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 
 #include "nsert.h"
 #include "read.h"
@@ -10,7 +11,7 @@
 struct reader {
   char type;
   Stream *stream;
-  const char *file_name;
+  String *file_name;
   size_t la;
   char la_buffer[MAX_LOOKAHEAD];
   size_t line;
@@ -26,13 +27,19 @@ Reader *open_reader(Stream *stream, const char *file_name, Module *module) {
   s->la = 0;
   s->line = 1;
   s->column = 1;
-  s->file_name = file_name;
+  s->file_name = create_string(file_name, strlen(file_name));
   s->module = module;
   return s;
 }
 
+void set_reader_position(Reader *reader, size_t line, size_t column) {
+  reader->line = line;
+  reader->column = column;
+}
+
 void close_reader(Reader *reader) {
   stream_close(reader->stream);
+  del_ref(STRING(reader->file_name));
   free(reader);
 }
 
@@ -82,9 +89,17 @@ static void skip(Reader *input) {
   }
 }
 
+static void delete_syntax(Syntax *syntax) {
+  if (syntax->file) {
+    del_ref(STRING(syntax->file));
+  }
+  free(syntax);
+}
+
 static Syntax *start_pos(Syntax *syntax, Reader *input) {
   if (syntax) {
     syntax->file = input->file_name;
+    add_ref(STRING(input->file_name));
     syntax->start_line = input->line;
     syntax->start_column = input->column;
     syntax->end_line = input->line;
@@ -147,7 +162,7 @@ static Syntax *read_string(Reader *input) {
         raise_error(syntax_error, "unexpected end of file, expected '\"'");
         // TODO: add start pos to error
         free(buffer);
-        free(syntax);
+        delete_syntax(syntax);
         return NULL;
       }
       if (escape) {
@@ -173,14 +188,14 @@ static Syntax *read_string(Reader *input) {
         } else {
           raise_error(out_of_memory_error, "out of memory");
           free(buffer);
-          free(syntax);
+          delete_syntax(syntax);
           return NULL;
         }
       }
     }
     syntax->quoted = check_alloc(STRING(create_string(buffer, l)));
     if (!RESULT_OK(syntax->quoted)) {
-      free(syntax);
+      delete_syntax(syntax);
       syntax = NULL;
     }
   }
@@ -201,7 +216,16 @@ static Syntax *read_symbol(Reader *input, int keyword) {
   Syntax *syntax = start_pos(create_syntax(undefined), input);
   if (syntax) {
     while (c != EOF && !iswhite(c) && c != '(' && c != ')' && c != '"' && c != ';') {
-      if (c == '/' && l != 0) {
+      if (c == '\\') {
+        pop(input);
+        c = peek(input);
+        if (c == EOF) {
+          raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name->chars, input->line, input->column);
+          free(buffer);
+          delete_syntax(syntax);
+          return NULL;
+        }
+      } else if (c == '/' && l != 0) {
         qualified = 1;
       }
       buffer[l++] = (char)c;
@@ -215,7 +239,7 @@ static Syntax *read_symbol(Reader *input, int keyword) {
         } else {
           raise_error(out_of_memory_error, "out of memory");
           free(buffer);
-          free(syntax);
+          delete_syntax(syntax);
           return NULL;
         }
       }
@@ -229,7 +253,7 @@ static Syntax *read_symbol(Reader *input, int keyword) {
       syntax->quoted = check_alloc(SYMBOL(module_intern_symbol(input->module, buffer)));
     }
     if (!RESULT_OK(syntax->quoted)) {
-      free(syntax);
+      delete_syntax(syntax);
       syntax = NULL;
     }
   }
@@ -242,7 +266,7 @@ Syntax *nse_read(Reader *input) {
   skip(input);
   c = peek(input);
   if (c == EOF) {
-    raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name, input->line, input->column);
+    raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name->chars, input->line, input->column);
     return NULL;
   }
   if (c == ';') {
@@ -253,7 +277,7 @@ Syntax *nse_read(Reader *input) {
     return nse_read(input);
   }
   if (c == '.' || c == ')') {
-    raise_error(syntax_error, "%s:%zu:%zu: unexpected '%c'", input->file_name, input->line, input->column, c);
+    raise_error(syntax_error, "%s:%zu:%zu: unexpected '%c'", input->file_name->chars, input->line, input->column, c);
     pop(input);
     return NULL;
   }
@@ -281,9 +305,36 @@ Syntax *nse_read(Reader *input) {
           return end_pos(syntax, input);
         }
       }
-      free(syntax);
+      delete_syntax(syntax);
     }
     return NULL;
+  }
+  if (c == '#') {
+    int skip = 0;
+    Syntax *syntax = start_pos(create_syntax(undefined), input);
+    if (syntax) {
+      pop(input);
+      c = peek(input);
+      if (c == EOF) {
+        raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name->chars, input->line, input->column);
+      } else {
+        Symbol *s = module_intern_symbol(input->module, (char[]){ c, 0 });
+        if (s) {
+          NseVal macro = get_read_macro(s);
+          if (RESULT_OK(macro)) {
+            syntax->quoted = execute_read(input, macro, &skip);
+            if (RESULT_OK(syntax->quoted)) {
+              return end_pos(syntax, input);
+            }
+          }
+        }
+      }
+      delete_syntax(syntax);
+    }
+    if (!skip) {
+      return NULL;
+    }
+    return nse_read(input);
   }
   if (c == '(') {
     Syntax *syntax = start_pos(create_syntax(undefined), input);
@@ -292,15 +343,15 @@ Syntax *nse_read(Reader *input) {
       Syntax *list = read_list(input);
       if (list){
         syntax->quoted = list->quoted;
-        free(list);
+        delete_syntax(list);
         if (peek(input) == ')') {
           pop(input);
           return end_pos(syntax, input);
         }
-        raise_error(syntax_error, "%s:%zu:%zu: missing ')'", input->file_name, input->line, input->column);
+        raise_error(syntax_error, "%s:%zu:%zu: missing ')'", input->file_name->chars, input->line, input->column);
         del_ref(syntax->quoted);
       }
-      free(syntax);
+      delete_syntax(syntax);
     }
     return NULL;
   }
@@ -349,8 +400,70 @@ static Syntax *read_list(Reader *input) {
       }
       del_ref(head);
     }
-    free(syntax);
+    delete_syntax(syntax);
     return NULL;
   }
 }
 
+NseVal execute_read(Reader *reader, NseVal read, int *skip) {
+  Symbol *action = to_symbol(read);
+  if (action) {
+    if (action == read_char_symbol) {
+      int c = peek(reader);
+      if (c != EOF) {
+        pop(reader);
+        return I64(c);
+      } else {
+        raise_error(syntax_error, "%s:%zu:%zu: end of input", reader->file_name->chars, reader->line, reader->column);
+        return undefined;
+      }
+    } else if (action == read_string_symbol) {
+      return check_alloc(SYNTAX(read_string(reader)));
+    } else if (action == read_symbol_symbol) {
+      return check_alloc(SYNTAX(read_symbol(reader, 0)));
+    } else if (action == read_int_symbol) {
+      return check_alloc(SYNTAX(read_int(reader)));
+    } else if (action == read_any_symbol) {
+      return check_alloc(SYNTAX(nse_read(reader)));
+    } else if (action == read_ignore_symbol) {
+      *skip = 1;
+      return undefined;
+    } else {
+      raise_error(domain_error, "invalid read action");
+    }
+  } else if (is_cons(read)) {
+    action = to_symbol(head(read));
+    if (action) {
+      if (action == read_bind_symbol) {
+        NseVal result = undefined;
+        NseVal action_a = elem(1, read);
+        NseVal transform = THEN(action_a, elem(2, read));
+        if (RESULT_OK(transform)) {
+          NseVal value = execute_read(reader, action_a, skip);
+          if (RESULT_OK(value)) {
+            NseVal transform_args = check_alloc(CONS(create_cons(value, nil)));
+            if (RESULT_OK(transform_args)) {
+              NseVal transform_result = nse_apply(transform, transform_args);
+              if (RESULT_OK(transform_result)) {
+                result = execute_read(reader, transform_result, skip);
+                del_ref(transform_result);
+              }
+              del_ref(transform_args);
+            }
+            del_ref(value);
+          }
+        }
+        return result;
+      } else if (action == read_return_symbol) {
+        return add_ref(elem(1, read));
+      } else {
+        raise_error(domain_error, "invalid read action");
+      }
+    } else {
+      raise_error(domain_error, "invalid read action");
+    }
+  } else {
+    raise_error(domain_error, "invalid read action");
+  }
+  return undefined;
+}

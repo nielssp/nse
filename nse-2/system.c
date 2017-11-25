@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "nsert.h"
 
 #include "system.h"
@@ -48,7 +50,9 @@ static NseVal divide(NseVal args) {
 }
 
 static NseVal type_of(NseVal args) {
-  Type *t = get_type(head(args));
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  Type *t = get_type(arg);
   return check_alloc(TYPE(t));
 }
 
@@ -157,6 +161,42 @@ static NseVal apply(NseVal args) {
   return nse_apply(func, func_args);
 }
 
+static NseVal symbol_name(NseVal args) {
+  ARG_POP_TYPE(Symbol *, symbol, args, to_symbol, "a symbol");
+  ARG_DONE(args);
+  return check_alloc(STRING(create_string(symbol->name, strlen(symbol->name))));
+}
+
+static NseVal symbol_module(NseVal args) {
+  ARG_POP_TYPE(Symbol *, symbol, args, to_symbol, "a symbol");
+  ARG_DONE(args);
+  const char *name = module_name(symbol->module);
+  return check_alloc(STRING(create_string(name, strlen(name))));
+}
+
+static NseVal byte_length(NseVal args) {
+  ARG_POP_TYPE(String *, string, args, to_string, "a string");
+  ARG_DONE(args);
+  return I64(string->length);
+}
+
+static NseVal byte_at(NseVal args) {
+  ARG_POP_I64(n, args);
+  ARG_POP_TYPE(String *, string, args, to_string, "a string");
+  ARG_DONE(args);
+  if (n >= string->length) {
+    raise_error(domain_error, "string index out of bounds: %d", n);
+    return undefined;
+  }
+  return I64((unsigned char) string->chars[n]);
+}
+
+static NseVal syntax_to_datum_(NseVal args) {
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  return syntax_to_datum(arg);
+}
+
 Module *get_system_module() {
   Module *system = create_module("system");
   module_ext_define(system, "+", FUNC(sum));
@@ -165,6 +205,11 @@ Module *get_system_module() {
   module_ext_define(system, "/", FUNC(divide));
   module_ext_define(system, "=", FUNC(equals));
   module_ext_define(system, "apply", FUNC(apply));
+  module_ext_define(system, "symbol-name", FUNC(symbol_name));
+  module_ext_define(system, "symbol-module", FUNC(symbol_module));
+  module_ext_define(system, "byte-length", FUNC(byte_length));
+  module_ext_define(system, "byte-at", FUNC(byte_at));
+  module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_));
 
   module_ext_define(system, "type-of", FUNC(type_of));
   module_ext_define(system, "is-a", FUNC(is_a));
@@ -177,7 +222,7 @@ Module *get_system_module() {
   module_ext_define_type(system, "nothing", TYPE(nothing_type));
   module_ext_define_type(system, "any", TYPE(any_type));
   module_ext_define_type(system, "nil", TYPE(nil_type));
-  module_ext_define_type(system, "ref", TYPE(ref_type));
+  module_ext_define_type(system, "any-ref", TYPE(any_ref_type));
   module_ext_define_type(system, "i8", TYPE(i8_type));
   module_ext_define_type(system, "i16", TYPE(i16_type));
   module_ext_define_type(system, "i32", TYPE(i32_type));

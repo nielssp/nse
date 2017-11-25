@@ -5,6 +5,7 @@ typedef struct symbol Symbol;
 
 extern Symbol *out_of_memory_error;
 extern Symbol *domain_error;
+extern Symbol *pattern_error;
 extern Symbol *name_error;
 extern Symbol *io_error;
 extern Symbol *syntax_error;
