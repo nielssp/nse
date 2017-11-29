@@ -197,6 +197,21 @@ static NseVal syntax_to_datum_(NseVal args) {
   return syntax_to_datum(arg);
 }
 
+static NseVal update_head(NseVal args) {
+  ARG_POP_TYPE(Cons *, cons, args, to_cons, "a cons");
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  if (cons->refs == 1) {
+    NseVal old_head = cons->head;
+    cons->head = add_ref(arg);
+    add_ref(CONS(cons));
+    del_ref(old_head);
+  } else {
+    cons = create_cons(arg, cons->tail);
+  }
+  return check_alloc(CONS(cons));
+}
+
 Module *get_system_module() {
   Module *system = create_module("system");
   module_ext_define(system, "+", FUNC(sum));
@@ -210,6 +225,7 @@ Module *get_system_module() {
   module_ext_define(system, "byte-length", FUNC(byte_length));
   module_ext_define(system, "byte-at", FUNC(byte_at));
   module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_));
+  module_ext_define(system, "update-head", FUNC(update_head));
 
   module_ext_define(system, "type-of", FUNC(type_of));
   module_ext_define(system, "is-a", FUNC(is_a));
