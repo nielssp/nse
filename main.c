@@ -33,12 +33,14 @@ NseVal load(NseVal args) {
   ARG_POP_ANY(arg, args);
   ARG_DONE(args);
   const char *name = to_string_constant(arg);
+  Module *m = current_scope->module;
   if (name) {
     Stream *f = stream_file(name, "r");
     if (f) {
       Reader *reader = open_reader(f, name, current_scope->module);
       NseVal return_value = nil;
       while (1) {
+        set_reader_module(reader, current_scope->module);
         Syntax *code = nse_read(reader);
         if (code != NULL) {
           NseVal result = eval(SYNTAX(code), current_scope);
@@ -56,6 +58,7 @@ NseVal load(NseVal args) {
         }
       }
       close_reader(reader);
+      current_scope->module = m;
       return return_value;
     } else {
       raise_error(io_error, "could not open file: %s: %s", name, strerror(errno));
@@ -85,15 +88,24 @@ NseVal in_module(NseVal args) {
 }
 
 NseVal export(NseVal args) {
-  ARG_POP_ANY(arg, args);
-  ARG_DONE(args);
-  const char *name = to_string_constant(arg);
-  if (name) {
-    return check_alloc(SYMBOL(module_extern_symbol(current_scope->module, name)));
-  } else {
-    raise_error(domain_error, "must be called with a symbol");
-  }
-  return undefined;
+  do {
+    NseVal h = head(args);
+    if (!RESULT_OK(h)) {
+      return h;
+    }
+    const char *name = to_string_constant(h);
+    if (name) {
+      NseVal result = check_alloc(SYMBOL(module_extern_symbol(current_scope->module, name)));
+      if (!RESULT_OK(result)) {
+        return result;
+      }
+    } else {
+      raise_error(domain_error, "must be called with one or more symbols");
+      return undefined;
+    }
+    args = tail(args);
+  } while (is_cons(args));
+  return nil;
 }
 
 NseVal import(NseVal args) {
@@ -276,6 +288,8 @@ int main(int argc, char *argv[]) {
   Module *user_module = create_module("user");
   import_module(user_module, lang_module);
   import_module(user_module, system_module);
+  import_module(system_module, lang_module);
+
 
   current_scope = use_module(user_module);
 
@@ -290,6 +304,7 @@ int main(int argc, char *argv[]) {
     del_ref(load(args));
     del_ref(args);
   }
+  import_module(user_module, system_module);
 
   size_t line = 1;
   char *line_history = NULL;

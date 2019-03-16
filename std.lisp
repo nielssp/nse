@@ -1,18 +1,29 @@
-; types
+;;;;
+;;;; Self-hosted system functions
+;;;;
+(in-module :system)
+
+;;; types
+(export 'bool 'int 'float 'number 'error)
+
 (def-type bool (union-type ^'t ^'f))
 (def-type int (union-type ^i8 (union-type ^i16 (union-type ^i32 ^i64))))
 (def-type float (union-type ^f32 ^f64))
 (def-type number (union-type ^int ^float))
 (def-type (error t) (union-type (cons-type ^'ok (cons-type t ^nil)) (cons-type ^'error (cons-type ^string (cons-type ^any ^nil)))))
 
-; function composition
+;;; function composition
+(export 'compose 'curry 'flip 'negate 'pipe)
+
 (def (compose f g) (fn (x) (f (g x))))
 (def (curry f . curried) (fn args (apply f (++ curried args))))
 (def (flip f) (fn (x y) (f y x)))
 (def (negate f) (fn args (not (apply f args))))
 (def-macro (pipe x . funcs) (foldl list x funcs))
 
-; list fundamentals
+;;; list fundamentals
+(export 'nil 'nil? 'list 'cons 'head 'tail)
+
 (def nil '())
 (def (nil? xs) (= xs nil))
 (def (list . xs) xs)
@@ -20,7 +31,9 @@
 (def (head (h . t)) h)
 (def (tail (h . t)) t)
 
-; boolean
+;;; boolean
+(export 'or 'and 'not '!= 'cond)
+
 (def-macro (or a b) (list 'if a ''t b))
 (def-macro (and a b) (list 'if a b ''f))
 (def (or a b) (or a b))
@@ -30,7 +43,10 @@
 
 (def-macro (cond . cases) (if (nil? cases) ''nil (list 'if (head (head cases)) (elem 1 (head cases)) (cons 'cond (tail cases)))))
 
-; list operations
+;;; list operations
+(export 'length 'reverse 'elem 'drop 'take 'slice 'map '++ 'filter 'foldl
+        'foldr 'reduce 'sum 'product 'range 'iota 'zip-with 'zip 'flatten)
+
 (def (length xs)
   (let ((rec (fn (xs acc) (if (nil? xs) acc (rec (tail xs) (+ 1 acc))))))
     (rec xs 0)))
@@ -64,7 +80,15 @@
 (def (foldr f init xs)
   (if (nil? xs) init (f (head xs) (foldr f init (tail xs)))))
 
-(def (sum xs) (foldl + 0 xs))
+(def (reduce f xs)
+  (cond
+    ((nil? xs) (f))
+    ((nil? (tail xs)) (head xs))
+    ('t (f (head xs) (reduce f (tail xs))))))
+
+(def (sum xs) (reduce + xs))
+
+(def (product xs) (reduce * xs))
 
 (def (range start end)
   (let ((acc '()))
@@ -87,7 +111,9 @@
   (let ((rec (fn (xs rec) (if (nil? xs) rec (rec (tail xs) (++ rec (head xs)))))))
     (rec xs '())))
 
-; option type
+;;; option type
+(export 'option 'some 'none 'oget 'defined? 'omap)
+
 (def-type (option t) (union-type (cons-type ^'some (cons-type t ^nil)) ^'none))
 (def (some x) (list 'some x))
 (def none 'none)
@@ -95,7 +121,9 @@
 (def (defined? opt) (not (is-a opt ^'none)))
 (def (omap f opt) (if (defined? opt) (some (f (oget opt))) none))
 
-; read monad
+;;; read monad
+(export 'read>>= 'read>>)
+
 (def read-char 'read-char)
 (def read-string 'read-string)
 (def read-symbol 'read-symbol)
@@ -106,7 +134,7 @@
 (def (read>>= r f) (list 'read-bind r f))
 (def (read>> r1 r2) (list 'read-bind r1 (fn (v) r2)))
 
-; multiline comment
+;;; multiline comment
 
 (def-read-macro |
   (let ((read-bars (read>>= read-char (fn (c) (if (= c (ascii "#")) read-ignore (if (= c (ascii "|")) read-bars read-until-bar)))))

@@ -32,6 +32,10 @@ Reader *open_reader(Stream *stream, const char *file_name, Module *module) {
   return s;
 }
 
+void set_reader_module(Reader *reader, Module *module) {
+  reader->module = module;
+}
+
 void set_reader_position(Reader *reader, size_t line, size_t column) {
   reader->line = line;
   reader->column = column;
