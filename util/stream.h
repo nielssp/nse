@@ -56,6 +56,8 @@ char *string_vprintf(const char *format, va_list va);
 /* Like sprintf(), but automatically creates a large enough buffer. */
 char *string_printf(const char *format, ...);
 
+char *string_copy(const char *str);
+
 /* Resize a buffer. */
 char *resize_buffer(char *buffer, size_t oldsize, size_t newsize);
 

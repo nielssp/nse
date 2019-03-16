@@ -50,6 +50,7 @@ Module *find_module(const char *s);
 Symbol *find_symbol(const char *s);
 Symbol *module_find_internal(Module *module, const char *s);
 Symbol *module_intern_symbol(Module *module, const char *s);
+NseVal list_external_symbols(Module *module);
 char **get_symbols(Module *module);
 Symbol *module_extern_symbol(Module *module, const char *s);
 Symbol *intern_keyword(const char *s);

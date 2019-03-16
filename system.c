@@ -7,43 +7,115 @@
 
 static NseVal sum(NseVal args) {
   int64_t acc = 0;
+  double facc = 0.0;
+  int fp = 0;
   while (is_cons(args)) {
-    acc += head(args).i64;
+    NseVal h = head(args);
+    if (h.type == TYPE_I64) {
+      acc += h.i64;
+    } else if (h.type == TYPE_F64) {
+      facc += h.f64;
+      fp = 1;
+    } else {
+      raise_error(domain_error, "expected number");
+      return undefined;
+    }
     args = tail(args);
+  }
+  if (fp) {
+    return F64(acc + facc);
   }
   return I64(acc);
 }
 
 static NseVal subtract(NseVal args) {
-  int64_t acc = head(args).i64;
+  int64_t acc = 0;
+  double facc = 0.0;
+  int fp = 0;
+  NseVal h = head(args);
+  if (h.type == TYPE_I64) {
+    acc = h.i64;
+  } else if (h.type == TYPE_F64) {
+    facc = h.f64;
+    fp = 1;
+  } else {
+    raise_error(domain_error, "expected number");
+    return undefined;
+  }
   args = tail(args);
   if (!is_cons(args)) {
+    if (fp) {
+      return F64(-facc);
+    }
     return I64(-acc);
   }
   do {
-    acc -= head(args).i64;
+    h = head(args);
+    if (h.type == TYPE_I64) {
+      acc -= h.i64;
+    } else if (h.type == TYPE_F64) {
+      facc -= h.f64;
+      fp = 1;
+    } else {
+      raise_error(domain_error, "expected number");
+      return undefined;
+    }
     args = tail(args);
   } while (is_cons(args));
+  if (fp) {
+    return F64(acc - facc);
+  }
   return I64(acc);
 }
 
 static NseVal product(NseVal args) {
   int64_t acc = 1;
+  double facc = 1.0;
+  int fp = 0;
   while (is_cons(args)) {
-    acc *= head(args).i64;
+    NseVal h = head(args);
+    if (h.type == TYPE_I64) {
+      acc *= h.i64;
+    } else if (h.type == TYPE_F64) {
+      facc *= h.f64;
+      fp = 1;
+    } else {
+      raise_error(domain_error, "expected number");
+      return undefined;
+    }
     args = tail(args);
+  }
+  if (fp) {
+    return F64(acc * facc);
   }
   return I64(acc);
 }
 
 static NseVal divide(NseVal args) {
-  double acc = head(args).i64;
+  NseVal h = head(args);
+  double acc;
+  if (h.type == TYPE_I64) {
+    acc = h.i64;
+  } else if (h.type == TYPE_F64) {
+    acc = h.f64;
+  } else {
+    raise_error(domain_error, "expected number");
+    return undefined;
+  }
   args = tail(args);
   if (!is_cons(args)) {
     return F64(1.0 / acc);
   }
   do {
-    acc /= head(args).i64;
+    h = head(args);
+    if (h.type == TYPE_I64) {
+      acc /= h.i64;
+    } else if (h.type == TYPE_F64) {
+      acc /= h.f64;
+    } else {
+      raise_error(domain_error, "expected number");
+      return undefined;
+    }
     args = tail(args);
   } while (is_cons(args));
   return F64(acc);
@@ -174,6 +246,23 @@ static NseVal symbol_module(NseVal args) {
   return check_alloc(STRING(create_string(name, strlen(name))));
 }
 
+static NseVal module_symbols(NseVal args) {
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  const char *name = to_string_constant(arg);
+  if (name) {
+    Module *m = find_module(name);
+    if (m) {
+      return list_external_symbols(m);
+    } else {
+      raise_error(name_error, "could not find module: %s", name);
+    }
+  } else {
+    raise_error(domain_error, "must be called with a symbol");
+  }
+  return undefined;
+}
+
 static NseVal byte_length(NseVal args) {
   ARG_POP_TYPE(String *, string, args, to_string, "a string");
   ARG_DONE(args);
@@ -222,6 +311,7 @@ Module *get_system_module() {
   module_ext_define(system, "apply", FUNC(apply));
   module_ext_define(system, "symbol-name", FUNC(symbol_name));
   module_ext_define(system, "symbol-module", FUNC(symbol_module));
+  module_ext_define(system, "module-symbols", FUNC(module_symbols));
   module_ext_define(system, "byte-length", FUNC(byte_length));
   module_ext_define(system, "byte-at", FUNC(byte_at));
   module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_));

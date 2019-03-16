@@ -69,6 +69,30 @@ NseVal load(NseVal args) {
   return undefined;
 }
 
+NseVal def_module(NseVal args) {
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  const char *name = to_string_constant(arg);
+  if (name) {
+    Module *m = find_module(name);
+    if (!m) {
+      m = create_module(name);
+      if (m) {
+        import_module(m, lang_module);
+        import_module(m, system_module);
+        current_scope->module = m;
+        return TRUE;
+      }
+    } else {
+      current_scope->module = m;
+      return FALSE;
+    }
+  } else {
+    raise_error(domain_error, "must be called with a symbol");
+  }
+  return undefined;
+}
+
 NseVal in_module(NseVal args) {
   ARG_POP_ANY(arg, args);
   ARG_DONE(args);
@@ -281,6 +305,7 @@ int main(int argc, char *argv[]) {
   system_module = get_system_module();
   module_ext_define(system_module, "load", FUNC(load));
   module_ext_define(system_module, "in-module", FUNC(in_module));
+  module_ext_define(system_module, "def-module", FUNC(def_module));
   module_ext_define(system_module, "export", FUNC(export));
   module_ext_define(system_module, "import", FUNC(import));
   module_ext_define(system_module, "intern", FUNC(intern));

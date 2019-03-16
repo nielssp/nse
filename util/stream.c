@@ -312,3 +312,10 @@ char *string_printf(const char *format, ...) {
   va_end(va);
   return result;
 }
+
+char *string_copy(const char *str) {
+  size_t len = strlen(str);
+  char *copy = malloc(len + 1);
+  memcpy(copy, str, len + 1);
+  return copy;
+}

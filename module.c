@@ -210,14 +210,14 @@ Module *create_module(const char *name) {
   if (!module) {
     return NULL;
   }
-  module->name = name;
+  module->name = string_copy(name);
   module->internal = create_symmap();
   module->external = create_symmap();
   module->defs = create_namespace();
   module->macro_defs = create_namespace();
   module->type_defs = create_namespace();
   module->read_macro_defs = create_namespace();
-  module_map_add(loaded_modules, name, module);
+  module_map_add(loaded_modules, module->name, module);
   return module;
 }
 
@@ -381,6 +381,18 @@ Symbol *module_intern_symbol(Module *module, const char *s) {
   symmap_add(module->internal, value->name, value);
   value->refs++;
   return value;
+}
+
+NseVal list_external_symbols(Module *module) {
+  NseVal tail = nil;
+  SymMapIterator it = create_symmap_iterator(module->external);
+  for (SymMapEntry entry = symmap_next(it); entry.key; entry = symmap_next(it)) {
+    NseVal c = CONS(create_cons(SYMBOL(entry.value), tail));
+    del_ref(tail);
+    tail = c;
+  }
+  delete_symmap_iterator(it);
+  return tail;
 }
 
 char **get_symbols(Module *module) {
