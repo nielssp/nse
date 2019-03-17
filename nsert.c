@@ -135,6 +135,7 @@ Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], si
   closure->refs = 1;
   closure->f = f;
   closure->type = type;
+  closure->doc = NULL;
   closure->env_size = env_size;
   if (env_size > 0) {
     memcpy(closure->env, env, env_size * sizeof(NseVal));
@@ -280,6 +281,9 @@ void delete_all(NseVal value) {
     del_ref(value.quote->quoted);
   }
   if (value.type == TYPE_CLOSURE) {
+    if (value.closure->doc) {
+      del_ref(STRING(value.closure->doc));
+    }
     delete_type(value.closure->type);
     for (size_t i = 0; i < value.closure->env_size; i++) {
       del_ref(value.closure->env[i]);

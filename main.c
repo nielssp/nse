@@ -69,6 +69,22 @@ NseVal load(NseVal args) {
   return undefined;
 }
 
+NseVal read(NseVal args) {
+  ARG_POP_TYPE(String *, string, args, to_string, "a string");
+  ARG_DONE(args);
+  Stream *input = stream_buffer(string->chars, string->length);
+  Reader *reader = open_reader(input, "(read)", current_scope->module);
+  NseVal return_value = check_alloc(SYNTAX(nse_read(reader)));
+  close_reader(reader);
+  return return_value;
+}
+
+NseVal eval_(NseVal args) {
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  return eval(arg, current_scope);
+}
+
 NseVal def_module(NseVal args) {
   ARG_POP_ANY(arg, args);
   ARG_DONE(args);
@@ -154,6 +170,30 @@ NseVal intern(NseVal args) {
   ARG_POP_TYPE(Symbol *, symbol, args, to_symbol, "a symbol");
   ARG_DONE(args);
   import_module_symbol(current_scope->module, symbol);
+  return nil;
+}
+
+NseVal describe(NseVal args) {
+  Stream *out = stdout_stream;
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  nse_write(arg, out, NULL);
+  stream_printf(out, "\n");
+  Type *t = get_type(arg);
+  if (t) {
+    nse_write(TYPE(t), out, current_scope->module);
+    delete_type(t);
+    stream_printf(out, "\n");
+  }
+  if (arg.type == TYPE_CLOSURE) {
+    stream_printf(out, "\nParameters: ???\n");
+    if (arg.closure->doc) {
+      const char *doc_string = to_string_constant(STRING(arg.closure->doc));
+      stream_printf(out, "Documentation:\n  %s\n", doc_string);
+    }
+  } else if (is_symbol(arg)) {
+    stream_printf(out, "\n");
+  }
   return nil;
 }
 
@@ -304,11 +344,14 @@ int main(int argc, char *argv[]) {
   }
   system_module = get_system_module();
   module_ext_define(system_module, "load", FUNC(load));
+  module_ext_define(system_module, "read", FUNC(read));
+  module_ext_define(system_module, "eval", FUNC(eval_));
   module_ext_define(system_module, "in-module", FUNC(in_module));
   module_ext_define(system_module, "def-module", FUNC(def_module));
   module_ext_define(system_module, "export", FUNC(export));
   module_ext_define(system_module, "import", FUNC(import));
   module_ext_define(system_module, "intern", FUNC(intern));
+  module_ext_define(system_module, "describe", FUNC(describe));
 
   Module *user_module = create_module("user");
   import_module(user_module, lang_module);
