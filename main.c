@@ -69,7 +69,7 @@ NseVal load(NseVal args) {
   return undefined;
 }
 
-NseVal read(NseVal args) {
+NseVal read_(NseVal args) {
   ARG_POP_TYPE(String *, string, args, to_string, "a string");
   ARG_DONE(args);
   Stream *input = stream_buffer(string->chars, string->length);
@@ -344,7 +344,7 @@ int main(int argc, char *argv[]) {
   }
   system_module = get_system_module();
   module_ext_define(system_module, "load", FUNC(load));
-  module_ext_define(system_module, "read", FUNC(read));
+  module_ext_define(system_module, "read", FUNC(read_));
   module_ext_define(system_module, "eval", FUNC(eval_));
   module_ext_define(system_module, "in-module", FUNC(in_module));
   module_ext_define(system_module, "def-module", FUNC(def_module));
