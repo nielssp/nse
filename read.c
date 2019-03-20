@@ -3,7 +3,8 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "nsert.h"
+#include "runtime/value.h"
+#include "runtime/error.h"
 #include "read.h"
 
 #define MAX_LOOKAHEAD 2
@@ -289,7 +290,7 @@ Syntax *nse_read(Reader *input) {
     pop(input);
     Syntax *s = read_symbol(input, 1);
     if (s) {
-      s->quoted.type = TYPE_KEYWORD;
+      s->quoted.type = keyword_type;
     }
     return s;
   }

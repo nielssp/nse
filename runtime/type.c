@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../error.h"
+#include "error.h"
 #include "hashmap.h"
 
 #include "type.h"
@@ -10,13 +10,13 @@ size_t c_types_hash(const void *p) {
   CType **head = (CType **)p;
   size_t hash = 0;
   while (*head) {
-    hash ^= *head;
+    hash ^= (size_t)*head;
     head++;
   }
   return hash;
 }
 
-int c_type_equals(const void *a, const void *b) {
+int c_types_equals(const void *a, const void *b) {
   CType **head_a = (CType **)a;
   CType **head_b = (CType **)b;
   while (*head_a && *head_b) {
@@ -72,7 +72,9 @@ CType *string_type;
 CType *symbol_type;
 CType *keyword_type;
 CType *quote_type;
+CType *continue_type;
 CType *type_quote_type;
+CType *syntax_type;
 CType *type_type;
 CType *func_type;
 
@@ -85,7 +87,7 @@ void init_types() {
   improper_list_type = create_simple_type(INTERNAL_NOTHING, any_type);
   cons_type = create_simple_type(INTERNAL_CONS, improper_list_type);
   list_type = create_generic(1, INTERNAL_CONS, improper_list_type);
-  any_list_type = get_instance(list_type, (CType **){ copy_type(any_type), NULL });
+  any_list_type = get_instance(list_type, (const CType *[]){ copy_type(any_type), NULL });
   nil_type = create_simple_type(INTERNAL_NIL, any_list_type);
   num_type = create_simple_type(INTERNAL_NOTHING, any_type);
   i64_type = create_simple_type(INTERNAL_I64, num_type);
@@ -94,7 +96,9 @@ void init_types() {
   symbol_type = create_simple_type(INTERNAL_SYMBOL, any_type);
   keyword_type = create_simple_type(INTERNAL_SYMBOL, any_type);
   quote_type = create_simple_type(INTERNAL_QUOTE, any_type);
+  continue_type = create_simple_type(INTERNAL_QUOTE, any_type);
   type_quote_type = create_simple_type(INTERNAL_QUOTE, any_type);
+  syntax_type = create_simple_type(INTERNAL_SYNTAX, any_type);
   type_type = create_simple_type(INTERNAL_TYPE, any_type);
   func_type = create_simple_type(INTERNAL_NOTHING, any_type);
 }
@@ -124,7 +128,7 @@ GType *copy_generic(GType *g) {
   return g;
 }
 
-GType *delete_generic(GType *g) {
+void delete_generic(GType *g) {
   if (!g) {
     return;
   }
@@ -160,7 +164,7 @@ void delete_type(CType *t) {
     case C_TYPE_CLOSURE:
       break;
     case C_TYPE_INSTANCE:
-      instance_map_remove(t->instance.type->instances, t->instance.parameters);
+      instance_map_remove(t->instance.type->instances, (const CType **)t->instance.parameters);
       delete_generic(t->instance.type);
       CType **param = t->instance.parameters;
       while (*param) {
@@ -177,7 +181,7 @@ CType *get_instance(GType *g, const CType **parameters) {
   if (instance) {
     return copy_type(instance);
   } else {
-    CType **param = parameters;
+    const CType **param = parameters;
     CType *super = copy_type(any_type);
     int arity = g->arity;
     while (*param) {
@@ -188,7 +192,7 @@ CType *get_instance(GType *g, const CType **parameters) {
       }
     }
     if (arity != 0) {
-      raise_error("Invalid number of generic parameters, expected %d, got %d", g->arity, g->arity - arity);
+      raise_error(domain_error, "Invalid number of generic parameters, expected %d, got %d", g->arity, g->arity - arity);
       return NULL;
     }
     CType **param_copy = allocate(sizeof(CType *) * (arity + 1));
@@ -222,7 +226,7 @@ CType *get_func_type(int min_arity, int variadic) {
     t->refs = 1;
     t->super = copy_type(func_type);
     t->type = C_TYPE_FUNC;
-    t->internal = INTERNAL_FUNC_POINTER;
+    t->internal = INTERNAL_FUNC;
     t->func.min_arity = min_arity;
     t->func.variadic = variadic;
     FuncType *key_copy = allocate(sizeof(FuncType));
@@ -242,7 +246,7 @@ CType *get_closure_type(int min_arity, int variadic) {
     t->refs = 1;
     t->super = get_func_type(min_arity, variadic);
     t->type = C_TYPE_CLOSURE;
-    t->internal = INTERNAL_FUNC_CLOSURE;
+    t->internal = INTERNAL_CLOSURE;
     t->func.min_arity = min_arity;
     t->func.variadic = variadic;
     FuncType *key_copy = allocate(sizeof(FuncType));

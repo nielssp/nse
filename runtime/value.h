@@ -1,28 +1,28 @@
-#ifndef NSERT_H
-#define NSERT_H
+#ifndef NSE_VALUE_H
+#define NSE_VALUE_H
 
 #include <stdlib.h>
 #include <stdint.h>
 
 #include "type.h"
 
-#define I64(i) ((NseVal) { .type = TYPE_I64, .i64 = (i) })
-#define F64(i) ((NseVal) { .type = TYPE_F64, .f64 = (i) })
-#define FUNC(f) ((NseVal) { .type = TYPE_FUNC, .func = (f) })
+#define I64(i) ((NseVal) { .type = i64_type, .i64 = (i) })
+#define F64(i) ((NseVal) { .type = f64_type, .f64 = (i) })
+#define FUNC(f, t) ((NseVal) { .type = t, .func = (f) })
 
-#define CONS(c) ((NseVal) { .type = TYPE_CONS, .cons = (c) })
-#define SYNTAX(c) ((NseVal) { .type = TYPE_SYNTAX, .syntax = (c) })
-#define CLOSURE(c) ((NseVal) { .type = TYPE_CLOSURE, .closure = (c) })
-#define SYMBOL(s) ((NseVal) { .type = TYPE_SYMBOL, .symbol = (s) })
-#define KEYWORD(s) ((NseVal) { .type = TYPE_KEYWORD, .symbol = (s) })
-#define STRING(s) ((NseVal) { .type = TYPE_STRING, .string = (s) })
-#define QUOTE(q) ((NseVal) { .type = TYPE_QUOTE, .quote = (q) })
-#define TQUOTE(q) ((NseVal) { .type = TYPE_TQUOTE, .quote = (q) })
-#define CONTINUE(q) ((NseVal) { .type = TYPE_CONTINUE, .quote = (q) })
-#define TYPE(t) ((NseVal) { .type = TYPE_TYPE, .type_val = (t) })
-#define REFERENCE(r) ((NseVal) { .type = TYPE_REFERENCE, .reference = (r) })
+#define CONS(c) from_cons(c)
+#define SYNTAX(c) ((NseVal) { .type = syntax_type, .syntax = (c) })
+#define CLOSURE(c) from_closure(c)
+#define SYMBOL(s) ((NseVal) { .type = symbol_type, .symbol = (s) })
+#define KEYWORD(s) ((NseVal) { .type = keyword_type, .symbol = (s) })
+#define STRING(s) ((NseVal) { .type = string_type, .string = (s) })
+#define QUOTE(q) ((NseVal) { .type = quote_type, .quote = (q) })
+#define TQUOTE(q) ((NseVal) { .type = type_quote_type, .quote = (q) })
+#define CONTINUE(q) ((NseVal) { .type = continue_type, .quote = (q) })
+#define TYPE(t) ((NseVal) { .type = type_type, .type_val = (t) })
+#define REFERENCE(r) from_reference(r)
 
-#define RESULT_OK(value) ((value).type != TYPE_UNDEFINED)
+#define RESULT_OK(value) ((value).type != NULL)
 #define THEN(previous, next) ((RESULT_OK(previous)) ? (next) : undefined)
 
 #define ARG_POP_ANY(name, args) NseVal name = head(args);\
@@ -67,40 +67,24 @@
   return undefined;\
 }
 
-typedef enum {
- TYPE_UNDEFINED,
- TYPE_NIL,
- TYPE_CONS,
- TYPE_I64,
- TYPE_F64,
- TYPE_SYMBOL,
- TYPE_KEYWORD,
- TYPE_STRING,
- TYPE_QUOTE,
- TYPE_TQUOTE,
- TYPE_SYNTAX,
- TYPE_FUNC,
- TYPE_CLOSURE,
- TYPE_REFERENCE,
- TYPE_CONTINUE,
- TYPE_TYPE
-} NseValType;
-
-typedef struct nse_val NseVal;
-typedef struct cons Cons;
-typedef struct closure Closure;
-typedef struct quote Quote;
-typedef struct quote TypeQuote;
-typedef struct quote Continue;
-typedef struct syntax Syntax;
-typedef struct reference Reference;
-typedef struct string String;
-typedef struct symbol Symbol;
+typedef struct NseVal NseVal;
+typedef struct Cons Cons;
+typedef struct Closure Closure;
+typedef struct Quote Quote;
+typedef struct Quote TypeQuote;
+typedef struct Quote Continue;
+typedef struct Syntax Syntax;
+typedef struct Reference Reference;
+typedef struct String String;
+typedef struct Symbol Symbol;
 
 typedef void (* Destructor)(void *);
 
-struct nse_val {
-  NseValType type;
+#include "../module.h"
+#include "../lang.h"
+
+struct NseVal {
+  CType *type;
   union {
     int64_t i64;
     double f64;
@@ -110,45 +94,46 @@ struct nse_val {
     Symbol *symbol;
     String *string;
     NseVal (*func)(NseVal);
-    Type *type_val;
+    CType *type_val;
     Closure *closure;
     Reference *reference;
   };
 };
 
-struct cons {
+struct Cons {
   size_t refs;
+  CType *type;
   NseVal head;
   NseVal tail;
 };
 
-struct closure {
+struct Closure {
   size_t refs;
   NseVal (*f)(NseVal, NseVal[]);
-  Type *type;
+  CType *type;
   size_t env_size;
   NseVal env[];
 };
 
-struct quote {
+struct Quote {
   size_t refs;
   NseVal quoted;
 };
 
-struct string {
+struct String {
   size_t refs;
   size_t length;
   char chars[];
 };
 
-struct reference {
+struct Reference {
   size_t refs;
-  Symbol *tag;
+  CType *type;
   void *pointer;
   Destructor destructor;
 };
 
-struct syntax {
+struct Syntax {
   size_t refs;
   size_t start_line;
   size_t start_column;
@@ -158,16 +143,11 @@ struct syntax {
   NseVal quoted;
 };
 
-#include "error.h"
-#include "module.h"
-
-struct symbol {
+struct Symbol {
   size_t refs;
   Module *module;
   char name[];
 };
-
-#include "lang.h"
 
 extern NseVal undefined;
 extern NseVal nil;
@@ -179,11 +159,15 @@ Syntax *create_syntax(NseVal quoted);
 Symbol *create_symbol(const char *s, Module *module);
 Symbol *create_keyword(const char *s, Module *module);
 String *create_string(const char *s, size_t length);
-Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], size_t env_size);
-Reference *create_reference(Symbol *tag, void *pointer, void destructor(void *));
+Closure *create_closure(NseVal f(NseVal, NseVal[]), CType *type, NseVal env[], size_t env_size);
+Reference *create_reference(CType *type, void *pointer, void destructor(void *));
 
 Syntax *copy_syntax(Syntax *syntax, NseVal quoted);
 NseVal check_alloc(NseVal v);
+
+NseVal from_cons(Cons *c);
+NseVal from_closure(Closure *c);
+NseVal from_reference(Reference *r);
 
 Cons *to_cons(NseVal v);
 Symbol *to_symbol(NseVal v);
@@ -191,7 +175,7 @@ String *to_string(NseVal v);
 Symbol *to_keyword(NseVal v);
 const char *to_string_constant(NseVal v);
 void *to_reference(NseVal v);
-Type *to_type(NseVal v);
+CType *to_type(NseVal v);
 
 extern Syntax *error_form;
 void set_debug_form(Syntax *syntax);
@@ -231,9 +215,5 @@ NseVal nse_and(NseVal a, NseVal b);
 NseVal nse_equals(NseVal a, NseVal b);
 
 NseVal syntax_to_datum(NseVal v);
-
-const char *nse_val_type_to_string(NseValType t);
-
-Type *get_type(NseVal v);
 
 #endif
