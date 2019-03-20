@@ -495,6 +495,11 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
               NseVal body = tail(args);
               NseVal formal = tail(h);
               if (RESULT_OK(formal) && RESULT_OK(body)) {
+                String *doc_string = NULL;
+                if (is_cons(body) && is_string(head(body))) {
+                  doc_string = to_string(head(body));
+                  body = tail(body);
+                }
                 NseVal def = check_alloc(CONS(create_cons(formal, body)));
                 if (RESULT_OK(def)) {
                   NseVal env[] = {def, scope_ref};
@@ -506,6 +511,10 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
                   if (RESULT_OK(func)) {
                     func.closure = optimize_tail_call(func.closure, symbol);
                     if (func.closure) {
+                      if (doc_string) {
+                        add_ref(STRING(doc_string));
+                        func.closure->doc = doc_string;
+                      }
                       module_define(symbol->module, symbol->name, func);
                       del_ref(func);
                       return add_ref(SYMBOL(symbol));

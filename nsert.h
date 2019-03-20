@@ -126,6 +126,7 @@ struct closure {
   size_t refs;
   NseVal (*f)(NseVal, NseVal[]);
   Type *type;
+  String *doc;
   size_t env_size;
   NseVal env[];
 };
@@ -219,6 +220,7 @@ int is_type_quote(NseVal v);
 int is_function(NseVal v);
 int is_reference(NseVal v);
 int is_symbol(NseVal v);
+int is_string(NseVal v);
 int is_keyword(NseVal v);
 int is_type(NseVal v);
 int is_true(NseVal b);
