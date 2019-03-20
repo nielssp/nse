@@ -1,4 +1,7 @@
-#include "nsert.h"
+#include "runtime/value.h"
+#include "runtime/error.h"
+
+#include "lang.h"
 
 Symbol *t_symbol = NULL;
 Symbol *f_symbol = NULL;
@@ -12,8 +15,6 @@ Symbol *def_symbol = NULL;
 Symbol *def_macro_symbol = NULL;
 Symbol *def_type_symbol = NULL;
 Symbol *def_read_macro_symbol = NULL;
-
-Symbol *scope_symbol = NULL;
 
 Symbol *read_char_symbol = NULL;
 Symbol *read_string_symbol = NULL;
@@ -29,6 +30,7 @@ Symbol *key_symbol = NULL;
 Module *lang_module = NULL;
 
 void init_lang_module() {
+  init_values();
   init_error_module();
 
   lang_module = create_module("lang");
@@ -45,8 +47,6 @@ void init_lang_module() {
   def_macro_symbol = module_extern_symbol(lang_module, "def-macro");
   def_type_symbol = module_extern_symbol(lang_module, "def-type");
   def_read_macro_symbol = module_extern_symbol(lang_module, "def-read-macro");
-
-  scope_symbol = module_extern_symbol(lang_module, "scope");
 
   read_char_symbol = module_extern_symbol(lang_module, "read-char");
   read_string_symbol = module_extern_symbol(lang_module, "read-string");

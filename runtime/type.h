@@ -7,13 +7,13 @@ typedef struct GType GType;
 typedef enum {
   INTERNAL_NOTHING,
   INTERNAL_NIL,
+  INTERNAL_CONS,
   INTERNAL_I64,
   INTERNAL_F64,
-  INTERNAL_FUNC_POINTER,
-  INTERNAL_FUNC_CLOSURE,
+  INTERNAL_FUNC,
+  INTERNAL_CLOSURE,
   INTERNAL_STRING,
   INTERNAL_SYNTAX,
-  INTERNAL_CONST,
   INTERNAL_SYMBOL,
   INTERNAL_REFERENCE,
   INTERNAL_TYPE,
@@ -58,11 +58,16 @@ extern CType *string_type;
 extern CType *symbol_type;
 extern CType *keyword_type;
 extern CType *quote_type;
+extern CType *continue_type;
 extern CType *type_quote_type;
 extern CType *type_type;
+extern CType *syntax_type;
 extern CType *func_type;
+extern CType *scope_type;
 
 extern GType *list_type;
+
+void init_types();
 
 CType *create_simple_type(InternalType internal, CType *super);
 GType *create_generic(int arity, InternalType internal, CType *super);
@@ -70,7 +75,7 @@ GType *create_generic(int arity, InternalType internal, CType *super);
 CType *copy_type(CType *t);
 void delete_type(CType *t);
 
-CType *get_instance(GType *g, const CType **parameters);
+CType *get_instance(GType *g, CType **parameters);
 CType *get_func_type(int min_arity, int variadic);
 CType *get_closure_type(int min_arity, int variadic);
 

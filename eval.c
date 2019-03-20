@@ -1,17 +1,18 @@
 #include <string.h>
 
-#include "nsert.h"
+#include "runtime/value.h"
+#include "runtime/error.h"
 #include "write.h"
 
 #include "eval.h"
 
 NseVal eval_list(NseVal list, Scope *scope) {
-  if (list.type == TYPE_SYNTAX) {
+  if (list.type->internal == INTERNAL_SYNTAX) {
     Syntax *previous = push_debug_form(list.syntax);
     return pop_debug_form(eval_list(list.syntax->quoted, scope), previous);
-  } else if (list.type == TYPE_NIL) {
+  } else if (list.type->internal == INTERNAL_NIL) {
     return nil;
-  } else if (list.type == TYPE_CONS) {
+  } else if (list.type->internal == INTERNAL_CONS) {
     NseVal result = undefined;
     NseVal head = eval(list.cons->head, scope);
     if (RESULT_OK(head)) {
@@ -30,26 +31,27 @@ NseVal eval_list(NseVal list, Scope *scope) {
   return eval(list, scope);
 }
 
-static Type *parameters_to_type(NseVal formal) {
-  switch (formal.type) {
-    case TYPE_UNDEFINED:
-      return NULL;
-    case TYPE_NIL:
+static CType *parameters_to_type(NseVal formal) {
+  if (!formal.type) {
+    return NULL;
+  }
+  switch (formal.type->internal) {
+    case INTERNAL_NIL:
       return copy_type(nil_type);
-    case TYPE_CONS:
-      return create_cons_type(parameters_to_type(formal.cons->head), parameters_to_type(formal.cons->tail));
-    case TYPE_SYMBOL:
+    case INTERNAL_CONS:
+      return copy_type(cons_type);
+    case INTERNAL_SYMBOL:
       return copy_type(any_type);
-    case TYPE_QUOTE: {
+    case INTERNAL_QUOTE: {
       NseVal datum = syntax_to_datum(formal.quote->quoted);
-      Type *type = get_type(datum);
+      CType *type = copy_type(datum.type);
       del_ref(datum);
       return type;
     }
-    case TYPE_SYNTAX:
+    case INTERNAL_SYNTAX:
       return parameters_to_type(formal.syntax->quoted);
     default:
-      raise_error(domain_error, "unexpected value type: %s", nse_val_type_to_string(formal.type));
+      raise_error(domain_error, "unexpected value type"); // TODO: type_to_string
       return NULL;
   }
 }
@@ -169,8 +171,8 @@ int assign_named_parameters(Scope **scope, NseVal formal, NseVal actual) {
 }
 
 int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
-  switch (formal.type) {
-    case TYPE_SYNTAX: {
+  switch (formal.type->internal) {
+    case INTERNAL_SYNTAX: {
       Syntax *previous = push_debug_form(formal.syntax);
       if (assign_parameters(scope, formal.syntax->quoted, actual)) {
         pop_debug_form(nil, previous);
@@ -180,16 +182,16 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
         return 0;
       }
     }
-    case TYPE_SYMBOL:
+    case INTERNAL_SYMBOL:
       *scope = scope_push(*scope, formal.symbol, actual);
       return 1;
-    case TYPE_QUOTE:
+    case INTERNAL_QUOTE:
       if (!is_true(nse_equals(formal.quote->quoted, actual))) {
         raise_error(pattern_error, "pattern match failed");
         return 0;
       }
       return 1;
-    case TYPE_CONS: {
+    case INTERNAL_CONS: {
       Symbol *keyword = to_symbol(head(formal));
       if (keyword) {
         if (keyword == key_symbol) {
@@ -203,7 +205,7 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
       return assign_parameters(scope, head(formal), head(actual))
         && assign_parameters(scope, tail(formal), tail(actual));
     }
-    case TYPE_NIL:
+    case INTERNAL_NIL:
       if (!is_nil(actual)) {
         raise_error(pattern_error, "too many parameters for function");
         return 0;
@@ -244,12 +246,9 @@ NseVal eval_anon_type(NseVal args, NseVal env[]) {
   NseVal result = eval_anon(args, env);
   if (RESULT_OK(result)) {
     if (is_type(result)) {
-      Type *t = to_type(result);
-      char *type_name_str = nse_write_to_string(name_datum, scope->module);
-      Type *alias = create_alias_type(type_name_str, copy_type(t));
-      free(type_name_str);
+      CType *t = to_type(result);
       del_ref(result);
-      result = TYPE(alias);
+      result = TYPE(t);
     }
   }
   del_ref(name_datum);
@@ -281,25 +280,24 @@ NseVal optimize_tail_call_cons(Cons *cons, Symbol *name) {
 }
 
 NseVal optimize_tail_call_any(NseVal code, Symbol *name) {
-  switch (code.type) {
-    case TYPE_CONS:
+  if (!code.type) {
+    return code;
+  }
+  switch (code.type->internal) {
+    case INTERNAL_CONS:
       return optimize_tail_call_cons(code.cons, name);
-    case TYPE_I64:
-    case TYPE_F64:
-    case TYPE_STRING:
-    case TYPE_KEYWORD:
-    case TYPE_QUOTE:
-    case TYPE_TQUOTE:
-    case TYPE_SYMBOL:
+    case INTERNAL_I64:
+    case INTERNAL_F64:
+    case INTERNAL_STRING:
+    case INTERNAL_QUOTE:
+    case INTERNAL_SYMBOL:
       return FALSE;
-    case TYPE_SYNTAX: {
+    case INTERNAL_SYNTAX: {
       Syntax *previous = push_debug_form(code.syntax);
       return pop_debug_form(optimize_tail_call_any(code.syntax->quoted, name), previous);
     }
-    case TYPE_UNDEFINED:
-      return code;
     default:
-      raise_error(domain_error, "unexpected value type: %s", nse_val_type_to_string(code.type));
+      raise_error(domain_error, "unexpected value type: %s", ""); // TOOD: type_to_str
       return undefined;
   }
 }
@@ -384,7 +382,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
             ok = 0;
             break;
           }
-          if (assignment.type == TYPE_CLOSURE && is_symbol(pattern)) {
+          if (assignment.type->internal == INTERNAL_CLOSURE && is_symbol(pattern)) {
             assignment.closure = optimize_tail_call(assignment.closure, to_symbol(pattern));
             if (!assignment.closure) {
               del_ref(assignment);
@@ -413,11 +411,10 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
     } else if (macro_name == fn_symbol) {
       Scope *fn_scope = copy_scope(scope);
       NseVal result = undefined;
-      NseVal scope_ref = check_alloc(REFERENCE(create_reference(scope_symbol, fn_scope, (Destructor) delete_scope)));
+      NseVal scope_ref = check_alloc(REFERENCE(create_reference(copy_type(scope_type), fn_scope, (Destructor) delete_scope)));
       if (RESULT_OK(scope_ref)) {
         NseVal env[] = {args, scope_ref};
-        Type *arg_type = parameters_to_type(head(args));
-        Type *func_type = create_func_type(arg_type, copy_type(any_type));
+        CType *func_type = get_closure_type(0, 1);
         result = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
         del_ref(scope_ref);
       }
@@ -467,7 +464,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
         NseVal result = undefined;
         while (1) {
           result = eval(body, loop_scope);
-          if (!RESULT_OK(result) || result.type != TYPE_CONTINUE) {
+          if (!RESULT_OK(result) || result.type != continue_type) {
             break;
           }
           scope_pop_until(loop_scope, scope);
@@ -490,7 +487,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           Symbol *symbol = to_symbol(head(h));
           if (symbol) {
             Scope *fn_scope = copy_scope(scope);
-            NseVal scope_ref = check_alloc(REFERENCE(create_reference(scope_symbol, fn_scope, (Destructor) delete_scope)));
+            NseVal scope_ref = check_alloc(REFERENCE(create_reference(copy_type(scope_type), fn_scope, (Destructor) delete_scope)));
             if (RESULT_OK(scope_ref)) {
               NseVal body = tail(args);
               NseVal formal = tail(h);
@@ -503,8 +500,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
                 NseVal def = check_alloc(CONS(create_cons(formal, body)));
                 if (RESULT_OK(def)) {
                   NseVal env[] = {def, scope_ref};
-                  Type *arg_type = parameters_to_type(formal);
-                  Type *func_type = create_func_type(arg_type, copy_type(any_type));
+                  CType *func_type = get_closure_type(0, 1);
                   NseVal func = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
                   del_ref(scope_ref);
                   del_ref(def);
@@ -564,7 +560,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           Symbol *symbol = to_symbol(head(h));
           if (symbol) {
             Scope *fn_scope = copy_scope(scope);
-            NseVal scope_ref = check_alloc(REFERENCE(create_reference(scope_symbol, fn_scope, (Destructor) delete_scope)));
+            NseVal scope_ref = check_alloc(REFERENCE(create_reference(copy_type(scope_type), fn_scope, (Destructor) delete_scope)));
             if (RESULT_OK(scope_ref)) {
               NseVal body = tail(args);
               NseVal formal = tail(h);
@@ -572,8 +568,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
                 NseVal def = check_alloc(CONS(create_cons(formal, body)));
                 if (RESULT_OK(def)) {
                   NseVal env[] = {def, scope_ref, head(h)};
-                  Type *arg_type = parameters_to_type(formal);
-                  Type *func_type = create_func_type(arg_type, copy_type(any_type));
+                  CType *func_type = get_closure_type(0, 1);
                   NseVal func = check_alloc(CLOSURE(create_closure(eval_anon_type, func_type, env, 3)));
                   del_ref(scope_ref);
                   del_ref(def);
@@ -594,9 +589,8 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
             NseVal value = eval(head(tail(args)), scope);
             if (RESULT_OK(value)) {
               if (is_type(value)) {
-                Type *t = to_type(value);
-                Type *alias = create_alias_type(symbol->name, t);
-                value = TYPE(alias);
+                CType *t = to_type(value);
+                value = TYPE(t);
               }
               module_define_type(symbol->module, symbol->name, value);
               del_ref(value);
@@ -615,7 +609,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           Symbol *symbol = to_symbol(head(h));
           if (symbol) {
             Scope *macro_scope = copy_scope(scope);
-            NseVal scope_ref = check_alloc(REFERENCE(create_reference(scope_symbol, macro_scope, (Destructor) delete_scope)));
+            NseVal scope_ref = check_alloc(REFERENCE(create_reference(copy_type(scope_type), macro_scope, (Destructor) delete_scope)));
             if (RESULT_OK(scope_ref)) {
               NseVal body = tail(args);
               NseVal formal = tail(h);
@@ -623,8 +617,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
                 NseVal def = check_alloc(CONS(create_cons(formal, body)));
                 if (RESULT_OK(def)) {
                   NseVal env[] = {def, scope_ref};
-                  Type *arg_type = parameters_to_type(formal);
-                  Type *func_type = create_func_type(arg_type, copy_type(any_type));
+                  CType *func_type = get_closure_type(0, 1);
                   NseVal value = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
                   del_ref(scope_ref);
                   del_ref(def);
@@ -671,37 +664,39 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
 }
 
 NseVal eval(NseVal code, Scope *scope) {
-  switch (code.type) {
-    case TYPE_CONS:
+  switch (code.type->internal) {
+    case INTERNAL_CONS:
       return eval_cons(code.cons, scope);
-    case TYPE_I64:
-    case TYPE_F64:
-    case TYPE_STRING:
-    case TYPE_KEYWORD:
+    case INTERNAL_I64:
+    case INTERNAL_F64:
+    case INTERNAL_STRING:
       return add_ref(code);
-    case TYPE_QUOTE:
+    case INTERNAL_QUOTE:
+      if (code.type == type_quote_type) {
+        Scope *type_scope = use_module_types(scope->module);
+        NseVal result = eval(code.quote->quoted, type_scope);
+        scope_pop(type_scope);
+        return result;
+      }
       if (scope->type == TYPE_SCOPE) {
         NseVal datum = syntax_to_datum(code.quote->quoted);
         if (!RESULT_OK(datum)) {
           return datum;
         }
-        return check_alloc(TYPE(get_type(datum)));
+        return check_alloc(TYPE(datum.type));
       }
       return syntax_to_datum(code.quote->quoted);
-    case TYPE_TQUOTE: {
-      Scope *type_scope = use_module_types(scope->module);
-      NseVal result = eval(code.quote->quoted, type_scope);
-      scope_pop(type_scope);
-      return result;
-    }
-    case TYPE_SYMBOL:
+    case INTERNAL_SYMBOL:
+      if (code.type == keyword_type) {
+        return add_ref(code);
+      }
       return add_ref(scope_get(scope, code.symbol));
-    case TYPE_SYNTAX: {
+    case INTERNAL_SYNTAX: {
       Syntax *previous = push_debug_form(code.syntax);
       return pop_debug_form(eval(code.syntax->quoted, scope), previous);
     }
     default:
-      raise_error(domain_error, "unexpected value type: %s", nse_val_type_to_string(code.type));
+      raise_error(domain_error, "unexpected value type: %s", ""); // TODO
       return undefined;
   }
 }

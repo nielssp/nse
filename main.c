@@ -6,7 +6,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#include "nsert.h"
+#include "runtime/value.h"
+#include "runtime/error.h"
 #include "read.h"
 #include "write.h"
 #include "eval.h"
@@ -179,13 +180,13 @@ NseVal describe(NseVal args) {
   ARG_DONE(args);
   nse_write(arg, out, NULL);
   stream_printf(out, "\n");
-  Type *t = get_type(arg);
+  CType *t = arg.type;
   if (t) {
     nse_write(TYPE(t), out, current_scope->module);
     delete_type(t);
     stream_printf(out, "\n");
   }
-  if (arg.type == TYPE_CLOSURE) {
+  if (arg.type->internal == INTERNAL_CLOSURE) {
     stream_printf(out, "\nParameters: ???\n");
     if (arg.closure->doc) {
       const char *doc_string = to_string_constant(STRING(arg.closure->doc));
@@ -343,15 +344,15 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   system_module = get_system_module();
-  module_ext_define(system_module, "load", FUNC(load));
-  module_ext_define(system_module, "read", FUNC(read_));
-  module_ext_define(system_module, "eval", FUNC(eval_));
-  module_ext_define(system_module, "in-module", FUNC(in_module));
-  module_ext_define(system_module, "def-module", FUNC(def_module));
-  module_ext_define(system_module, "export", FUNC(export));
-  module_ext_define(system_module, "import", FUNC(import));
-  module_ext_define(system_module, "intern", FUNC(intern));
-  module_ext_define(system_module, "describe", FUNC(describe));
+  module_ext_define(system_module, "load", FUNC(load, 1, 0));
+  module_ext_define(system_module, "read", FUNC(read_, 1, 0));
+  module_ext_define(system_module, "eval", FUNC(eval_, 1, 0));
+  module_ext_define(system_module, "in-module", FUNC(in_module, 1, 0));
+  module_ext_define(system_module, "def-module", FUNC(def_module, 1, 0));
+  module_ext_define(system_module, "export", FUNC(export, 1, 0));
+  module_ext_define(system_module, "import", FUNC(import, 1, 0));
+  module_ext_define(system_module, "intern", FUNC(intern, 1, 0));
+  module_ext_define(system_module, "describe", FUNC(describe, 1, 0));
 
   Module *user_module = create_module("user");
   import_module(user_module, lang_module);

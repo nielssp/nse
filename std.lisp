@@ -3,15 +3,6 @@
 ;;;;
 (in-module :system)
 
-;;; types
-(export 'bool 'int 'float 'number 'error)
-
-(def-type bool (union-type ^'t ^'f))
-(def-type int (union-type ^i8 (union-type ^i16 (union-type ^i32 ^i64))))
-(def-type float (union-type ^f32 ^f64))
-(def-type number (union-type ^int ^float))
-(def-type (error t) (union-type (cons-type ^'ok (cons-type t ^nil)) (cons-type ^'error (cons-type ^string (cons-type ^any ^nil)))))
-
 ;;; function composition
 (export 'compose 'curry 'flip 'negate 'pipe)
 
@@ -111,16 +102,6 @@
   (let ((rec (fn (xs rec) (if (nil? xs) rec (rec (tail xs) (++ rec (head xs)))))))
     (rec xs '())))
 
-;;; option type
-(export 'option 'some 'none 'oget 'defined? 'omap)
-
-(def-type (option t) (union-type (cons-type ^'some (cons-type t ^nil)) ^'none))
-(def (some x) (list 'some x))
-(def none 'none)
-(def (oget ('some x)) x)
-(def (defined? opt) (not (is-a opt ^'none)))
-(def (omap f opt) (if (defined? opt) (some (f (oget opt))) none))
-
 ;;; read monad
 (export 'read>>= 'read>>)
 
@@ -145,11 +126,11 @@
 ; partial function application
 (def (ascii c) (byte-at 0 c))
 (def (find-params code)
-     (if (is-a code ^any-symbol)
+     (if (is-a code ^symbol)
        (if (= (ascii "%") (byte-at 0 (symbol-name code)))
          (list code)
          nil)
-       (if (is-a code ^(cons any any))
+       (if (is-a code ^cons)
          (++ (find-params (head code)) (find-params (tail code)))
          nil)))
 

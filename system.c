@@ -1,6 +1,7 @@
 #include <string.h>
 
-#include "nsert.h"
+#include "runtime/value.h"
+#include "runtime/error.h"
 
 #include "system.h"
 #include "write.h"
@@ -11,9 +12,9 @@ static NseVal sum(NseVal args) {
   int fp = 0;
   while (is_cons(args)) {
     NseVal h = head(args);
-    if (h.type == TYPE_I64) {
+    if (h.type == i64_type) {
       acc += h.i64;
-    } else if (h.type == TYPE_F64) {
+    } else if (h.type == f64_type) {
       facc += h.f64;
       fp = 1;
     } else {
@@ -33,9 +34,9 @@ static NseVal subtract(NseVal args) {
   double facc = 0.0;
   int fp = 0;
   NseVal h = head(args);
-  if (h.type == TYPE_I64) {
+  if (h.type == i64_type) {
     acc = h.i64;
-  } else if (h.type == TYPE_F64) {
+  } else if (h.type == f64_type) {
     facc = h.f64;
     fp = 1;
   } else {
@@ -51,9 +52,9 @@ static NseVal subtract(NseVal args) {
   }
   do {
     h = head(args);
-    if (h.type == TYPE_I64) {
+    if (h.type == i64_type) {
       acc -= h.i64;
-    } else if (h.type == TYPE_F64) {
+    } else if (h.type == f64_type) {
       facc -= h.f64;
       fp = 1;
     } else {
@@ -74,9 +75,9 @@ static NseVal product(NseVal args) {
   int fp = 0;
   while (is_cons(args)) {
     NseVal h = head(args);
-    if (h.type == TYPE_I64) {
+    if (h.type == i64_type) {
       acc *= h.i64;
-    } else if (h.type == TYPE_F64) {
+    } else if (h.type == f64_type) {
       facc *= h.f64;
       fp = 1;
     } else {
@@ -94,9 +95,9 @@ static NseVal product(NseVal args) {
 static NseVal divide(NseVal args) {
   NseVal h = head(args);
   double acc;
-  if (h.type == TYPE_I64) {
+  if (h.type == i64_type) {
     acc = h.i64;
-  } else if (h.type == TYPE_F64) {
+  } else if (h.type == f64_type) {
     acc = h.f64;
   } else {
     raise_error(domain_error, "expected number");
@@ -108,9 +109,9 @@ static NseVal divide(NseVal args) {
   }
   do {
     h = head(args);
-    if (h.type == TYPE_I64) {
+    if (h.type == i64_type) {
       acc /= h.i64;
-    } else if (h.type == TYPE_F64) {
+    } else if (h.type == f64_type) {
       acc /= h.f64;
     } else {
       raise_error(domain_error, "expected number");
@@ -121,18 +122,11 @@ static NseVal divide(NseVal args) {
   return F64(acc);
 }
 
-static NseVal type_of(NseVal args) {
-  ARG_POP_ANY(arg, args);
-  ARG_DONE(args);
-  Type *t = get_type(arg);
-  return check_alloc(TYPE(t));
-}
-
 static NseVal equals(NseVal args) {
   NseVal previous = undefined;
-  while (args.type == TYPE_CONS) {
+  while (args.type->internal == INTERNAL_CONS) {
     NseVal h = head(args);
-    if (previous.type != TYPE_UNDEFINED) {
+    if (previous.type) {
       NseVal result = nse_equals(previous, h);
       if (!is_true(result)) {
         return FALSE;
@@ -145,85 +139,6 @@ static NseVal equals(NseVal args) {
     raise_error(domain_error, "too few arguments");
   }
   return TRUE;
-}
-
-static NseVal is_a(NseVal args) {
-  NseVal a = head(args);
-  NseVal b = elem(1, args);
-  Type *type_a = get_type(a);
-  NseVal result = undefined;
-  if (type_a) {
-    Type *type_b = to_type(b);
-    if (type_b) {
-      result = is_subtype_of(type_a, type_b) ? TRUE : FALSE;
-    }
-    delete_type(type_a);
-  }
-  return result;
-}
-
-static NseVal subtype_of(NseVal args) {
-  NseVal a = head(args);
-  NseVal b = elem(1, args);
-  Type *type_a = to_type(a);
-  Type *type_b = to_type(b);
-  if (type_a && type_b) {
-    return is_subtype_of(type_a, type_b) ? TRUE : FALSE;
-  }
-  return undefined;
-}
-
-static NseVal cons_type(NseVal args) {
-//  DESCRIBE_FORM("(cons a b)");
-//  DESCRIBE_FUNC("Creates a cons-type from types a and b");
-//  DESCRIBE_TYPE("&(-> (* type type) type)");
-  ARG_POP_TYPE(Type *, type_a, args, to_type, "a type");
-  ARG_POP_TYPE(Type *, type_b, args, to_type, "a type");
-  ARG_DONE(args);
-  return TYPE(create_cons_type(copy_type(type_a), copy_type(type_b)));
-}
-
-static NseVal simplify_type_(NseVal args) {
-  ARG_POP_TYPE(Type *, type_a, args, to_type, "a type");
-  ARG_DONE(args);
-  return TYPE(simplify_type(type_a));
-}
-
-static NseVal union_type(NseVal args) {
-  NseVal a = head(args);
-  NseVal b = elem(1, args);
-  Type *type_a = to_type(a);
-  Type *type_b = to_type(b);
-  if (type_a && type_b) {
-    return TYPE(create_union_type(copy_type(type_a), copy_type(type_b)));
-  }
-  return undefined;
-}
-
-static NseVal func_type(NseVal args) {
-  ARG_POP_TYPE(Type *, type_a, args, to_type, "a type");
-  ARG_POP_TYPE(Type *, type_b, args, to_type, "a type");
-  ARG_DONE(args);
-  return TYPE(create_func_type(copy_type(type_a), copy_type(type_b)));
-}
-
-static NseVal forall_type(NseVal args) {
-  ARG_POP_TYPE(Symbol *, symbol, args, to_symbol, "a symbol");
-  ARG_POP_TYPE(Type *, t, args, to_type, "a type");
-  ARG_DONE(args);
-  return TYPE(create_forall_type(symbol->name, copy_type(t)));
-}
-
-static NseVal expand_type(NseVal args) {
-  NseVal a = head(args);
-  Type *type_a = to_type(a);
-  if (type_a) {
-    if (type_a->type == BASE_TYPE_ALIAS) {
-      return TYPE(copy_type(type_a->param_b));
-    }
-    return a;
-  }
-  return undefined;
 }
 
 static NseVal apply(NseVal args) {
@@ -301,51 +216,44 @@ static NseVal update_head(NseVal args) {
   return check_alloc(CONS(cons));
 }
 
+static NseVal is_a(NseVal args) {
+  NseVal a = head(args);
+  NseVal b = elem(1, args);
+  CType *type_a = a.type;
+  NseVal result = undefined;
+  if (type_a) {
+    CType *type_b = to_type(b);
+    if (type_b) {
+      result = type_a == type_b ? TRUE : FALSE;
+    }
+  }
+  return result;
+}
+
 Module *get_system_module() {
   Module *system = create_module("system");
-  module_ext_define(system, "+", FUNC(sum));
-  module_ext_define(system, "-", FUNC(subtract));
-  module_ext_define(system, "*", FUNC(product));
-  module_ext_define(system, "/", FUNC(divide));
-  module_ext_define(system, "=", FUNC(equals));
-  module_ext_define(system, "apply", FUNC(apply));
-  module_ext_define(system, "symbol-name", FUNC(symbol_name));
-  module_ext_define(system, "symbol-module", FUNC(symbol_module));
-  module_ext_define(system, "module-symbols", FUNC(module_symbols));
-  module_ext_define(system, "byte-length", FUNC(byte_length));
-  module_ext_define(system, "byte-at", FUNC(byte_at));
-  module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_));
-  module_ext_define(system, "update-head", FUNC(update_head));
+  module_ext_define(system, "+", FUNC(sum, 0, 1));
+  module_ext_define(system, "-", FUNC(subtract, 1, 1));
+  module_ext_define(system, "*", FUNC(product, 0, 1));
+  module_ext_define(system, "/", FUNC(divide, 1, 1));
+  module_ext_define(system, "=", FUNC(equals, 1, 1));
+  module_ext_define(system, "apply", FUNC(apply, 2, 0));
+  module_ext_define(system, "symbol-name", FUNC(symbol_name, 1, 0));
+  module_ext_define(system, "symbol-module", FUNC(symbol_module, 1, 0));
+  module_ext_define(system, "module-symbols", FUNC(module_symbols, 1, 0));
+  module_ext_define(system, "byte-length", FUNC(byte_length, 1, 0));
+  module_ext_define(system, "byte-at", FUNC(byte_at, 2, 0));
+  module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_, 1, 0));
+  module_ext_define(system, "update-head", FUNC(update_head, 2, 0));
+  module_ext_define(system, "is-a", FUNC(is_a, 2, 0));
 
-  module_ext_define(system, "type-of", FUNC(type_of));
-  module_ext_define(system, "is-a", FUNC(is_a));
-  module_ext_define(system, "subtype-of?", FUNC(subtype_of));
-  module_ext_define(system, "cons-type", FUNC(cons_type));
-  module_ext_define(system, "union-type", FUNC(union_type));
-  module_ext_define(system, "expand-type", FUNC(expand_type));
-  module_ext_define(system, "simplify-type", FUNC(simplify_type_));
-
-  module_ext_define_type(system, "nothing", TYPE(nothing_type));
   module_ext_define_type(system, "any", TYPE(any_type));
   module_ext_define_type(system, "nil", TYPE(nil_type));
-  module_ext_define_type(system, "any-ref", TYPE(any_ref_type));
-  module_ext_define_type(system, "i8", TYPE(i8_type));
-  module_ext_define_type(system, "i16", TYPE(i16_type));
-  module_ext_define_type(system, "i32", TYPE(i32_type));
   module_ext_define_type(system, "i64", TYPE(i64_type));
-  module_ext_define_type(system, "u8", TYPE(u8_type));
-  module_ext_define_type(system, "u16", TYPE(u16_type));
-  module_ext_define_type(system, "u32", TYPE(u32_type));
-  module_ext_define_type(system, "u64", TYPE(u64_type));
-  module_ext_define_type(system, "f32", TYPE(f32_type));
   module_ext_define_type(system, "f64", TYPE(f64_type));
   module_ext_define_type(system, "string", TYPE(string_type));
-  module_ext_define_type(system, "any-symbol", TYPE(any_symbol_type));
+  module_ext_define_type(system, "symbol", TYPE(symbol_type));
   module_ext_define_type(system, "type", TYPE(type_type));
-  module_ext_define_type(system, "cons", FUNC(cons_type));
-  module_ext_define_type(system, "+", FUNC(union_type));
-  //module_ext_define_type(system, "*", FUNC(product_type));
-  module_ext_define_type(system, "->", FUNC(func_type));
-  module_ext_define_type(system, "forall", FUNC(forall_type));
+  module_ext_define_type(system, "cons", TYPE(cons_type));
   return system;
 }

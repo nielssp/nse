@@ -1,8 +1,7 @@
 #ifndef EVAL_H
 #define EVAL_H
 
-#include "util/hash_map.h"
-#include "nsert.h"
+#include "runtime/value.h"
 #include "module.h"
 
 NseVal eval(NseVal code, Scope *scope);

@@ -1,7 +1,7 @@
 #ifndef ERROR_H
 #define ERROR_H
 
-typedef struct symbol Symbol;
+typedef struct Symbol Symbol;
 
 extern Symbol *out_of_memory_error;
 extern Symbol *domain_error;

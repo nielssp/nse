@@ -2,19 +2,27 @@
 #include <string.h>
 #include <stdarg.h>
 
-#include "nsert.h"
-#include "util/hash_map.h"
+#include "hashmap.h"
+#include "error.h"
+
+#include "value.h"
 
 void delete_all(NseVal value);
 void delete(NseVal value);
 NseVal parse_list(char **input);
 
-NseVal undefined = { .type = TYPE_UNDEFINED };
-NseVal nil = { .type = TYPE_NIL };
+NseVal undefined = { .type = NULL };
+NseVal nil;
 
 Syntax *error_form = NULL;
 
-NseVal stack_trace = { .type = TYPE_NIL };
+NseVal stack_trace;
+
+void init_values() {
+  init_types();
+  nil = (NseVal){ .type = nil_type };
+  stack_trace = nil;
+}
 
 void set_debug_form(Syntax *syntax) {
   if (error_form) {
@@ -55,6 +63,8 @@ Cons *create_cons(NseVal h, NseVal t) {
     return NULL;
   }
   cons->refs = 1;
+  // if (is_proper_list(t)) cons->type = get_instance(list_type, {unify(h, t))
+  cons->type = copy_type(cons_type);
   cons->head = h;
   cons->tail = t;
   add_ref(h);
@@ -127,7 +137,7 @@ String *create_string(const char *s, size_t length) {
   return str;
 }
 
-Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], size_t env_size) {
+Closure *create_closure(NseVal f(NseVal, NseVal[]), CType *type, NseVal env[], size_t env_size) {
   Closure *closure = allocate(sizeof(Closure) + env_size * sizeof(NseVal));
   if (!closure) {
     return NULL;
@@ -146,14 +156,14 @@ Closure *create_closure(NseVal f(NseVal, NseVal[]), Type *type, NseVal env[], si
   return closure;
 }
 
-Reference *create_reference(Symbol *tag, void *pointer, void destructor(void *)) {
+Reference *create_reference(CType *type, void *pointer, void destructor(void *)) {
   Reference *reference = allocate(sizeof(Reference));
   if (!reference) {
+    delete_type(type);
     return NULL;
   }
   reference->refs = 1;
-  reference->tag = tag;
-  add_ref(SYMBOL(tag));
+  reference->type = type;
   reference->pointer = pointer;
   reference->destructor = destructor;
   return reference;
@@ -175,18 +185,18 @@ Syntax *copy_syntax(Syntax *syntax, NseVal quoted) {
 }
 
 NseVal check_alloc(NseVal v) {
-  switch (v.type) {
-    case TYPE_CONS:
-    case TYPE_CLOSURE:
-    case TYPE_QUOTE:
-    case TYPE_TQUOTE:
-    case TYPE_CONTINUE:
-    case TYPE_SYNTAX:
-    case TYPE_REFERENCE:
-    case TYPE_SYMBOL:
-    case TYPE_KEYWORD:
-    case TYPE_STRING:
-    case TYPE_TYPE:
+  if (!v.type) {
+    return undefined;
+  }
+  switch (v.type->internal) {
+    case INTERNAL_CONS:
+    case INTERNAL_CLOSURE:
+    case INTERNAL_QUOTE:
+    case INTERNAL_SYNTAX:
+    case INTERNAL_REFERENCE:
+    case INTERNAL_SYMBOL:
+    case INTERNAL_STRING:
+    case INTERNAL_TYPE:
       if ((void *)v.cons == NULL) {
         return undefined;
       }
@@ -196,32 +206,32 @@ NseVal check_alloc(NseVal v) {
 }
 
 NseVal add_ref(NseVal value) {
-  switch (value.type) {
-    case TYPE_CONS:
+  if (!value.type) {
+    return value;
+  }
+  switch (value.type->internal) {
+    case INTERNAL_CONS:
       value.cons->refs++;
       break;
-    case TYPE_CLOSURE:
+    case INTERNAL_CLOSURE:
       value.closure->refs++;
       break;
-    case TYPE_TQUOTE:
-    case TYPE_QUOTE:
-    case TYPE_CONTINUE:
+    case INTERNAL_QUOTE:
       value.quote->refs++;
       break;
-    case TYPE_SYMBOL:
-    case TYPE_KEYWORD:
+    case INTERNAL_SYMBOL:
       value.symbol->refs++;
       break;
-    case TYPE_STRING:
+    case INTERNAL_STRING:
       value.string->refs++;
       break;
-    case TYPE_SYNTAX:
+    case INTERNAL_SYNTAX:
       value.syntax->refs++;
       break;
-    case TYPE_REFERENCE:
+    case INTERNAL_REFERENCE:
       value.reference->refs++;
       break;
-    case TYPE_TYPE:
+    case INTERNAL_TYPE:
       copy_type(value.type_val);
       break;
     default:
@@ -231,33 +241,33 @@ NseVal add_ref(NseVal value) {
 }
 
 void del_ref(NseVal value) {
+  if (!value.type) {
+    return;
+  }
   size_t *refs = NULL;
-  switch (value.type) {
-    case TYPE_CONS:
+  switch (value.type->internal) {
+    case INTERNAL_CONS:
       refs = &value.cons->refs;
       break;
-    case TYPE_CLOSURE:
+    case INTERNAL_CLOSURE:
       refs = &value.closure->refs;
       break;
-    case TYPE_TQUOTE:
-    case TYPE_QUOTE:
-    case TYPE_CONTINUE:
+    case INTERNAL_QUOTE:
       refs = &value.quote->refs;
       break;
-    case TYPE_SYMBOL:
-    case TYPE_KEYWORD:
+    case INTERNAL_SYMBOL:
       refs = &value.symbol->refs;
       break;
-    case TYPE_STRING:
+    case INTERNAL_STRING:
       refs = &value.string->refs;
       break;
-    case TYPE_SYNTAX:
+    case INTERNAL_SYNTAX:
       refs = &value.syntax->refs;
       break;
-    case TYPE_REFERENCE:
+    case INTERNAL_REFERENCE:
       refs = &value.reference->refs;
       break;
-    case TYPE_TYPE:
+    case INTERNAL_TYPE:
       delete_type(value.type_val);
       return;
     default:
@@ -273,14 +283,14 @@ void del_ref(NseVal value) {
 }
 
 void delete_all(NseVal value) {
-  if (value.type == TYPE_CONS) {
+  if (value.type->internal == INTERNAL_CONS) {
     del_ref(value.cons->head);
     del_ref(value.cons->tail);
   }
-  if (value.type == TYPE_QUOTE || value.type == TYPE_TQUOTE || value.type == TYPE_CONTINUE) {
+  if (value.type->internal == INTERNAL_QUOTE) {
     del_ref(value.quote->quoted);
   }
-  if (value.type == TYPE_CLOSURE) {
+  if (value.type->internal == INTERNAL_CLOSURE) {
     if (value.closure->doc) {
       del_ref(STRING(value.closure->doc));
     }
@@ -289,7 +299,7 @@ void delete_all(NseVal value) {
       del_ref(value.closure->env[i]);
     }
   }
-  if (value.type == TYPE_SYNTAX) {
+  if (value.type->internal == INTERNAL_SYNTAX) {
     if (value.syntax->file) {
       del_ref(STRING(value.syntax->file));
     }
@@ -299,33 +309,30 @@ void delete_all(NseVal value) {
 }
 
 void delete(NseVal value) {
-  switch (value.type) {
-    case TYPE_CONS:
+  switch (value.type->internal) {
+    case INTERNAL_CONS:
       free(value.cons);
       return;
-    case TYPE_SYMBOL:
-    case TYPE_KEYWORD:
+    case INTERNAL_SYMBOL:
       free(value.symbol);
       return;
-    case TYPE_QUOTE:
-    case TYPE_TQUOTE:
-    case TYPE_CONTINUE:
+    case INTERNAL_QUOTE:
       free(value.quote);
       return;
-    case TYPE_STRING:
+    case INTERNAL_STRING:
       free(value.string);
       return;
-    case TYPE_SYNTAX:
+    case INTERNAL_SYNTAX:
       free(value.syntax);
       return;
-    case TYPE_CLOSURE:
+    case INTERNAL_CLOSURE:
       free(value.closure);
       return;
-    case TYPE_REFERENCE:
+    case INTERNAL_REFERENCE:
       if (value.reference->destructor) {
         value.reference->destructor(value.reference->pointer);
       }
-      del_ref(SYMBOL(value.reference->tag));
+      delete_type(value.reference->type);
       free(value.reference);
       return;
     default:
@@ -335,9 +342,9 @@ void delete(NseVal value) {
 
 NseVal head(NseVal value) {
   NseVal result = undefined;
-  if (value.type == TYPE_CONS) {
+  if (value.type->internal == INTERNAL_CONS) {
     result = value.cons->head;
-  } else if (value.type == TYPE_SYNTAX) {
+  } else if (value.type->internal == INTERNAL_SYNTAX) {
     return head(value.syntax->quoted);
   } else {
     raise_error(domain_error, "head of empty list");
@@ -347,9 +354,9 @@ NseVal head(NseVal value) {
 
 NseVal tail(NseVal value) {
   NseVal result = undefined;
-  if (value.type == TYPE_CONS) {
+  if (value.type->internal == INTERNAL_CONS) {
     result = value.cons->tail;
-  } else if (value.type == TYPE_SYNTAX) {
+  } else if (value.type->internal == INTERNAL_SYNTAX) {
     return tail(value.syntax->quoted);
   } else {
     raise_error(domain_error, "tail of empty list");
@@ -369,173 +376,185 @@ NseVal elem(size_t n, NseVal value) {
 
 
 int is_cons(NseVal v) {
-  if (v.type == TYPE_CONS) {
+  if (v.type->internal == INTERNAL_CONS) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_cons(v.syntax->quoted);
   }
   return 0;
 }
 
 int is_nil(NseVal v) {
-  if (v.type == TYPE_NIL) {
+  if (v.type->internal == INTERNAL_NIL) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_nil(v.syntax->quoted);
   }
   return 0;
 }
 
 int is_list(NseVal v) {
-  if (v.type == TYPE_CONS || v.type == TYPE_NIL) {
+  if (v.type->internal == INTERNAL_CONS || v.type->internal == INTERNAL_NIL) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_list(v.syntax->quoted);
   }
   return 0;
 }
 
 int is_i64(NseVal v) {
-  if (v.type == TYPE_I64) {
+  if (v.type->internal == INTERNAL_I64) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_i64(v.syntax->quoted);
   }
   return 0;
 }
 
 int is_f64(NseVal v) {
-  if (v.type == TYPE_F64) {
+  if (v.type->internal == INTERNAL_F64) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_f64(v.syntax->quoted);
   }
   return 0;
 }
 
 int is_function(NseVal v) {
-  if (v.type == TYPE_FUNC || v.type == TYPE_CLOSURE) {
+  if (v.type->internal == INTERNAL_FUNC || v.type->internal == INTERNAL_CLOSURE) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_function(v.syntax->quoted);
   }
   return 0;
 }
 
 int is_reference(NseVal v) {
-  if (v.type == TYPE_REFERENCE) {
+  if (v.type->internal == INTERNAL_REFERENCE) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_reference(v.syntax->quoted);
   }
   return 0;
 }
 
 int is_quote(NseVal v) {
-  if (v.type == TYPE_QUOTE) {
+  if (v.type->internal == INTERNAL_QUOTE) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_quote(v.syntax->quoted);
   }
   return 0;
 }
 
 int is_type_quote(NseVal v) {
-  if (v.type == TYPE_TQUOTE) {
+  if (v.type == type_quote_type) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_type_quote(v.syntax->quoted);
   }
   return 0;
 }
 
 int is_string(NseVal v) {
-  if (v.type == TYPE_STRING) {
+  if (v.type->internal == INTERNAL_STRING) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_string(v.syntax->quoted);
   }
   return 0;
 }
 
 int is_symbol(NseVal v) {
-  if (v.type == TYPE_SYMBOL) {
+  if (v.type->internal == INTERNAL_SYMBOL) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_symbol(v.syntax->quoted);
   }
   return 0;
 }
 
 int is_type(NseVal v) {
-  if (v.type == TYPE_TYPE) {
+  if (v.type->internal == INTERNAL_TYPE) {
     return 1;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_type(v.syntax->quoted);
   }
   return 0;
 }
 
+NseVal from_cons(Cons *c) {
+  return (NseVal){ .type = c->type, .cons = c };
+}
+
+NseVal from_closure(Closure *c) {
+  return (NseVal){ .type = c->type, .closure = c };
+}
+
+NseVal from_reference(Reference *r) {
+  return (NseVal){ .type = r->type, .reference = r };
+}
+
 Cons *to_cons(NseVal v) {
-  if (v.type == TYPE_CONS) {
+  if (v.type->internal == INTERNAL_CONS) {
     return v.cons;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return to_cons(v.syntax->quoted);
   }
   return NULL;
 }
 
 Symbol *to_symbol(NseVal v) {
-  if (v.type == TYPE_SYMBOL) {
+  if (v.type == symbol_type) {
     return v.symbol;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return to_symbol(v.syntax->quoted);
   }
   return NULL;
 }
 
 String *to_string(NseVal v) {
-  if (v.type == TYPE_STRING) {
+  if (v.type->internal == INTERNAL_STRING) {
     return v.string;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return to_string(v.syntax->quoted);
   }
   return NULL;
 }
 
 Symbol *to_keyword(NseVal v) {
-  if (v.type == TYPE_KEYWORD) {
+  if (v.type == keyword_type) {
     return v.symbol;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return to_keyword(v.syntax->quoted);
   }
   return NULL;
 }
 
 const char *to_string_constant(NseVal v) {
-  if (v.type == TYPE_SYMBOL || v.type == TYPE_KEYWORD) {
+  if (v.type->internal == INTERNAL_SYMBOL) {
     return v.symbol->name;
-  } else if (v.type == TYPE_STRING) {
+  } else if (v.type->internal == INTERNAL_STRING) {
     return v.string->chars;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return to_string_constant(v.syntax->quoted);
   }
   return NULL;
 }
 
 void *to_reference(NseVal v) {
-  if (v.type == TYPE_REFERENCE) {
+  if (v.type->internal == INTERNAL_REFERENCE) {
     return v.reference->pointer;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return to_reference(v.syntax->quoted);
   }
   return NULL;
 }
 
-Type *to_type(NseVal v) {
-  if (v.type == TYPE_TYPE) {
+CType *to_type(NseVal v) {
+  if (v.type->internal == INTERNAL_TYPE) {
     return v.type_val;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     return to_type(v.syntax->quoted);
   }
   return NULL;
@@ -543,9 +562,9 @@ Type *to_type(NseVal v) {
 
 int match_symbol(NseVal v, const Symbol *symbol) {
   int result = 0;
-  if (v.type == TYPE_SYMBOL) {
+  if (v.type == symbol_type) {
     result = v.symbol == symbol;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     result = match_symbol(v.syntax->quoted, symbol);
   }
   return result;
@@ -553,7 +572,7 @@ int match_symbol(NseVal v, const Symbol *symbol) {
 
 int is_special_form(NseVal v) {
   int result = 0;
-  if (v.type == TYPE_SYMBOL) {
+  if (v.type == symbol_type) {
     result |= v.symbol == if_symbol;
     result |= v.symbol == fn_symbol;
     result |= v.symbol == let_symbol;
@@ -561,7 +580,7 @@ int is_special_form(NseVal v) {
     result |= v.symbol == def_symbol;
     result |= v.symbol == def_macro_symbol;
     result |= v.symbol == def_type_symbol;
-  } else if (v.type == TYPE_SYNTAX) {
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
     result = is_special_form(v.syntax->quoted);
   }
   return result;
@@ -573,7 +592,7 @@ int is_true(NseVal b) {
 
 size_t list_length(NseVal value) {
   size_t count = 0;
-  while (value.type == TYPE_CONS) {
+  while (value.type->internal == INTERNAL_CONS) {
     count++;
     value = value.cons->tail;
   }
@@ -626,12 +645,12 @@ void clear_stack_trace() {
 
 NseVal nse_apply(NseVal func, NseVal args) {
   NseVal result = undefined;
-  if (func.type == TYPE_FUNC) {
+  if (func.type->internal == INTERNAL_FUNC) {
     if (!stack_trace_push(func, args)) {
       return undefined;
     }
     result = func.func(args);
-  } else if (func.type == TYPE_CLOSURE) {
+  } else if (func.type->internal == INTERNAL_CLOSURE) {
     if (!stack_trace_push(func, args)) {
       return undefined;
     }
@@ -653,55 +672,52 @@ NseVal nse_and(NseVal a, NseVal b) {
 }
 
 NseVal nse_equals(NseVal a, NseVal b) {
-  if (a.type == TYPE_UNDEFINED || b.type == TYPE_UNDEFINED) {
+  if (a.type == NULL || b.type == NULL) {
     return undefined;
   }
-  if (a.type == TYPE_SYNTAX) {
+  if (a.type->internal == INTERNAL_SYNTAX) {
     return nse_equals(a.syntax->quoted, b);
   }
-  if (b.type == TYPE_SYNTAX) {
+  if (b.type->internal == INTERNAL_SYNTAX) {
     return nse_equals(a, b.syntax->quoted);
   }
   if (a.type != b.type) {
     return FALSE;
   }
-  switch (a.type) {
-    case TYPE_NIL:
-      return b.type == TYPE_NIL ? TRUE : FALSE;
-    case TYPE_CONS:
+  switch (a.type->internal) {
+    case INTERNAL_NIL:
+      return TRUE;
+    case INTERNAL_CONS:
       return nse_and(nse_equals(head(a), head(b)), nse_equals(tail(a), tail(b)));
-    case TYPE_STRING:
+    case INTERNAL_STRING:
       if (a.string->length != b.string->length) {
         return FALSE;
       }
       return strncmp(a.string->chars, b.string->chars, a.string->length) == 0 ? TRUE : FALSE;
-    case TYPE_SYMBOL:
-    case TYPE_KEYWORD:
+    case INTERNAL_SYMBOL:
       if (a.symbol == b.symbol) {
         return TRUE;
       }
       return FALSE;
-    case TYPE_QUOTE:
-    case TYPE_TQUOTE:
-    case TYPE_CONTINUE:
+    case INTERNAL_QUOTE:
       return nse_equals(a.quote->quoted, b.quote->quoted);
-    case TYPE_I64:
+    case INTERNAL_I64:
       if (a.i64 == b.i64) {
         return TRUE;
       }
       return FALSE;
-    case TYPE_TYPE:
-      return type_equals(a.type_val, b.type_val) ? TRUE : FALSE;
+    case INTERNAL_TYPE:
+      return a.type_val == b.type_val ? TRUE : FALSE;
     default:
       return FALSE;
   }
 }
 
 NseVal syntax_to_datum(NseVal v) {
-  switch (v.type) {
-    case  TYPE_SYNTAX:
+  switch (v.type->internal) {
+    case  INTERNAL_SYNTAX:
       return syntax_to_datum(v.syntax->quoted);
-    case  TYPE_CONS: {
+    case  INTERNAL_CONS: {
       NseVal cons = undefined;
       NseVal head = syntax_to_datum(v.cons->head);
       if (RESULT_OK(head)) {
@@ -714,108 +730,17 @@ NseVal syntax_to_datum(NseVal v) {
       }
       return cons;
     }
-    case TYPE_QUOTE: {
+    case INTERNAL_QUOTE: {
       NseVal quote = undefined;
       NseVal quoted = syntax_to_datum(v.quote->quoted);
       if (RESULT_OK(quoted)) {
         quote = check_alloc(QUOTE(create_quote(quoted)));
-        del_ref(quoted);
-      }
-      return quote;
-    }
-    case TYPE_TQUOTE: {
-      NseVal quote = undefined;
-      NseVal quoted = syntax_to_datum(v.quote->quoted);
-      if (RESULT_OK(quoted)) {
-        quote = check_alloc(TQUOTE(create_type_quote(quoted)));
-        del_ref(quoted);
-      }
-      return quote;
-    }
-    case TYPE_CONTINUE: {
-      NseVal quote = undefined;
-      NseVal quoted = syntax_to_datum(v.quote->quoted);
-      if (RESULT_OK(quoted)) {
-        quote = check_alloc(CONTINUE(create_continue(quoted)));
+        quote.type = copy_type(v.type);
         del_ref(quoted);
       }
       return quote;
     }
     default:
       return add_ref(v);
-  }
-}
-
-const char *nse_val_type_to_string(NseValType t) {
-  switch (t) {
-    case TYPE_UNDEFINED:
-      return "undefined";
-    case TYPE_NIL:
-      return "nil";
-    case TYPE_CONS:
-      return "cons";
-    case TYPE_I64:
-      return "i64";
-    case TYPE_F64:
-      return "f64";
-    case TYPE_SYMBOL:
-      return "symbol";
-    case TYPE_KEYWORD:
-      return "keyword";
-    case TYPE_STRING:
-      return "string";
-    case TYPE_QUOTE:
-      return "quote";
-    case TYPE_TQUOTE:
-      return "type-quote";
-    case TYPE_CONTINUE:
-      return "continue";
-    case TYPE_SYNTAX:
-      return "syntax";
-    case TYPE_FUNC:
-      return "func";
-    case TYPE_CLOSURE:
-      return "closure";
-    case TYPE_REFERENCE:
-      return "reference";
-    case TYPE_TYPE:
-      return "type";
-  }
-}
-
-Type *get_type(NseVal v) {
-  switch (v.type) {
-    case TYPE_UNDEFINED:
-      return NULL;
-    case TYPE_NIL:
-      return copy_type(nil_type);
-    case TYPE_CONS:
-      return create_cons_type(get_type(v.cons->head), get_type(v.cons->tail));
-    case TYPE_I64:
-      return copy_type(i64_type);
-    case TYPE_F64:
-      return copy_type(f64_type);
-    case TYPE_SYMBOL:
-      return create_symbol_type(add_ref(v).symbol);
-    case TYPE_KEYWORD:
-      return copy_type(keyword_type);
-    case TYPE_STRING:
-      return copy_type(string_type);
-    case TYPE_QUOTE:
-      return create_quote_type(get_type(v.quote->quoted));
-    case TYPE_TQUOTE:
-      return create_type_quote_type(get_type(v.quote->quoted));
-    case TYPE_CONTINUE:
-      return copy_type(any_type);
-    case TYPE_SYNTAX:
-      return create_syntax_type(get_type(v.syntax->quoted));
-    case TYPE_FUNC:
-      return create_func_type(copy_type(any_type), copy_type(any_type));
-    case TYPE_CLOSURE:
-      return copy_type(v.closure->type);
-    case TYPE_REFERENCE:
-      return create_ref_type(v.reference->tag);
-    case TYPE_TYPE:
-      return copy_type(type_type);
   }
 }
