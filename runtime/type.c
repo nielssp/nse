@@ -260,7 +260,7 @@ CType *get_closure_type(int min_arity, int variadic) {
     t->func.variadic = variadic;
     FuncType *key_copy = allocate(sizeof(FuncType));
     *key_copy = key;
-    func_type_map_add(func_types, key_copy, t);
+    func_type_map_add(closure_types, key_copy, t);
     return t;
   }
 }

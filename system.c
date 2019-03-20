@@ -216,6 +216,20 @@ static NseVal update_head(NseVal args) {
   return check_alloc(CONS(cons));
 }
 
+static NseVal is_a(NseVal args) {
+  NseVal a = head(args);
+  NseVal b = elem(1, args);
+  CType *type_a = a.type;
+  NseVal result = undefined;
+  if (type_a) {
+    CType *type_b = to_type(b);
+    if (type_b) {
+      result = type_a == type_b ? TRUE : FALSE;
+    }
+  }
+  return result;
+}
+
 Module *get_system_module() {
   Module *system = create_module("system");
   module_ext_define(system, "+", FUNC(sum, 0, 1));
@@ -231,28 +245,15 @@ Module *get_system_module() {
   module_ext_define(system, "byte-at", FUNC(byte_at, 2, 0));
   module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_, 1, 0));
   module_ext_define(system, "update-head", FUNC(update_head, 2, 0));
+  module_ext_define(system, "is-a", FUNC(is_a, 2, 0));
 
-  /*
-  module_ext_define_type(system, "nothing", TYPE(nothing_type));
   module_ext_define_type(system, "any", TYPE(any_type));
   module_ext_define_type(system, "nil", TYPE(nil_type));
-  module_ext_define_type(system, "any-ref", TYPE(any_ref_type));
-  module_ext_define_type(system, "i8", TYPE(i8_type));
-  module_ext_define_type(system, "i16", TYPE(i16_type));
-  module_ext_define_type(system, "i32", TYPE(i32_type));
   module_ext_define_type(system, "i64", TYPE(i64_type));
-  module_ext_define_type(system, "u8", TYPE(u8_type));
-  module_ext_define_type(system, "u16", TYPE(u16_type));
-  module_ext_define_type(system, "u32", TYPE(u32_type));
-  module_ext_define_type(system, "u64", TYPE(u64_type));
-  module_ext_define_type(system, "f32", TYPE(f32_type));
   module_ext_define_type(system, "f64", TYPE(f64_type));
   module_ext_define_type(system, "string", TYPE(string_type));
-  module_ext_define_type(system, "any-symbol", TYPE(any_symbol_type));
+  module_ext_define_type(system, "symbol", TYPE(symbol_type));
   module_ext_define_type(system, "type", TYPE(type_type));
-  module_ext_define_type(system, "cons", FUNC(cons_type));
-  module_ext_define_type(system, "->", FUNC(func_type));
-  module_ext_define_type(system, "forall", FUNC(forall_type));
-  */
+  module_ext_define_type(system, "cons", TYPE(cons_type));
   return system;
 }
