@@ -8,7 +8,7 @@
 
 #define I64(i) ((NseVal) { .type = i64_type, .i64 = (i) })
 #define F64(i) ((NseVal) { .type = f64_type, .f64 = (i) })
-#define FUNC(f, t) ((NseVal) { .type = t, .func = (f) })
+#define FUNC(f, arity, variadic) ((NseVal) { .type = get_func_type(arity, variadic), .func = (f) })
 
 #define CONS(c) from_cons(c)
 #define SYNTAX(c) ((NseVal) { .type = syntax_type, .syntax = (c) })
@@ -151,6 +151,9 @@ struct Symbol {
 
 extern NseVal undefined;
 extern NseVal nil;
+
+void init_values();
+
 Cons *create_cons(NseVal h, NseVal t);
 Quote *create_quote(NseVal quoted);
 TypeQuote *create_type_quote(NseVal quoted);

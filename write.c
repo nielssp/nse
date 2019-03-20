@@ -3,12 +3,12 @@
 static void write_cons(Cons *cons, Stream *stream, Module *module);
 
 static void write_cons_tail(NseVal tail, Stream *stream, Module *module) {
-  if (tail.type == TYPE_SYNTAX) {
+  if (tail.type->internal == INTERNAL_SYNTAX) {
     write_cons_tail(tail.syntax->quoted, stream, module);
-  } else if (tail.type == TYPE_CONS) {
+  } else if (tail.type->internal == INTERNAL_CONS) {
     stream_printf(stream, " ");
     write_cons(tail.cons, stream, module);
-  } else if (tail.type != TYPE_NIL) {
+  } else if (tail.type->internal != INTERNAL_NIL) {
     stream_printf(stream, " . ");
     nse_write(tail, stream, module);
   }
@@ -19,111 +19,34 @@ static void write_cons(Cons *cons, Stream *stream, Module *module) {
   write_cons_tail(cons->tail, stream, module);
 }
 
-static void write_type(Type *type, Stream *stream, Module *module) {
-  switch (type->type) {
-    case BASE_TYPE_NOTHING:
-    case BASE_TYPE_ANY:
-    case BASE_TYPE_NIL:
-    case BASE_TYPE_ANY_REF:
-    case BASE_TYPE_I8:
-    case BASE_TYPE_I16:
-    case BASE_TYPE_I32:
-    case BASE_TYPE_I64:
-    case BASE_TYPE_U8:
-    case BASE_TYPE_U16:
-    case BASE_TYPE_U32:
-    case BASE_TYPE_U64:
-    case BASE_TYPE_F32:
-    case BASE_TYPE_F64:
-    case BASE_TYPE_STRING:
-    case BASE_TYPE_ANY_SYMBOL:
-    case BASE_TYPE_KEYWORD:
-    case BASE_TYPE_TYPE:
-      stream_printf(stream, base_type_to_string(type->type));
-      break;
-    case BASE_TYPE_SYMBOL:
-      stream_printf(stream, "'");
-      nse_write(SYMBOL(type->symbol), stream, module);
-      break;
-    case BASE_TYPE_REF:
-      stream_printf(stream, "(ref ");
-      nse_write(SYMBOL(type->symbol), stream, module);
-      stream_printf(stream, ")");
-      break;
-    case BASE_TYPE_TYPE_VAR:
-      stream_printf(stream, "%s", type->var_name);
-      break;
-    case BASE_TYPE_QUOTE:
-    case BASE_TYPE_TYPE_QUOTE:
-    case BASE_TYPE_SYNTAX:
-      stream_printf(stream, "(");
-      stream_printf(stream, base_type_to_string(type->type));
-      stream_printf(stream, " ");
-      write_type(type->param_a, stream, module);
-      stream_printf(stream, ")");
-      break;
-    case BASE_TYPE_CONS:
-      if (type_is_product(type)) {
-        stream_printf(stream, "(%s", base_type_to_string(BASE_TYPE_PRODUCT));
-        while (type->type == BASE_TYPE_CONS) {
-          stream_printf(stream, " ");
-          write_type(type->param_a, stream, module);
-          type = type->param_b;
-        }
-        stream_printf(stream, ")");
-        break;
-      }
-    case BASE_TYPE_FUNC:
-    case BASE_TYPE_UNION:
-      stream_printf(stream, "(");
-      stream_printf(stream, base_type_to_string(type->type));
-      stream_printf(stream, " ");
-      write_type(type->param_a, stream, module);
-      stream_printf(stream, " ");
-      write_type(type->param_b, stream, module);
-      stream_printf(stream, ")");
-      break;
-    case BASE_TYPE_PRODUCT:
-      stream_printf(stream, "(");
-      stream_printf(stream, base_type_to_string(type->type));
-      for (size_t i = 0; i < type->num_operands; i++) {
-        stream_printf(stream, " ");
-        write_type(type->operands[i], stream, module);
-      }
-      stream_printf(stream, ")");
-      break;
-    case BASE_TYPE_RECUR:
-    case BASE_TYPE_FORALL:
-      stream_printf(stream, "(");
-      stream_printf(stream, base_type_to_string(type->type));
-      stream_printf(stream, " %s ", type->var_name);
-      write_type(type->param_b, stream, module);
-      stream_printf(stream, ")");
-      break;
-    case BASE_TYPE_ALIAS:
-      stream_printf(stream, "%s", type->var_name);
-      break;
-  }
+static void write_type(CType *type, Stream *stream, Module *module) {
 }
 
 NseVal nse_write(NseVal value, Stream *stream, Module *module) {
-  switch (value.type) {
-    case TYPE_NIL:
+  if (!value.type) {
+    return undefined;
+  }
+  switch (value.type->internal) {
+    case INTERNAL_NIL:
       stream_printf(stream, "()");
       break;
-    case TYPE_CONS:
+    case INTERNAL_CONS:
       stream_printf(stream, "(");
       write_cons(value.cons, stream, module);
       stream_printf(stream, ")");
       break;
-    case TYPE_STRING:
+    case INTERNAL_STRING:
       stream_printf(stream, "\"");
       for (size_t i = 0; i < value.string->length; i++) {
         stream_printf(stream, "%c", value.string->chars[i]);
       }
       stream_printf(stream, "\"");
       break;
-    case TYPE_SYMBOL: {
+    case INTERNAL_SYMBOL: {
+      if (value.type == keyword_type) {
+        stream_printf(stream, ":%s", value.symbol->name);
+        break;
+      }
       Symbol *internal = module_find_internal(module, value.symbol->name);
       if (internal == value.symbol) {
         stream_printf(stream, "%s", value.symbol->name);
@@ -132,48 +55,46 @@ NseVal nse_write(NseVal value, Stream *stream, Module *module) {
       }
       break;
     }
-    case TYPE_KEYWORD:
-      stream_printf(stream, ":%s", value.symbol->name);
-      break;
-    case TYPE_I64:
+    case INTERNAL_I64:
       stream_printf(stream, "%ld", value.i64);
       break;
-    case TYPE_F64:
+    case INTERNAL_F64:
       stream_printf(stream, "%lf", value.f64);
       break;
-    case TYPE_QUOTE:
+    case INTERNAL_QUOTE:
+      if (value.type == type_quote_type) {
+        stream_printf(stream, "^");
+        nse_write(value.quote->quoted, stream, module);
+        break;
+      } else if (value.type == continue_type) {
+        stream_printf(stream, "#<continue ");
+        nse_write(value.quote->quoted, stream, module);
+        stream_printf(stream, ">");
+        break;
+      }
       stream_printf(stream, "'");
       nse_write(value.quote->quoted, stream, module);
       break;
-    case TYPE_TQUOTE:
-      stream_printf(stream, "^");
-      nse_write(value.quote->quoted, stream, module);
-      break;
-    case TYPE_CONTINUE:
-      stream_printf(stream, "#<continue ");
-      nse_write(value.quote->quoted, stream, module);
-      stream_printf(stream, ">");
-      break;
-    case TYPE_TYPE:
+    case INTERNAL_TYPE:
       stream_printf(stream, "^");
       write_type(value.type_val, stream, module);
       break;
-    case TYPE_SYNTAX:
+    case INTERNAL_SYNTAX:
       stream_printf(stream, "#<syntax ");
       nse_write(value.syntax->quoted, stream, module);
       stream_printf(stream, ">");
       break;
-    case TYPE_FUNC:
+    case INTERNAL_FUNC:
       stream_printf(stream, "#<function>");
       break;
-    case TYPE_CLOSURE:
+    case INTERNAL_CLOSURE:
       stream_printf(stream, "#<lambda>");
       break;
-    case TYPE_REFERENCE:
+    case INTERNAL_REFERENCE:
       stream_printf(stream, "#<reference#%p>", value.reference->pointer);
       break;
-    case TYPE_UNDEFINED:
-      return undefined;
+    case INTERNAL_NOTHING:
+      break;
   }
   return nil;
 }

@@ -184,6 +184,9 @@ Syntax *copy_syntax(Syntax *syntax, NseVal quoted) {
 }
 
 NseVal check_alloc(NseVal v) {
+  if (!v.type) {
+    return undefined;
+  }
   switch (v.type->internal) {
     case INTERNAL_CONS:
     case INTERNAL_CLOSURE:
@@ -202,6 +205,9 @@ NseVal check_alloc(NseVal v) {
 }
 
 NseVal add_ref(NseVal value) {
+  if (!value.type) {
+    return value;
+  }
   switch (value.type->internal) {
     case INTERNAL_CONS:
       value.cons->refs++;
@@ -234,6 +240,9 @@ NseVal add_ref(NseVal value) {
 }
 
 void del_ref(NseVal value) {
+  if (!value.type) {
+    return;
+  }
   size_t *refs = NULL;
   switch (value.type->internal) {
     case INTERNAL_CONS:

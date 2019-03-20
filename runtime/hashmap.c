@@ -74,8 +74,6 @@ HashMapEntry next_entry(HashMapIterator *iterator) {
   return (HashMapEntry){.key = NULL, .value = NULL};
 }
 
-#include <stdio.h>
-
 static void hash_map_resize(HashMap *map, size_t new_capacity) {
   size_t old_capacity = map->capacity;
   Bucket *old_buckets = map->buckets;
@@ -83,7 +81,6 @@ static void hash_map_resize(HashMap *map, size_t new_capacity) {
   map->mask = new_capacity - 1;
   map->upper_cap = map->capacity * 3 / 4;
   map->lower_cap = map->capacity / 4;
-  printf("resizing %zd -> %zd (low: %zd, high: %zd)\n", old_capacity, map->capacity, map->lower_cap, map->upper_cap);
   map->buckets = calloc(map->capacity, sizeof(Bucket));
   for (int i = 0; i < old_capacity; i++) {
     if (old_buckets[i].defined && !old_buckets[i].deleted) {

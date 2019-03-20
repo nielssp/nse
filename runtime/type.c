@@ -77,6 +77,7 @@ CType *type_quote_type;
 CType *syntax_type;
 CType *type_type;
 CType *func_type;
+CType *scope_type;
 
 GType *list_type;
 
@@ -87,7 +88,7 @@ void init_types() {
   improper_list_type = create_simple_type(INTERNAL_NOTHING, any_type);
   cons_type = create_simple_type(INTERNAL_CONS, improper_list_type);
   list_type = create_generic(1, INTERNAL_CONS, improper_list_type);
-  any_list_type = get_instance(list_type, (const CType *[]){ copy_type(any_type), NULL });
+  any_list_type = get_instance(list_type, (CType *[]){ copy_type(any_type), NULL });
   nil_type = create_simple_type(INTERNAL_NIL, any_list_type);
   num_type = create_simple_type(INTERNAL_NOTHING, any_type);
   i64_type = create_simple_type(INTERNAL_I64, num_type);
@@ -101,6 +102,7 @@ void init_types() {
   syntax_type = create_simple_type(INTERNAL_SYNTAX, any_type);
   type_type = create_simple_type(INTERNAL_TYPE, any_type);
   func_type = create_simple_type(INTERNAL_NOTHING, any_type);
+  scope_type = create_simple_type(INTERNAL_REFERENCE, any_type);
 }
 
 CType *create_simple_type(InternalType internal, CType *super) {
@@ -118,6 +120,7 @@ GType *create_generic(int arity, InternalType internal, CType *super) {
   t->arity = arity;
   t->internal = internal;
   t->super = super;
+  t->instances = create_instance_map();
   return t;
 }
 
@@ -176,12 +179,12 @@ void delete_type(CType *t) {
   free(t);
 }
 
-CType *get_instance(GType *g, const CType **parameters) {
-  CType *instance = instance_map_lookup(g->instances, parameters);
+CType *get_instance(GType *g, CType **parameters) {
+  CType *instance = instance_map_lookup(g->instances, (const CType **)parameters);
   if (instance) {
     return copy_type(instance);
   } else {
-    const CType **param = parameters;
+    CType **param = parameters;
     CType *super = copy_type(any_type);
     int arity = g->arity;
     while (*param) {
@@ -190,19 +193,25 @@ CType *get_instance(GType *g, const CType **parameters) {
         delete_type(super);
         super = NULL;
       }
+      param++;
     }
     if (arity != 0) {
       raise_error(domain_error, "Invalid number of generic parameters, expected %d, got %d", g->arity, g->arity - arity);
       return NULL;
     }
-    CType **param_copy = allocate(sizeof(CType *) * (arity + 1));
-    if (super) {
-      memcpy(param_copy, parameters, sizeof(CType *) * (arity + 1));
-    } else {
-      param_copy[arity] = NULL;
-      for (int i = 0; i < arity; i++) {
-        param_copy[i] = copy_type(any_type);
+    CType **param_copy = allocate(sizeof(CType *) * (g->arity + 1));
+    param_copy[g->arity] = NULL;
+    for (int i = 0; i < g->arity; i++) {
+      param_copy[i] = copy_type(parameters[i]);
+    }
+    if (!super) {
+      CType **param_copy2 = allocate(sizeof(CType *) * (g->arity + 1));
+      param_copy2[g->arity] = NULL;
+      for (int i = 0; i < g->arity; i++) {
+        param_copy2[i] = any_type;
       }
+      super = get_instance(g, param_copy2);
+      free(param_copy2);
     }
     instance = allocate(sizeof(CType));
     instance->refs = 1;

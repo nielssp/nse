@@ -63,6 +63,7 @@ extern CType *type_quote_type;
 extern CType *type_type;
 extern CType *syntax_type;
 extern CType *func_type;
+extern CType *scope_type;
 
 extern GType *list_type;
 
@@ -74,7 +75,7 @@ GType *create_generic(int arity, InternalType internal, CType *super);
 CType *copy_type(CType *t);
 void delete_type(CType *t);
 
-CType *get_instance(GType *g, const CType **parameters);
+CType *get_instance(GType *g, CType **parameters);
 CType *get_func_type(int min_arity, int variadic);
 CType *get_closure_type(int min_arity, int variadic);
 

@@ -1,8 +1,9 @@
 #include <string.h>
 
-#include "nsert.h"
+#include "runtime/value.h"
+#include "runtime/error.h"
+#include "runtime/hashmap.h"
 
-#include "util/hash_map.h"
 #include "util/stream.h"
 
 DEFINE_PRIVATE_HASH_MAP(namespace, Namespace, char *, NseVal *, string_hash, string_equals)
