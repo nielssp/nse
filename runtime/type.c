@@ -225,6 +225,10 @@ CType *get_instance(GType *g, CType **parameters) {
   }
 }
 
+CType *get_unary_instance(GType *g, CType *parameter) {
+  return get_instance(g, (CType *[]){ parameter, NULL });
+}
+
 CType *get_func_type(int min_arity, int variadic) {
   FuncType key = (FuncType){ .min_arity = min_arity, .variadic = variadic };
   CType *t = func_type_map_lookup(func_types, &key);

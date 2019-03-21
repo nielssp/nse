@@ -76,6 +76,7 @@ CType *copy_type(CType *t);
 void delete_type(CType *t);
 
 CType *get_instance(GType *g, CType **parameters);
+CType *get_unary_instance(GType *g, CType *parameter);
 CType *get_func_type(int min_arity, int variadic);
 CType *get_closure_type(int min_arity, int variadic);
 

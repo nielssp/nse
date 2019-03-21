@@ -63,7 +63,18 @@ Cons *create_cons(NseVal h, NseVal t) {
     return NULL;
   }
   cons->refs = 1;
-  // if (is_proper_list(t)) cons->type = get_instance(list_type, {unify(h, t))
+  if (t.type == nil_type) {
+    cons->type = get_unary_instance(list_type, copy_type(h.type));
+  } else if (t.type->type == C_TYPE_INSTANCE && t.type->instance.type == list_type) {
+    // TODO: unify(t.type->instance.parameters[0], h.type)
+    if (t.type->instance.parameters[0] == h.type) {
+      cons->type = copy_type(t.type);
+    } else {
+      cons->type = get_unary_instance(list_type, copy_type(any_type));
+    }
+  } else {
+    cons->type = copy_type(cons_type);
+  }
   cons->type = copy_type(cons_type);
   cons->head = h;
   cons->tail = t;
