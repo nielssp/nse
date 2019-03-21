@@ -216,6 +216,12 @@ static NseVal update_head(NseVal args) {
   return check_alloc(CONS(cons));
 }
 
+static NseVal type_of(NseVal args) {
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  return TYPE(copy_type(arg.type));
+}
+
 static NseVal is_a(NseVal args) {
   NseVal a = head(args);
   NseVal b = elem(1, args);
@@ -246,6 +252,7 @@ Module *get_system_module() {
   module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_, 1, 0));
   module_ext_define(system, "update-head", FUNC(update_head, 2, 0));
   module_ext_define(system, "is-a", FUNC(is_a, 2, 0));
+  module_ext_define(system, "type-of", FUNC(type_of, 1, 0));
 
   module_ext_define_type(system, "any", TYPE(any_type));
   module_ext_define_type(system, "nil", TYPE(nil_type));
