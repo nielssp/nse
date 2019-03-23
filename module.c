@@ -481,7 +481,9 @@ void module_ext_define_macro(Module *module, const char *name, NseVal value) {
 }
 
 void module_ext_define_type(Module *module, const char *name, NseVal value) {
+  Symbol *symbol = module_extern_symbol(module, name);
+  if (value.type == type_type && value.type_val->name == NULL) {
+    value.type_val->name = add_ref(SYMBOL(symbol)).symbol;
+  }
   module_define_type(module, name, value);
-  module_extern_symbol(module, name);
 }
-

@@ -1,6 +1,7 @@
 #ifndef NSE_TYPE_H
 #define NSE_TYPE_H
 
+typedef struct Symbol Symbol;
 typedef struct CType CType;
 typedef struct GType GType;
 
@@ -32,6 +33,7 @@ struct CType {
   CTypeType type;
   InternalType internal;
   CType *super;
+  Symbol *name;
   union {
     struct {
       GType *type;
@@ -74,6 +76,9 @@ GType *create_generic(int arity, InternalType internal, CType *super);
 
 CType *copy_type(CType *t);
 void delete_type(CType *t);
+
+Symbol *generic_type_name(GType *g);
+void set_generic_type_name(GType *g, Symbol *s);
 
 CType *get_instance(GType *g, CType **parameters);
 CType *get_unary_instance(GType *g, CType *parameter);

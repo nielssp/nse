@@ -75,7 +75,6 @@ Cons *create_cons(NseVal h, NseVal t) {
   } else {
     cons->type = copy_type(cons_type);
   }
-  cons->type = copy_type(cons_type);
   cons->head = h;
   cons->tail = t;
   add_ref(h);

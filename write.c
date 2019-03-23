@@ -20,6 +20,47 @@ static void write_cons(Cons *cons, Stream *stream, Module *module) {
 }
 
 static void write_type(CType *type, Stream *stream, Module *module) {
+  switch (type->type) {
+    case C_TYPE_SIMPLE:
+      if (type->name) {
+        nse_write(SYMBOL(type->name), stream, module);
+      } else {
+        stream_printf(stream, "#<type>");
+      }
+      break;
+    case C_TYPE_FUNC:
+    case C_TYPE_CLOSURE:
+        stream_printf(stream, "(-> (");
+        if (type->func.min_arity) {
+          stream_printf(stream, "any");
+          for (int i = 1; i < type->func.min_arity; i++) {
+            stream_printf(stream, " any");
+          }
+          if (type->func.variadic) {
+            stream_printf(stream, " ");
+          }
+        }
+        if (type->func.variadic) {
+          stream_printf(stream, "&rest any");
+        }
+        stream_printf(stream, ") any)");
+        break;
+    case C_TYPE_INSTANCE:
+      stream_printf(stream, "(");
+      Symbol *name = generic_type_name(type->instance.type);
+      if (name) {
+        nse_write(SYMBOL(name), stream, module);
+      } else {
+        stream_printf(stream, "#<generic-type>");
+      }
+      CType **param = type->instance.parameters;
+      while (*param) {
+        stream_printf(stream, " ");
+        write_type(*(param++), stream, module);
+      }
+      stream_printf(stream, ")");
+      break;
+  }
 }
 
 NseVal nse_write(NseVal value, Stream *stream, Module *module) {

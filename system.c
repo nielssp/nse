@@ -260,7 +260,10 @@ Module *get_system_module() {
   module_ext_define_type(system, "f64", TYPE(f64_type));
   module_ext_define_type(system, "string", TYPE(string_type));
   module_ext_define_type(system, "symbol", TYPE(symbol_type));
+  module_ext_define_type(system, "quote", TYPE(quote_type));
+  module_ext_define_type(system, "syntax", TYPE(syntax_type));
   module_ext_define_type(system, "type", TYPE(type_type));
   module_ext_define_type(system, "cons", TYPE(cons_type));
+  set_generic_type_name(list_type, module_extern_symbol(system, "list"));
   return system;
 }

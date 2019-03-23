@@ -3,6 +3,7 @@
 
 #include "error.h"
 #include "hashmap.h"
+#include "value.h"
 
 #include "type.h"
 
@@ -52,6 +53,7 @@ DEFINE_PRIVATE_HASH_MAP(func_type_map, FuncTypeMap, FuncType *, CType *, func_ty
 struct GType {
   size_t refs;
   int arity;
+  Symbol *name;
   InternalType internal;
   CType *super;
   InstanceMap instances;
@@ -111,6 +113,7 @@ CType *create_simple_type(InternalType internal, CType *super) {
   t->type = C_TYPE_SIMPLE;
   t->internal = internal;
   t->super = super;
+  t->name = NULL;
   return t;
 }
 
@@ -121,6 +124,7 @@ GType *create_generic(int arity, InternalType internal, CType *super) {
   t->internal = internal;
   t->super = super;
   t->instances = create_instance_map();
+  t->name = NULL;
   return t;
 }
 
@@ -177,6 +181,20 @@ void delete_type(CType *t) {
       break;
   }
   free(t);
+}
+
+Symbol *generic_type_name(GType *g) {
+  return g->name;
+}
+
+void set_generic_type_name(GType *g, Symbol *s) {
+  if (g->name) {
+    del_ref(SYMBOL(g->name));
+  }
+  if (s) {
+    add_ref(SYMBOL(s));
+    g->name = s;
+  }
 }
 
 CType *get_instance(GType *g, CType **parameters) {
