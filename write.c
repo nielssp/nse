@@ -79,7 +79,28 @@ NseVal nse_write(NseVal value, Stream *stream, Module *module) {
     case INTERNAL_STRING:
       stream_printf(stream, "\"");
       for (size_t i = 0; i < value.string->length; i++) {
-        stream_printf(stream, "%c", value.string->chars[i]);
+        char c = value.string->chars[i];
+        switch (c) {
+          case '"':
+          case '\\':
+            stream_printf(stream, "\\%c", c);
+            break;
+          case '\n':
+            stream_printf(stream, "\\n");
+            break;
+          case '\r':
+            stream_printf(stream, "\\r");
+            break;
+          case '\t':
+            stream_printf(stream, "\\t");
+            break;
+          case '\0':
+            stream_printf(stream, "\\0");
+            break;
+          default:
+            stream_putc(c, stream);
+            break;
+        }
       }
       stream_printf(stream, "\"");
       break;

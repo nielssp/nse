@@ -171,7 +171,21 @@ static Syntax *read_string(Reader *input) {
         return NULL;
       }
       if (escape) {
-        // TODO: do something with c
+        // TODO: more escapes
+        switch (c) {
+          case 'n':
+            c = '\n';
+            break;
+          case 'r':
+            c = '\r';
+            break;
+          case 't':
+            c = '\t';
+            break;
+          case '0':
+            c = '\0';
+            break;
+        }
         escape = 0;
       } else if (c == '"') {
         pop(input);
