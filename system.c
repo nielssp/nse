@@ -258,6 +258,20 @@ static NseVal stream_write(NseVal args) {
   return nil;
 }
 
+static NseVal stream_read_(NseVal args) {
+  ARG_POP_I64(bytes, args);
+  ARG_POP_REF(Stream *, f, args, stream_type);
+  ARG_DONE(args);
+  char *buffer = allocate(bytes);
+  if (!buffer) {
+    return undefined;
+  }
+  size_t length = stream_read(buffer, 1, bytes, f);
+  String *return_value = create_string(buffer, length);
+  free(buffer);
+  return check_alloc(STRING(return_value));
+}
+
 Module *get_system_module() {
   Module *system = create_module("system");
   module_ext_define(system, "+", FUNC(sum, 0, 1));
@@ -276,7 +290,8 @@ Module *get_system_module() {
   module_ext_define(system, "is-a", FUNC(is_a, 2, 0));
   module_ext_define(system, "type-of", FUNC(type_of, 1, 0));
   module_ext_define(system, "open", FUNC(open_stream, 2, 0));
-  module_ext_define(system, "write", FUNC(stream_write, 2, 0));
+  module_ext_define(system, "stream-write", FUNC(stream_write, 2, 0));
+  module_ext_define(system, "stream-read", FUNC(stream_read_, 2, 0));
 
   module_ext_define_type(system, "any", TYPE(any_type));
   module_ext_define_type(system, "nil", TYPE(nil_type));
