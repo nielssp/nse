@@ -80,6 +80,7 @@ CType *syntax_type;
 CType *type_type;
 CType *func_type;
 CType *scope_type;
+CType *stream_type;
 
 GType *list_type;
 
@@ -105,6 +106,7 @@ void init_types() {
   type_type = create_simple_type(INTERNAL_TYPE, any_type);
   func_type = create_simple_type(INTERNAL_NOTHING, any_type);
   scope_type = create_simple_type(INTERNAL_REFERENCE, any_type);
+  stream_type = create_simple_type(INTERNAL_REFERENCE, any_type);
 }
 
 CType *create_simple_type(InternalType internal, CType *super) {

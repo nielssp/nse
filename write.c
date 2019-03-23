@@ -134,7 +134,9 @@ NseVal nse_write(NseVal value, Stream *stream, Module *module) {
       stream_printf(stream, "#<lambda>");
       break;
     case INTERNAL_REFERENCE:
-      stream_printf(stream, "#<reference#%p>", value.reference->pointer);
+      stream_printf(stream, "#<");
+      write_type(value.type, stream, module);
+      stream_printf(stream, "#%p>", value.reference->pointer);
       break;
     case INTERNAL_NOTHING:
       break;

@@ -1,4 +1,5 @@
 #include <string.h>
+#include <errno.h>
 
 #include "runtime/value.h"
 #include "runtime/error.h"
@@ -236,6 +237,27 @@ static NseVal is_a(NseVal args) {
   return result;
 }
 
+static NseVal open_stream(NseVal args) {
+  ARG_POP_TYPE(String *, name, args, to_string, "a string");
+  ARG_POP_TYPE(String *, mode, args, to_string, "a string");
+  ARG_DONE(args);
+  Stream *f = stream_file(name->chars, mode->chars);
+  if (f) {
+    return check_alloc(REFERENCE(create_reference(stream_type, f, (Destructor) stream_close)));
+  } else {
+    raise_error(io_error, "could not open file: %s: %s", name, strerror(errno));
+  }
+  return undefined;
+}
+
+static NseVal stream_write(NseVal args) {
+  ARG_POP_TYPE(String *, str, args, to_string, "a string");
+  ARG_POP_REF(Stream *, f, args, stream_type);
+  ARG_DONE(args);
+  stream_printf(f, str->chars);
+  return nil;
+}
+
 Module *get_system_module() {
   Module *system = create_module("system");
   module_ext_define(system, "+", FUNC(sum, 0, 1));
@@ -253,6 +275,8 @@ Module *get_system_module() {
   module_ext_define(system, "update-head", FUNC(update_head, 2, 0));
   module_ext_define(system, "is-a", FUNC(is_a, 2, 0));
   module_ext_define(system, "type-of", FUNC(type_of, 1, 0));
+  module_ext_define(system, "open", FUNC(open_stream, 2, 0));
+  module_ext_define(system, "write", FUNC(stream_write, 2, 0));
 
   module_ext_define_type(system, "any", TYPE(any_type));
   module_ext_define_type(system, "nil", TYPE(nil_type));
@@ -264,6 +288,7 @@ Module *get_system_module() {
   module_ext_define_type(system, "syntax", TYPE(syntax_type));
   module_ext_define_type(system, "type", TYPE(type_type));
   module_ext_define_type(system, "cons", TYPE(cons_type));
+  module_ext_define_type(system, "stream", TYPE(stream_type));
   set_generic_type_name(list_type, module_extern_symbol(system, "list"));
   return system;
 }

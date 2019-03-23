@@ -62,6 +62,24 @@
       return undefined;\
     }\
   }
+#define ARG_POP_REF(ptr_type, name, args, nse_type) ptr_type name;\
+  {\
+    NseVal temp1 = head(args);\
+    if (!RESULT_OK(temp1)) {\
+      raise_error(domain_error, "too few parameters for function");\
+      return undefined;\
+    }\
+    args = tail(args);\
+    if (temp1.type != nse_type) {\
+      char *temp2 = nse_write_to_string(temp1, lang_module);\
+      char *temp3 = nse_write_to_string(TYPE(nse_type), lang_module);\
+      raise_error(domain_error, "%s is not a %s", temp2, temp3);\
+      free(temp2);\
+      free(temp3);\
+      return undefined;\
+    }\
+    name = (ptr_type)temp1.reference->pointer;\
+  }
 #define ARG_DONE(args) if (!is_nil(args)) {\
   raise_error(domain_error, "too many parameters for function");\
   return undefined;\
