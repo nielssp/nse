@@ -42,9 +42,9 @@ void module_define(Module *module, const char *name, NseVal value);
 void module_define_macro(Module *module, const char *name, NseVal value);
 void module_define_type(Module *module, const char *name, NseVal value);
 void module_define_read_macro(Module *module, const char *name, NseVal value);
-void module_ext_define(Module *module, const char *name, NseVal value);
-void module_ext_define_macro(Module *module, const char *name, NseVal value);
-void module_ext_define_type(Module *module, const char *name, NseVal value);
+Symbol *module_ext_define(Module *module, const char *name, NseVal value);
+Symbol *module_ext_define_macro(Module *module, const char *name, NseVal value);
+Symbol *module_ext_define_type(Module *module, const char *name, NseVal value);
 
 Module *find_module(const char *s);
 Symbol *find_symbol(const char *s);

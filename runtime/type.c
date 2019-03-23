@@ -205,7 +205,12 @@ CType *get_instance(GType *g, CType **parameters) {
     return copy_type(instance);
   } else {
     CType **param = parameters;
-    CType *super = copy_type(any_type);
+    CType *super;
+    if (g->super) {
+      super = copy_type(g->super);
+    } else {
+      super = copy_type(any_type);
+    }
     int arity = g->arity;
     while (*param) {
       arity--;
@@ -238,7 +243,7 @@ CType *get_instance(GType *g, CType **parameters) {
     instance->super = super;
     instance->type = C_TYPE_INSTANCE;
     instance->internal = g->internal;
-    instance->instance.type = g;
+    instance->instance.type = copy_generic(g);
     instance->instance.parameters = param_copy;
     instance_map_add(g->instances, param_copy, instance);
     return instance;

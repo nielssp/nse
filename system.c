@@ -230,8 +230,13 @@ static NseVal is_a(NseVal args) {
   NseVal result = undefined;
   if (type_a) {
     CType *type_b = to_type(b);
-    if (type_b) {
-      result = type_a == type_b ? TRUE : FALSE;
+    result = FALSE;
+    while (type_a) {
+      if (type_a == type_b) {
+        result = TRUE;
+        break;
+      }
+      type_a = type_a->super;
     }
   }
   return result;
@@ -272,6 +277,12 @@ static NseVal stream_read_(NseVal args) {
   return check_alloc(STRING(return_value));
 }
 
+static NseVal get_list_type(NseVal args) {
+  ARG_POP_TYPE(CType *, type_a, args, to_type, "a type");
+  ARG_DONE(args);
+  return TYPE(get_unary_instance(list_type, copy_type(type_a)));
+}
+
 Module *get_system_module() {
   Module *system = create_module("system");
   module_ext_define(system, "+", FUNC(sum, 0, 1));
@@ -303,7 +314,8 @@ Module *get_system_module() {
   module_ext_define_type(system, "syntax", TYPE(syntax_type));
   module_ext_define_type(system, "type", TYPE(type_type));
   module_ext_define_type(system, "cons", TYPE(cons_type));
+  module_ext_define_type(system, "improper-list", TYPE(improper_list_type));
   module_ext_define_type(system, "stream", TYPE(stream_type));
-  set_generic_type_name(list_type, module_extern_symbol(system, "list"));
+  set_generic_type_name(list_type, module_ext_define_type(system, "list", FUNC(get_list_type, 1, 1)));
   return system;
 }

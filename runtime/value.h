@@ -43,6 +43,7 @@
       char *temp2 = nse_write_to_string(temp1, lang_module);\
       raise_error(domain_error, "%s is not an integer", temp2);\
       free(temp2);\
+      return undefined;\
     }\
     name = temp1.i64;\
   }

@@ -470,20 +470,21 @@ void module_define_read_macro(Module *module, const char *name, NseVal value) {
   add_ref(value);
 }
 
-void module_ext_define(Module *module, const char *name, NseVal value) {
+Symbol *module_ext_define(Module *module, const char *name, NseVal value) {
   module_define(module, name, value);
-  module_extern_symbol(module, name);
+  return module_extern_symbol(module, name);
 }
 
-void module_ext_define_macro(Module *module, const char *name, NseVal value) {
+Symbol *module_ext_define_macro(Module *module, const char *name, NseVal value) {
   module_define_macro(module, name, value);
-  module_extern_symbol(module, name);
+  return module_extern_symbol(module, name);
 }
 
-void module_ext_define_type(Module *module, const char *name, NseVal value) {
+Symbol *module_ext_define_type(Module *module, const char *name, NseVal value) {
   Symbol *symbol = module_extern_symbol(module, name);
   if (value.type == type_type && value.type_val->name == NULL) {
     value.type_val->name = add_ref(SYMBOL(symbol)).symbol;
   }
   module_define_type(module, name, value);
+  return symbol;
 }
