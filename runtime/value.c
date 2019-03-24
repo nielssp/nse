@@ -387,7 +387,6 @@ NseVal elem(size_t n, NseVal value) {
   return head(value);
 }
 
-
 int is_cons(NseVal v) {
   if (v.type->internal == INTERNAL_CONS) {
     return 1;

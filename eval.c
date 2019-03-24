@@ -2,6 +2,7 @@
 
 #include "runtime/value.h"
 #include "runtime/error.h"
+#include "runtime/validate.h"
 #include "write.h"
 
 #include "eval.h"
@@ -280,15 +281,43 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
   }
 }
 
+NseVal eval_block(NseVal block, Scope *scope) {
+  NseVal result = nil;
+  Scope *current_scope = scope;
+  while (is_cons(block)) {
+    del_ref(result);
+    result = nil;
+    NseVal statement = head(block);
+    Symbol *name = NULL;
+    NseVal expr = undefined;
+    if (VALIDATE(statement, V_EXACT(let_symbol), V_SYMBOL(&name), V_ANY(&expr))) {
+      NseVal value = eval(expr, current_scope);
+      if (!RESULT_OK(value)) {
+        result = value;
+        break;
+      }
+      current_scope = scope_push(current_scope, name, value);
+      del_ref(value);
+    } else {
+      result = eval(statement, current_scope);
+      if (!RESULT_OK(result)) {
+        break;
+      }
+    }
+    block = tail(block);
+  }
+  scope_pop_until(current_scope, scope);
+  return result;
+}
+
 NseVal eval_anon(NseVal args, NseVal env[]) {
   NseVal definition = env[0];
   Scope *scope = env[1].reference->pointer;
   NseVal formal = head(definition);
-  NseVal body = head(tail(definition));
   Scope *current_scope = scope;
   NseVal result = undefined;
   if (assign_parameters(&current_scope, formal, args)) {
-    result = eval(body, current_scope);
+    result = eval_block(tail(definition), current_scope);
   }
   scope_pop_until(current_scope, scope);
   return result;

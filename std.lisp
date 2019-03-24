@@ -1,7 +1,15 @@
 ;;;;
-;;;; Self-hosted system functions
+;;;; Self-hosted standard library
 ;;;;
 (in-module :system)
+
+;;; stdio
+(export 'print 'println)
+
+(def (print str) (stream-write str *stdout*))
+(def (println str)
+     (stream-write str *stdout*)
+     (stream-write "\n" *stdout*))
 
 ;;; function composition
 (export 'compose 'curry 'flip 'negate 'pipe)
