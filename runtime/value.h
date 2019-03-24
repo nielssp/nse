@@ -184,6 +184,7 @@ Symbol *create_keyword(const char *s, Module *module);
 String *create_string(const char *s, size_t length);
 Closure *create_closure(NseVal f(NseVal, NseVal[]), CType *type, NseVal env[], size_t env_size);
 Reference *create_reference(CType *type, void *pointer, void destructor(void *));
+void void_destructor(void * p);
 
 Syntax *copy_syntax(Syntax *syntax, NseVal quoted);
 NseVal check_alloc(NseVal v);

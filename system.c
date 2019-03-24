@@ -3,9 +3,10 @@
 
 #include "runtime/value.h"
 #include "runtime/error.h"
+#include "util/stream.h"
+#include "write.h"
 
 #include "system.h"
-#include "write.h"
 
 static NseVal sum(NseVal args) {
   int64_t acc = 0;
@@ -303,6 +304,15 @@ Module *get_system_module() {
   module_ext_define(system, "open", FUNC(open_stream, 2, 0));
   module_ext_define(system, "stream-write", FUNC(stream_write, 2, 0));
   module_ext_define(system, "stream-read", FUNC(stream_read_, 2, 0));
+  NseVal stdin_val = REFERENCE(create_reference(stream_type, stdin_stream, void_destructor));
+  NseVal stdout_val = REFERENCE(create_reference(stream_type, stdout_stream, void_destructor));
+  NseVal stderr_val = REFERENCE(create_reference(stream_type, stderr_stream, void_destructor));
+  module_ext_define(system, "*stdin*", stdin_val);
+  module_ext_define(system, "*stdout*", stdout_val);
+  module_ext_define(system, "*sterr*", stderr_val);
+  del_ref(stdin_val);
+  del_ref(stdout_val);
+  del_ref(stderr_val);
 
   module_ext_define_type(system, "any", TYPE(any_type));
   module_ext_define_type(system, "nil", TYPE(nil_type));

@@ -1,22 +1,23 @@
 #include "write.h"
 
-static void write_cons(Cons *cons, Stream *stream, Module *module);
-
-static void write_cons_tail(NseVal tail, Stream *stream, Module *module) {
-  if (tail.type->internal == INTERNAL_SYNTAX) {
-    write_cons_tail(tail.syntax->quoted, stream, module);
-  } else if (tail.type->internal == INTERNAL_CONS) {
-    stream_printf(stream, " ");
-    write_cons(tail.cons, stream, module);
-  } else if (tail.type->internal != INTERNAL_NIL) {
-    stream_printf(stream, " . ");
-    nse_write(tail, stream, module);
-  }
-}
-
 static void write_cons(Cons *cons, Stream *stream, Module *module) {
-  nse_write(cons->head, stream, module);
-  write_cons_tail(cons->tail, stream, module);
+  while (cons) {
+    nse_write(cons->head, stream, module);
+    NseVal tail = cons->tail;
+    while (tail.type->internal == INTERNAL_SYNTAX) {
+      tail = tail.syntax->quoted;
+    }
+    if (tail.type->internal == INTERNAL_CONS) {
+      stream_printf(stream, " ");
+      cons = tail.cons;
+    } else {
+      if (tail.type->internal != INTERNAL_NIL) {
+        stream_printf(stream, " . ");
+        nse_write(tail, stream, module);
+      }
+      break;
+    }
+  }
 }
 
 static void write_type(CType *type, Stream *stream, Module *module) {

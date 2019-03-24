@@ -179,6 +179,9 @@ Reference *create_reference(CType *type, void *pointer, void destructor(void *))
   return reference;
 }
 
+void void_destructor(void * p) {
+}
+
 Syntax *copy_syntax(Syntax *syntax, NseVal quoted) {
   Syntax *copy = create_syntax(quoted);
   if (copy) {
