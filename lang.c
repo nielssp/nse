@@ -26,6 +26,8 @@ Symbol *read_return_symbol = NULL;
 Symbol *read_ignore_symbol = NULL;
 
 Symbol *key_symbol = NULL;
+Symbol *opt_symbol = NULL;
+Symbol *rest_symbol = NULL;
 
 Module *lang_module = NULL;
 
@@ -58,4 +60,6 @@ void init_lang_module() {
   read_ignore_symbol = module_extern_symbol(lang_module, "read-ignore");
 
   key_symbol = module_extern_symbol(lang_module, "&key");
+  opt_symbol = module_extern_symbol(lang_module, "&opt");
+  rest_symbol = module_extern_symbol(lang_module, "&rest");
 }

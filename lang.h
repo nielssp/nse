@@ -31,6 +31,8 @@ extern Symbol *read_return_symbol;
 extern Symbol *read_ignore_symbol;
 
 extern Symbol *key_symbol;
+extern Symbol *opt_symbol;
+extern Symbol *rest_symbol;
 
 void init_lang_module();
 

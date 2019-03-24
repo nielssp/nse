@@ -170,6 +170,65 @@ int assign_named_parameters(Scope **scope, NseVal formal, NseVal actual) {
   return result;
 }
 
+int assign_rest_parameters(Scope **scope, NseVal formal, NseVal actual) {
+  Cons *cons = to_cons(formal);
+  if (!cons || !is_nil(cons->tail)) {
+    raise_error(domain_error, "&rest must be followed by exactly one symbol");
+    return 0;
+  }
+  Symbol *name = to_symbol(cons->head);
+  if (!name) {
+    raise_error(domain_error, "&rest must be followed by exactly one symbol");
+    return 0;
+  }
+  *scope = scope_push(*scope, name, actual);
+  return 1;
+}
+
+int assign_opt_parameters(Scope **scope, NseVal formal, NseVal actual) {
+  while (is_cons(formal)) {
+    Symbol *symbol;
+    NseVal default_expr = undefined;
+    if (is_cons(head(formal))) {
+      symbol = to_symbol(head(head(formal)));
+      default_expr = elem(1, head(formal));
+      if (!RESULT_OK(default_expr)) {
+        raise_error(domain_error, "expected a default value");
+        return 0;
+      }
+    } else {
+      symbol = to_symbol(head(formal));
+    }
+    if (!symbol) {
+      raise_error(domain_error, "expected a symbol");
+      return 0;
+    }
+    if (symbol == key_symbol) {
+      return assign_named_parameters(scope, tail(formal), actual);
+    } else if (symbol == rest_symbol) {
+      return assign_rest_parameters(scope, tail(formal), actual);
+    }
+    if (is_cons(actual)) {
+      *scope = scope_push(*scope, symbol, head(actual));
+      actual = tail(actual);
+    } else if (RESULT_OK(default_expr)) {
+      NseVal default_value = eval(default_expr, *scope);
+      if (!RESULT_OK(default_value)) {
+        return 0;
+      }
+      *scope = scope_push(*scope, symbol, default_value);
+    } else {
+      *scope = scope_push(*scope, symbol, nil);
+    }
+    formal = tail(formal);
+  }
+  if (!is_nil(actual)) {
+    raise_error(pattern_error, "too many parameters for function");
+    return 0;
+  }
+  return 1;
+}
+
 int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
   switch (formal.type->internal) {
     case INTERNAL_SYNTAX: {
@@ -196,6 +255,10 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
       if (keyword) {
         if (keyword == key_symbol) {
           return assign_named_parameters(scope, tail(formal), actual);
+        } else if (keyword == opt_symbol) {
+          return assign_opt_parameters(scope, tail(formal), actual);
+        } else if (keyword == rest_symbol) {
+          return assign_rest_parameters(scope, tail(formal), actual);
         }
       }
       if (!is_cons(actual)) {
