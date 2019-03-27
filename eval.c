@@ -316,14 +316,14 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
     formal = tail(formal);
     actual = tail(actual);
   }
-  if (!is_nil(actual)) {
-    set_debug_form(actual);
-    raise_error(domain_error, "too many parameters for function");
-    return 0;
-  }
   if (!is_nil(formal)) {
     set_debug_form(formal);
     raise_error(syntax_error, "formal parameters must be a proper list");
+    return 0;
+  }
+  if (!is_nil(actual)) {
+    set_debug_form(actual);
+    raise_error(domain_error, "too many parameters for function");
     return 0;
   }
   return 1;
