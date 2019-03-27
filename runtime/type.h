@@ -20,6 +20,7 @@ typedef enum {
   INTERNAL_REFERENCE,
   INTERNAL_TYPE,
   INTERNAL_QUOTE,
+  INTERNAL_DATA,
 } InternalType;
 
 typedef enum {

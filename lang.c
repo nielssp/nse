@@ -15,6 +15,7 @@ Symbol *def_symbol = NULL;
 Symbol *def_macro_symbol = NULL;
 Symbol *def_type_symbol = NULL;
 Symbol *def_read_macro_symbol = NULL;
+Symbol *def_data_symbol = NULL;
 
 Symbol *read_char_symbol = NULL;
 Symbol *read_string_symbol = NULL;
@@ -49,6 +50,7 @@ void init_lang_module() {
   def_macro_symbol = module_extern_symbol(lang_module, "def-macro");
   def_type_symbol = module_extern_symbol(lang_module, "def-type");
   def_read_macro_symbol = module_extern_symbol(lang_module, "def-read-macro");
+  def_data_symbol = module_extern_symbol(lang_module, "def-data");
 
   read_char_symbol = module_extern_symbol(lang_module, "read-char");
   read_string_symbol = module_extern_symbol(lang_module, "read-string");

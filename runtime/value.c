@@ -7,9 +7,8 @@
 
 #include "value.h"
 
-void delete_all(NseVal value);
-void delete(NseVal value);
-NseVal parse_list(char **input);
+static void delete_all(NseVal value);
+static void delete(NseVal value);
 
 NseVal undefined = { .type = NULL };
 NseVal nil;
@@ -150,6 +149,7 @@ String *create_string(const char *s, size_t length) {
 Closure *create_closure(NseVal f(NseVal, NseVal[]), CType *type, NseVal env[], size_t env_size) {
   Closure *closure = allocate(sizeof(Closure) + env_size * sizeof(NseVal));
   if (!closure) {
+    delete_type(type);
     return NULL;
   }
   closure->refs = 1;
@@ -182,6 +182,26 @@ Reference *create_reference(CType *type, void *pointer, void destructor(void *))
 void void_destructor(void * p) {
 }
 
+Data *create_data(CType *type, Symbol *tag, NseVal record[], size_t record_size) {
+  Data *data = allocate(sizeof(Data) + record_size * sizeof(NseVal));
+  if (!data) {
+    delete_type(type);
+    return NULL;
+  }
+  data->refs = 1;
+  data->type = type;
+  add_ref(SYMBOL(tag));
+  data->tag = tag;
+  data->record_size = record_size;
+  if (record_size > 0) {
+    memcpy(data->record, record, record_size * sizeof(NseVal));
+    for (size_t i = 0; i < record_size; i++) {
+      add_ref(record[i]);
+    }
+  }
+  return data;
+}
+
 Syntax *copy_syntax(Syntax *syntax, NseVal quoted) {
   Syntax *copy = create_syntax(quoted);
   if (copy) {
@@ -210,6 +230,7 @@ NseVal check_alloc(NseVal v) {
     case INTERNAL_SYMBOL:
     case INTERNAL_STRING:
     case INTERNAL_TYPE:
+    case INTERNAL_DATA:
       if ((void *)v.cons == NULL) {
         return undefined;
       }
@@ -247,6 +268,9 @@ NseVal add_ref(NseVal value) {
     case INTERNAL_TYPE:
       copy_type(value.type_val);
       break;
+    case INTERNAL_DATA:
+      value.data->refs++;
+      break;
     default:
       break;
   }
@@ -283,6 +307,9 @@ void del_ref(NseVal value) {
     case INTERNAL_TYPE:
       delete_type(value.type_val);
       return;
+    case INTERNAL_DATA:
+      refs = &value.data->refs;
+      break;
     default:
       return;
   }
@@ -295,7 +322,7 @@ void del_ref(NseVal value) {
   }
 }
 
-void delete_all(NseVal value) {
+static void delete_all(NseVal value) {
   if (value.type->internal == INTERNAL_CONS) {
     del_ref(value.cons->head);
     del_ref(value.cons->tail);
@@ -318,10 +345,16 @@ void delete_all(NseVal value) {
     }
     del_ref(value.syntax->quoted);
   }
+  if (value.type->internal == INTERNAL_DATA) {
+    del_ref(SYMBOL(value.data->tag));
+    for (size_t i = 0; i < value.data->record_size; i++) {
+      del_ref(value.data->record[i]);
+    }
+  }
   delete(value);
 }
 
-void delete(NseVal value) {
+static void delete(NseVal value) {
   switch (value.type->internal) {
     case INTERNAL_CONS:
       free(value.cons);
@@ -347,6 +380,10 @@ void delete(NseVal value) {
       }
       delete_type(value.reference->type);
       free(value.reference);
+      return;
+    case INTERNAL_DATA:
+      delete_type(value.data->type);
+      free(value.data);
       return;
     default:
       return;
@@ -507,6 +544,10 @@ NseVal from_reference(Reference *r) {
   return (NseVal){ .type = r->type, .reference = r };
 }
 
+NseVal from_data(Data *d) {
+  return (NseVal){ .type = d->type, .data = d };
+}
+
 Cons *to_cons(NseVal v) {
   if (v.type->internal == INTERNAL_CONS) {
     return v.cons;
@@ -592,6 +633,7 @@ int is_special_form(NseVal v) {
     result |= v.symbol == def_symbol;
     result |= v.symbol == def_macro_symbol;
     result |= v.symbol == def_type_symbol;
+    result |= v.symbol == def_data_symbol;
   } else if (v.type->internal == INTERNAL_SYNTAX) {
     result = is_special_form(v.syntax->quoted);
   }
@@ -720,6 +762,25 @@ NseVal nse_equals(NseVal a, NseVal b) {
       return FALSE;
     case INTERNAL_TYPE:
       return a.type_val == b.type_val ? TRUE : FALSE;
+    case INTERNAL_DATA:
+      if (a.data == b.data) {
+        return TRUE;
+      }
+      if (a.data->type != b.data->type) {
+        return FALSE;
+      }
+      if (a.data->tag != b.data->tag) {
+        return FALSE;
+      }
+      if (a.data->record_size != b.data->record_size) {
+        return FALSE;
+      }
+      for (int i = 0; i < a.data->record_size; i++) {
+        if (!is_true(nse_equals(a.data->record[i], b.data->record[i]))) {
+          return FALSE;
+        }
+      }
+      return TRUE;
     default:
       return FALSE;
   }

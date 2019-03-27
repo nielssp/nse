@@ -187,6 +187,19 @@ NseVal nse_write(NseVal value, Stream *stream, Module *module) {
       write_type(value.type, stream, module);
       stream_printf(stream, "#%p>", value.reference->pointer);
       break;
+    case INTERNAL_DATA:
+      if (value.data->record_size) {
+        stream_printf(stream, "(");
+        nse_write(SYMBOL(value.data->tag), stream, module);
+        for (int i = 0; i < value.data->record_size; i++) {
+          stream_printf(stream, " ");
+          nse_write(value.data->record[i], stream, module);
+        }
+        stream_printf(stream, ")");
+      } else {
+        nse_write(SYMBOL(value.data->tag), stream, module);
+      }
+      break;
     case INTERNAL_NOTHING:
       break;
   }

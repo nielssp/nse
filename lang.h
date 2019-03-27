@@ -20,6 +20,7 @@ extern Symbol *def_symbol;
 extern Symbol *def_macro_symbol;
 extern Symbol *def_type_symbol;
 extern Symbol *def_read_macro_symbol;
+extern Symbol *def_data_symbol;
 
 extern Symbol *read_char_symbol;
 extern Symbol *read_string_symbol;

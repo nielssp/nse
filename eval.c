@@ -40,7 +40,7 @@ static CType *parameters_to_type(NseVal formal) {
     case INTERNAL_NIL:
       return copy_type(nil_type);
     case INTERNAL_CONS:
-      return copy_type(cons_type);
+      return copy_type(improper_list_type);
     case INTERNAL_SYMBOL:
       return copy_type(any_type);
     case INTERNAL_QUOTE: {
@@ -688,6 +688,48 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
               del_ref(value);
               return add_ref(SYMBOL(symbol));
             }
+          } else {
+            raise_error(syntax_error, "name of type must be a symbol");
+          }
+        }
+      }
+      return undefined;
+    } else if (macro_name == def_data_symbol) {
+      NseVal h = head(args);
+      if (RESULT_OK(h)) {
+        if (is_cons(h)) {
+          Symbol *symbol = to_symbol(head(h));
+          if (symbol) {
+            // TODO: not implemented
+          } else {
+            raise_error(syntax_error, "name of type must be a symbol");
+          }
+        } else {
+          Symbol *symbol = to_symbol(h);
+          if (symbol) {
+            CType *t = create_simple_type(INTERNAL_DATA, copy_type(any_type));
+            t->name = add_ref(SYMBOL(symbol)).symbol;
+            module_define_type(symbol->module, symbol->name, TYPE(t));
+            for (NseVal c = tail(args); is_cons(c); c = tail(c)) {
+              NseVal constructor = head(c);
+              if (is_cons(constructor)) {
+                // TODO: not implemented
+              } else {
+                Symbol *tag = to_symbol(constructor);
+                if (tag) {
+                  Data *d = create_data(t, tag, NULL, 0);
+                  if (!d) {
+                    return undefined;
+                  }
+                  module_define(tag->module, tag->name, DATA(d));
+                  del_ref(DATA(d));
+                } else {
+                  raise_error(syntax_error, "name of constructor must be a symbol");
+                  return undefined;
+                }
+              }
+            }
+            return add_ref(SYMBOL(symbol));
           } else {
             raise_error(syntax_error, "name of type must be a symbol");
           }

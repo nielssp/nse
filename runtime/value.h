@@ -21,6 +21,7 @@
 #define CONTINUE(q) ((NseVal) { .type = continue_type, .quote = (q) })
 #define TYPE(t) ((NseVal) { .type = type_type, .type_val = (t) })
 #define REFERENCE(r) from_reference(r)
+#define DATA(d) from_data(d)
 
 #define RESULT_OK(value) ((value).type != NULL)
 #define THEN(previous, next) ((RESULT_OK(previous)) ? (next) : undefined)
@@ -96,6 +97,7 @@ typedef struct Syntax Syntax;
 typedef struct Reference Reference;
 typedef struct String String;
 typedef struct Symbol Symbol;
+typedef struct Data Data;
 
 typedef void (* Destructor)(void *);
 
@@ -116,6 +118,7 @@ struct NseVal {
     CType *type_val;
     Closure *closure;
     Reference *reference;
+    Data *data;
   };
 };
 
@@ -169,6 +172,14 @@ struct Symbol {
   char name[];
 };
 
+struct Data {
+  size_t refs;
+  CType *type;
+  Symbol *tag;
+  size_t record_size;
+  NseVal record[];
+};
+
 extern NseVal undefined;
 extern NseVal nil;
 
@@ -185,6 +196,7 @@ String *create_string(const char *s, size_t length);
 Closure *create_closure(NseVal f(NseVal, NseVal[]), CType *type, NseVal env[], size_t env_size);
 Reference *create_reference(CType *type, void *pointer, void destructor(void *));
 void void_destructor(void * p);
+Data *create_data(CType *type, Symbol *tag, NseVal record[], size_t record_size);
 
 Syntax *copy_syntax(Syntax *syntax, NseVal quoted);
 NseVal check_alloc(NseVal v);
@@ -192,6 +204,7 @@ NseVal check_alloc(NseVal v);
 NseVal from_cons(Cons *c);
 NseVal from_closure(Closure *c);
 NseVal from_reference(Reference *r);
+NseVal from_data(Data *d);
 
 Cons *to_cons(NseVal v);
 Symbol *to_symbol(NseVal v);

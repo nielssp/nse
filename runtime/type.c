@@ -81,6 +81,9 @@ void init_types() {
 
 CType *create_simple_type(InternalType internal, CType *super) {
   CType *t = allocate(sizeof(CType));
+  if (!t) {
+    return NULL;
+  }
   t->refs = 1;
   t->type = C_TYPE_SIMPLE;
   t->internal = internal;
@@ -91,6 +94,9 @@ CType *create_simple_type(InternalType internal, CType *super) {
 
 GType *create_generic(int arity, InternalType internal, CType *super) {
   GType *t = allocate(sizeof(GType));
+  if (!t) {
+    return NULL;
+  }
   t->refs = 1;
   t->arity = arity;
   t->internal = internal;
@@ -193,12 +199,19 @@ CType *get_instance(GType *g, CType **parameters) {
       raise_error(domain_error, "Invalid number of generic parameters, expected %d, got %d", g->arity, g->arity - arity);
       return NULL;
     }
+    instance = allocate(sizeof(CType));
+    if (!instance) {
+      return NULL;
+    }
     CType **param_copy = allocate(sizeof(CType *) * (g->arity + 1));
+    if (!param_copy) {
+      free(instance);
+      return NULL;
+    }
     param_copy[g->arity] = NULL;
     for (int i = 0; i < g->arity; i++) {
       param_copy[i] = copy_type(parameters[i]);
     }
-    instance = allocate(sizeof(CType));
     instance->refs = 1;
     instance->super = copy_type(g->super);
     instance->type = C_TYPE_INSTANCE;
@@ -217,6 +230,9 @@ CType *get_unary_instance(GType *g, CType *parameter) {
 CType *get_poly_instance(GType *g) {
   if (!g->poly) {
     g->poly = allocate(sizeof(CType));
+    if (!g->poly) {
+      return NULL;
+    }
     g->poly->refs = 1;
     g->poly->type = C_TYPE_POLY_INSTANCE;
     g->poly->internal = g->internal;
@@ -234,6 +250,9 @@ CType *get_func_type(int min_arity, int variadic) {
     return copy_type(t);
   } else {
     t = allocate(sizeof(CType));
+    if (!t) {
+      return NULL;
+    }
     t->refs = 1;
     t->super = copy_type(func_type);
     t->type = C_TYPE_FUNC;
@@ -241,6 +260,11 @@ CType *get_func_type(int min_arity, int variadic) {
     t->func.min_arity = min_arity;
     t->func.variadic = variadic;
     FuncType *key_copy = allocate(sizeof(FuncType));
+    if (!key_copy) {
+      free(t);
+      delete_type(func_type);
+      return NULL;
+    }
     *key_copy = key;
     func_type_map_add(func_types, key_copy, t);
     return t;
@@ -254,6 +278,9 @@ CType *get_closure_type(int min_arity, int variadic) {
     return copy_type(t);
   } else {
     t = allocate(sizeof(CType));
+    if (!t) {
+      return NULL;
+    }
     t->refs = 1;
     t->super = get_func_type(min_arity, variadic);
     t->type = C_TYPE_CLOSURE;
@@ -261,6 +288,11 @@ CType *get_closure_type(int min_arity, int variadic) {
     t->func.min_arity = min_arity;
     t->func.variadic = variadic;
     FuncType *key_copy = allocate(sizeof(FuncType));
+    if (!key_copy) {
+      free(t);
+      delete_type(func_type);
+      return NULL;
+    }
     *key_copy = key;
     func_type_map_add(closure_types, key_copy, t);
     return t;
