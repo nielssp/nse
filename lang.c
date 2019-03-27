@@ -7,6 +7,7 @@ Symbol *t_symbol = NULL;
 Symbol *f_symbol = NULL;
 Symbol *if_symbol = NULL;
 Symbol *let_symbol = NULL;
+Symbol *match_symbol = NULL;
 Symbol *fn_symbol = NULL;
 Symbol *try_symbol = NULL;
 Symbol *loop_symbol = NULL;
@@ -26,10 +27,10 @@ Symbol *read_bind_symbol = NULL;
 Symbol *read_return_symbol = NULL;
 Symbol *read_ignore_symbol = NULL;
 
-Symbol *key_symbol = NULL;
-Symbol *opt_symbol = NULL;
-Symbol *rest_symbol = NULL;
-Symbol *match_symbol = NULL;
+Symbol *key_keyword = NULL;
+Symbol *opt_keyword = NULL;
+Symbol *rest_keyword = NULL;
+Symbol *match_keyword = NULL;
 
 Module *lang_module = NULL;
 
@@ -43,6 +44,7 @@ void init_lang_module() {
   f_symbol = module_extern_symbol(lang_module, "f");
   if_symbol = module_extern_symbol(lang_module, "if");
   let_symbol = module_extern_symbol(lang_module, "let");
+  match_symbol = module_extern_symbol(lang_module, "match");
   fn_symbol = module_extern_symbol(lang_module, "fn");
   try_symbol = module_extern_symbol(lang_module, "try");
   loop_symbol = module_extern_symbol(lang_module, "loop");
@@ -62,8 +64,8 @@ void init_lang_module() {
   read_return_symbol = module_extern_symbol(lang_module, "read-return");
   read_ignore_symbol = module_extern_symbol(lang_module, "read-ignore");
 
-  key_symbol = module_extern_symbol(lang_module, "&key");
-  opt_symbol = module_extern_symbol(lang_module, "&opt");
-  rest_symbol = module_extern_symbol(lang_module, "&rest");
-  match_symbol = module_extern_symbol(lang_module, "&match");
+  key_keyword = module_extern_symbol(lang_module, "&key");
+  opt_keyword = module_extern_symbol(lang_module, "&opt");
+  rest_keyword = module_extern_symbol(lang_module, "&rest");
+  match_keyword = module_extern_symbol(lang_module, "&match");
 }

@@ -12,6 +12,7 @@ extern Symbol *t_symbol;
 extern Symbol *f_symbol;
 extern Symbol *if_symbol;
 extern Symbol *let_symbol;
+extern Symbol *match_symbol;
 extern Symbol *fn_symbol;
 extern Symbol *try_symbol;
 extern Symbol *loop_symbol;
@@ -31,10 +32,10 @@ extern Symbol *read_bind_symbol;
 extern Symbol *read_return_symbol;
 extern Symbol *read_ignore_symbol;
 
-extern Symbol *key_symbol;
-extern Symbol *opt_symbol;
-extern Symbol *rest_symbol;
-extern Symbol *match_symbol;
+extern Symbol *key_keyword;
+extern Symbol *opt_keyword;
+extern Symbol *rest_keyword;
+extern Symbol *match_kyword;
 
 void init_lang_module();
 

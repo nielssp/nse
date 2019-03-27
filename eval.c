@@ -204,9 +204,9 @@ int assign_opt_parameters(Scope **scope, NseVal formal, NseVal actual) {
       raise_error(domain_error, "expected a symbol");
       return 0;
     }
-    if (symbol == key_symbol) {
+    if (symbol == key_keyword) {
       return assign_named_parameters(scope, tail(formal), actual);
-    } else if (symbol == rest_symbol) {
+    } else if (symbol == rest_keyword) {
       return assign_rest_parameters(scope, tail(formal), actual);
     }
     if (is_cons(actual)) {
@@ -271,6 +271,13 @@ int match_pattern(Scope **scope, NseVal pattern, NseVal actual) {
         return 0;
       }
       return 1;
+    case INTERNAL_I64:
+    case INTERNAL_F64:
+      if (!is_true(nse_equals(pattern, actual))) {
+        raise_error(pattern_error, "pattern match failed");
+        return 0;
+      }
+      return 1;
     default:
       // not ok
       return 0;
@@ -286,11 +293,11 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
       raise_error(syntax_error, "expected a symbol");
       return 0;
     }
-    if (param == key_symbol) {
+    if (param == key_keyword) {
       return assign_named_parameters(scope, tail(formal), actual);
-    } else if (param == opt_symbol) {
+    } else if (param == opt_keyword) {
       return assign_opt_parameters(scope, tail(formal), actual);
-    } else if (param == rest_symbol) {
+    } else if (param == rest_keyword) {
       return assign_rest_parameters(scope, tail(formal), actual);
     }
     if (!is_cons(actual)) {
@@ -299,7 +306,7 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
       return 0;
     }
     NseVal next = head(actual);
-    if (param == match_symbol) {
+    if (param == key_keyword) {
       formal = tail(formal);
       Cons *cons = to_cons(formal);
       if (!cons) {
@@ -536,7 +543,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
             // e.g.(let ((f (fn (x) x))) f)
             scope_set(let_scope, symbol, assignment, 1);
           }
-          if (!assign_parameters(&let_scope, pattern, assignment)) {
+          if (!match_pattern(&let_scope, pattern, assignment)) {
             ok = 0;
           }
           del_ref(assignment);
@@ -546,6 +553,31 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
           result = eval(body, let_scope);
         }
         scope_pop_until(let_scope, scope);
+      }
+      return result;
+    } else if (macro_name == match_symbol) {
+      NseVal result = nil;
+      NseVal h = head(args);
+      NseVal value = THEN(h, eval(h, scope));
+      if (RESULT_OK(value)) {
+        NseVal cases = tail(args);
+        if (is_cons(cases)) {
+          for (; is_cons(cases); cases = tail(cases)) {
+            NseVal c = head(cases);
+            if (!is_cons(c)) {
+              raise_error(syntax_error, "match case must be a list");
+              break;
+            }
+            Scope *case_scope = scope;
+            if (match_pattern(&case_scope, head(c), value)) {
+              result = eval_block(tail(c), case_scope);
+              scope_pop_until(case_scope, scope);
+              break;
+            }
+            scope_pop_until(case_scope, scope);
+          }
+        }
+        del_ref(value);
       }
       return result;
     } else if (macro_name == fn_symbol) {

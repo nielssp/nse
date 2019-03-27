@@ -631,9 +631,13 @@ int is_special_form(NseVal v) {
     result |= v.symbol == if_symbol;
     result |= v.symbol == fn_symbol;
     result |= v.symbol == let_symbol;
+    result |= v.symbol == match_symbol;
     result |= v.symbol == try_symbol;
+    result |= v.symbol == loop_symbol;
+    result |= v.symbol == continue_symbol;
     result |= v.symbol == def_symbol;
     result |= v.symbol == def_macro_symbol;
+    result |= v.symbol == def_read_macro_symbol;
     result |= v.symbol == def_type_symbol;
     result |= v.symbol == def_data_symbol;
   } else if (v.type->internal == INTERNAL_SYNTAX) {
