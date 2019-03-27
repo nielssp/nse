@@ -228,19 +228,11 @@ static NseVal is_a(NseVal args) {
   NseVal a = head(args);
   NseVal b = elem(1, args);
   CType *type_a = a.type;
-  NseVal result = undefined;
-  if (type_a) {
-    CType *type_b = to_type(b);
-    result = FALSE;
-    while (type_a) {
-      if (type_a == type_b) {
-        result = TRUE;
-        break;
-      }
-      type_a = type_a->super;
-    }
+  CType *type_b = to_type(b);
+  if (!type_b) {
+    return undefined;
   }
-  return result;
+  return is_subtype_of(type_a, type_b) ? TRUE : FALSE;
 }
 
 static NseVal open_stream(NseVal args) {
@@ -318,13 +310,16 @@ Module *get_system_module() {
   module_ext_define_type(system, "nil", TYPE(nil_type));
   module_ext_define_type(system, "i64", TYPE(i64_type));
   module_ext_define_type(system, "f64", TYPE(f64_type));
+  module_ext_define_type(system, "int", TYPE(int_type));
+  module_ext_define_type(system, "float", TYPE(float_type));
+  module_ext_define_type(system, "num", TYPE(num_type));
   module_ext_define_type(system, "string", TYPE(string_type));
   module_ext_define_type(system, "symbol", TYPE(symbol_type));
   module_ext_define_type(system, "quote", TYPE(quote_type));
   module_ext_define_type(system, "syntax", TYPE(syntax_type));
   module_ext_define_type(system, "type", TYPE(type_type));
-  module_ext_define_type(system, "cons", TYPE(cons_type));
   module_ext_define_type(system, "improper-list", TYPE(improper_list_type));
+  module_ext_define_type(system, "proper-list", TYPE(proper_list_type));
   module_ext_define_type(system, "stream", TYPE(stream_type));
   set_generic_type_name(list_type, module_ext_define_type(system, "list", FUNC(get_list_type, 1, 1)));
   return system;

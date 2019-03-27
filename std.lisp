@@ -85,9 +85,9 @@
     ((nil? (tail xs)) (head xs))
     ('t (f (head xs) (reduce f (tail xs))))))
 
-(def (sum xs) (reduce + xs))
+(def (sum xs) (apply + xs))
 
-(def (product xs) (reduce * xs))
+(def (product xs) (apply * xs))
 
 (def (range start end)
   (let ((acc '()))
@@ -138,7 +138,7 @@
        (if (= (ascii "%") (byte-at 0 (symbol-name code)))
          (list code)
          nil)
-       (if (is-a code ^cons)
+       (if (and (is-a code ^improper-list) (not (nil? code)))
          (++ (find-params (head code)) (find-params (tail code)))
          nil)))
 

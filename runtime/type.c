@@ -7,48 +7,10 @@
 
 #include "type.h"
 
-size_t c_types_hash(const void *p) {
-  CType **head = (CType **)p;
-  size_t hash = 0;
-  while (*head) {
-    hash ^= (size_t)*head;
-    head++;
-  }
-  return hash;
-}
+typedef struct FuncType FuncType;
 
-int c_types_equals(const void *a, const void *b) {
-  CType **head_a = (CType **)a;
-  CType **head_b = (CType **)b;
-  while (*head_a && *head_b) {
-    if (!*head_b || !*head_a || *head_a != *head_b) {
-      return 0;
-    }
-    head_a++;
-    head_b++;
-  }
-  return 1;
-}
-
-DEFINE_PRIVATE_HASH_MAP(instance_map, InstanceMap, CType **, CType *, c_types_hash, c_types_equals)
-
-typedef struct {
-  int min_arity;
-  int variadic;
-} FuncType;
-
-size_t func_type_hash(const void *p) {
-  FuncType *ft = (FuncType *)p;
-  return (ft->min_arity << 1) | ft->variadic;
-}
-
-int func_type_equals(const void *a, const void *b) {
-  FuncType *ft_a = (FuncType *)a;
-  FuncType *ft_b = (FuncType *)b;
-  return ft_a->min_arity == ft_b->min_arity && ft_a->variadic == ft_b->variadic;
-}
-
-DEFINE_PRIVATE_HASH_MAP(func_type_map, FuncTypeMap, FuncType *, CType *, func_type_hash, func_type_equals)
+DECLARE_HASH_MAP(instance_map, InstanceMap, CType **, CType *)
+DECLARE_HASH_MAP(func_type_map, FuncTypeMap, FuncType *, CType *)
 
 struct GType {
   size_t refs;
@@ -57,17 +19,24 @@ struct GType {
   InternalType internal;
   CType *super;
   InstanceMap instances;
+  CType *poly;
+};
+
+struct FuncType {
+  int min_arity;
+  int variadic;
 };
 
 FuncTypeMap func_types;
 FuncTypeMap closure_types;
 
 CType *any_type;
+CType *proper_list_type;
 CType *improper_list_type;
-CType *any_list_type;
 CType *nil_type;
-CType *cons_type;
 CType *num_type;
+CType *int_type;
+CType *float_type;
 CType *i64_type;
 CType *f64_type;
 CType *string_type;
@@ -88,14 +57,15 @@ void init_types() {
   func_types = create_func_type_map();
   closure_types = create_func_type_map();
   any_type = create_simple_type(INTERNAL_NOTHING, NULL);
-  improper_list_type = create_simple_type(INTERNAL_NOTHING, any_type);
-  cons_type = create_simple_type(INTERNAL_CONS, improper_list_type);
-  list_type = create_generic(1, INTERNAL_CONS, improper_list_type);
-  any_list_type = get_instance(list_type, (CType *[]){ copy_type(any_type), NULL });
-  nil_type = create_simple_type(INTERNAL_NIL, any_list_type);
+  improper_list_type = create_simple_type(INTERNAL_CONS, any_type);
+  proper_list_type = create_simple_type(INTERNAL_NOTHING, improper_list_type);
+  list_type = create_generic(1, INTERNAL_CONS, proper_list_type);
+  nil_type = create_simple_type(INTERNAL_NIL, get_poly_instance(list_type));
   num_type = create_simple_type(INTERNAL_NOTHING, any_type);
-  i64_type = create_simple_type(INTERNAL_I64, num_type);
-  f64_type = create_simple_type(INTERNAL_F64, num_type);
+  int_type = create_simple_type(INTERNAL_I64, num_type);
+  float_type = create_simple_type(INTERNAL_F64, num_type);
+  i64_type = create_simple_type(INTERNAL_I64, int_type);
+  f64_type = create_simple_type(INTERNAL_F64, float_type);
   string_type = create_simple_type(INTERNAL_STRING, any_type);
   symbol_type = create_simple_type(INTERNAL_SYMBOL, any_type);
   keyword_type = create_simple_type(INTERNAL_SYMBOL, any_type);
@@ -127,6 +97,7 @@ GType *create_generic(int arity, InternalType internal, CType *super) {
   t->super = super;
   t->instances = create_instance_map();
   t->name = NULL;
+  t->poly = NULL;
   return t;
 }
 
@@ -181,6 +152,10 @@ void delete_type(CType *t) {
       }
       free(t->instance.parameters);
       break;
+    case C_TYPE_POLY_INSTANCE:
+      t->poly_instance->poly = NULL;
+      delete_generic(t->poly_instance);
+      break;
   }
   free(t);
 }
@@ -199,25 +174,19 @@ void set_generic_type_name(GType *g, Symbol *s) {
   }
 }
 
+int generic_type_arity(GType *g) {
+  return g->arity;
+}
+
 CType *get_instance(GType *g, CType **parameters) {
   CType *instance = instance_map_lookup(g->instances, (const CType **)parameters);
   if (instance) {
     return copy_type(instance);
   } else {
     CType **param = parameters;
-    CType *super;
-    if (g->super) {
-      super = copy_type(g->super);
-    } else {
-      super = copy_type(any_type);
-    }
     int arity = g->arity;
     while (*param) {
       arity--;
-      if (*param != any_type && super) {
-        delete_type(super);
-        super = NULL;
-      }
       param++;
     }
     if (arity != 0) {
@@ -229,18 +198,9 @@ CType *get_instance(GType *g, CType **parameters) {
     for (int i = 0; i < g->arity; i++) {
       param_copy[i] = copy_type(parameters[i]);
     }
-    if (!super) {
-      CType **param_copy2 = allocate(sizeof(CType *) * (g->arity + 1));
-      param_copy2[g->arity] = NULL;
-      for (int i = 0; i < g->arity; i++) {
-        param_copy2[i] = any_type;
-      }
-      super = get_instance(g, param_copy2);
-      free(param_copy2);
-    }
     instance = allocate(sizeof(CType));
     instance->refs = 1;
-    instance->super = super;
+    instance->super = copy_type(g->super);
     instance->type = C_TYPE_INSTANCE;
     instance->internal = g->internal;
     instance->instance.type = copy_generic(g);
@@ -252,6 +212,19 @@ CType *get_instance(GType *g, CType **parameters) {
 
 CType *get_unary_instance(GType *g, CType *parameter) {
   return get_instance(g, (CType *[]){ parameter, NULL });
+}
+
+CType *get_poly_instance(GType *g) {
+  if (!g->poly) {
+    g->poly = allocate(sizeof(CType));
+    g->poly->refs = 1;
+    g->poly->type = C_TYPE_POLY_INSTANCE;
+    g->poly->internal = g->internal;
+    g->poly->super = copy_type(g->super);
+    g->poly->poly_instance = copy_generic(g);
+    g->poly->name = NULL;
+  }
+  return g->poly;
 }
 
 CType *get_func_type(int min_arity, int variadic) {
@@ -298,4 +271,77 @@ CType *get_super_type(CType *t) {
   return copy_type(t->super);
 }
 
+int is_subtype_of(CType *a, CType *b) {
+  while (a) {
+    if (a == b) {
+      return 1;
+    } else if (a->type == C_TYPE_POLY_INSTANCE && b->type == C_TYPE_INSTANCE
+        && a->poly_instance == b->instance.type) {
+      return 1;
+    } else if (b->type == C_TYPE_POLY_INSTANCE && a->type == C_TYPE_INSTANCE
+        && b->poly_instance == a->instance.type) {
+      return 1;
+    }
+    a = a->super;
+  }
+  return 0;
+}
+
+CType *unify_types(CType *a, CType *b) {
+  while (b && a) {
+    CType *tmp = a;
+    while (tmp) {
+      if (b == tmp) {
+        return copy_type(tmp);
+      } else if (tmp->type == C_TYPE_POLY_INSTANCE && b->type == C_TYPE_INSTANCE
+          && tmp->poly_instance == b->instance.type) {
+        return b;
+      } else if (b->type == C_TYPE_POLY_INSTANCE && tmp->type == C_TYPE_INSTANCE
+          && b->poly_instance == tmp->instance.type) {
+        return tmp;
+      }
+      tmp = tmp->super;
+    }
+    b = b->super;
+  }
+  return copy_type(any_type);
+}
+
+static size_t c_types_hash(const void *p) {
+  CType **head = (CType **)p;
+  size_t hash = 0;
+  while (*head) {
+    hash ^= (size_t)*head;
+    head++;
+  }
+  return hash;
+}
+
+static int c_types_equals(const void *a, const void *b) {
+  CType **head_a = (CType **)a;
+  CType **head_b = (CType **)b;
+  while (*head_a && *head_b) {
+    if (!*head_b || !*head_a || *head_a != *head_b) {
+      return 0;
+    }
+    head_a++;
+    head_b++;
+  }
+  return 1;
+}
+
+static size_t func_type_hash(const void *p) {
+  FuncType *ft = (FuncType *)p;
+  return (ft->min_arity << 1) | ft->variadic;
+}
+
+static int func_type_equals(const void *a, const void *b) {
+  FuncType *ft_a = (FuncType *)a;
+  FuncType *ft_b = (FuncType *)b;
+  return ft_a->min_arity == ft_b->min_arity && ft_a->variadic == ft_b->variadic;
+}
+
+DEFINE_HASH_MAP(func_type_map, FuncTypeMap, FuncType *, CType *, func_type_hash, func_type_equals)
+
+DEFINE_HASH_MAP(instance_map, InstanceMap, CType **, CType *, c_types_hash, c_types_equals)
 

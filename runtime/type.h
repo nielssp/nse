@@ -2,6 +2,7 @@
 #define NSE_TYPE_H
 
 typedef struct Symbol Symbol;
+typedef struct PolyParam PolyParam;
 typedef struct CType CType;
 typedef struct GType GType;
 
@@ -26,6 +27,7 @@ typedef enum {
   C_TYPE_FUNC,
   C_TYPE_CLOSURE,
   C_TYPE_INSTANCE,
+  C_TYPE_POLY_INSTANCE,
 } CTypeType;
 
 struct CType {
@@ -36,24 +38,24 @@ struct CType {
   Symbol *name;
   union {
     struct {
-      GType *type;
-      CType **parameters;
-    } instance;
-    struct {
       int min_arity;
       int variadic;
     } func;
+    struct {
+      GType *type;
+      CType **parameters;
+    } instance;
+    GType *poly_instance;
   };
 };
 
-typedef struct GType Gtype;
-
 extern CType *any_type;
 extern CType *improper_list_type;
-extern CType *any_list_type;
+extern CType *proper_list_type;
 extern CType *nil_type;
-extern CType *cons_type;
 extern CType *num_type;
+extern CType *int_type;
+extern CType *float_type;
 extern CType *i64_type;
 extern CType *f64_type;
 extern CType *string_type;
@@ -80,13 +82,17 @@ void delete_type(CType *t);
 
 Symbol *generic_type_name(GType *g);
 void set_generic_type_name(GType *g, Symbol *s);
+int generic_type_arity(GType *g);
 
 CType *get_instance(GType *g, CType **parameters);
 CType *get_unary_instance(GType *g, CType *parameter);
+CType *get_poly_instance(GType *g);
 CType *get_func_type(int min_arity, int variadic);
 CType *get_closure_type(int min_arity, int variadic);
 
 CType *get_super_type(CType *t);
+int is_subtype_of(CType *a, CType *b);
+CType *unify_types(CType *a, CType *b);
 
 #endif
 

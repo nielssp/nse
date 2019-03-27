@@ -21,6 +21,7 @@ static void write_cons(Cons *cons, Stream *stream, Module *module) {
 }
 
 static void write_type(CType *type, Stream *stream, Module *module) {
+  Symbol *name;
   switch (type->type) {
     case C_TYPE_SIMPLE:
       if (type->name) {
@@ -46,9 +47,35 @@ static void write_type(CType *type, Stream *stream, Module *module) {
         }
         stream_printf(stream, ") any)");
         break;
+    case C_TYPE_POLY_INSTANCE:
+      stream_printf(stream, "(forall (");
+      int arity = generic_type_arity(type->poly_instance);
+      if (arity == 1) {
+        stream_printf(stream, "t");
+      } else {
+        for (int i = 0; i < arity ; i++) {
+          stream_printf(stream, "%st%d", i == 0 ? "" : " ", i);
+        }
+      }
+      stream_printf(stream, ") (");
+      name = generic_type_name(type->poly_instance);
+      if (name) {
+        nse_write(SYMBOL(name), stream, module);
+      } else {
+        stream_printf(stream, "#<generic-type>");
+      }
+      if (arity == 1) {
+        stream_printf(stream, " t");
+      } else {
+        for (int i = 0; i < arity ; i++) {
+          stream_printf(stream, " t%d", i);
+        }
+      }
+      stream_printf(stream, "))");
+      break;
     case C_TYPE_INSTANCE:
       stream_printf(stream, "(");
-      Symbol *name = generic_type_name(type->instance.type);
+      name = generic_type_name(type->instance.type);
       if (name) {
         nse_write(SYMBOL(name), stream, module);
       } else {
