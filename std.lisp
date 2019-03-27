@@ -15,20 +15,20 @@
 (export 'compose 'curry 'flip 'negate 'pipe)
 
 (def (compose f g) (fn (x) (f (g x))))
-(def (curry f . curried) (fn args (apply f (++ curried args))))
+(def (curry f &rest curried) (fn args (apply f (++ curried args))))
 (def (flip f) (fn (x y) (f y x)))
 (def (negate f) (fn args (not (apply f args))))
-(def-macro (pipe x . funcs) (foldl list x funcs))
+(def-macro (pipe x &rest funcs) (foldl list x funcs))
 
 ;;; list fundamentals
 (export 'nil 'nil? 'list 'cons 'head 'tail)
 
 (def nil '())
 (def (nil? xs) (= xs nil))
-(def (list . xs) xs)
+(def (list &rest xs) xs)
 (def (cons head tail) (list head . tail))
-(def (head (h . t)) h)
-(def (tail (h . t)) t)
+(def (head &match (h . t)) h)
+(def (tail &match (h . t)) t)
 
 ;;; boolean
 (export 'or 'and 'not '!= 'cond)
@@ -40,7 +40,7 @@
 (def (not a) (if a 'f 't))
 (def != (negate =))
 
-(def-macro (cond . cases) (if (nil? cases) ''nil (list 'if (head (head cases)) (elem 1 (head cases)) (cons 'cond (tail cases)))))
+(def-macro (cond &rest cases) (if (nil? cases) ''nil (list 'if (head (head cases)) (elem 1 (head cases)) (cons 'cond (tail cases)))))
 
 ;;; list operations
 (export 'length 'reverse 'elem 'drop 'take 'slice 'map '++ 'filter 'foldl

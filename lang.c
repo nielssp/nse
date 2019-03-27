@@ -29,6 +29,7 @@ Symbol *read_ignore_symbol = NULL;
 Symbol *key_symbol = NULL;
 Symbol *opt_symbol = NULL;
 Symbol *rest_symbol = NULL;
+Symbol *match_symbol = NULL;
 
 Module *lang_module = NULL;
 
@@ -64,4 +65,5 @@ void init_lang_module() {
   key_symbol = module_extern_symbol(lang_module, "&key");
   opt_symbol = module_extern_symbol(lang_module, "&opt");
   rest_symbol = module_extern_symbol(lang_module, "&rest");
+  match_symbol = module_extern_symbol(lang_module, "&match");
 }

@@ -215,7 +215,7 @@ void *to_reference(NseVal v);
 CType *to_type(NseVal v);
 
 extern Syntax *error_form;
-void set_debug_form(Syntax *syntax);
+void set_debug_form(NseVal form);
 Syntax *push_debug_form(Syntax *syntax);
 NseVal pop_debug_form(NseVal result, Syntax *previous);
 NseVal get_stack_trace();
@@ -245,7 +245,7 @@ int is_keyword(NseVal v);
 int is_type(NseVal v);
 int is_true(NseVal b);
 
-int match_symbol(NseVal v, const Symbol *sym);
+int compare_symbol(NseVal v, const Symbol *sym);
 int is_special_form(NseVal v);
 
 NseVal nse_apply(NseVal func, NseVal args);

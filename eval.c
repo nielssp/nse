@@ -230,11 +230,11 @@ int assign_opt_parameters(Scope **scope, NseVal formal, NseVal actual) {
   return 1;
 }
 
-int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
-  switch (formal.type->internal) {
+int match_pattern(Scope **scope, NseVal pattern, NseVal actual) {
+  switch (pattern.type->internal) {
     case INTERNAL_SYNTAX: {
-      Syntax *previous = push_debug_form(formal.syntax);
-      if (assign_parameters(scope, formal.syntax->quoted, actual)) {
+      Syntax *previous = push_debug_form(pattern.syntax);
+      if (match_pattern(scope, pattern.syntax->quoted, actual)) {
         pop_debug_form(nil, previous);
         return 1;
       } else {
@@ -243,34 +243,30 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
       }
     }
     case INTERNAL_SYMBOL:
-      *scope = scope_push(*scope, formal.symbol, actual);
+      *scope = scope_push(*scope, pattern.symbol, actual);
       return 1;
     case INTERNAL_QUOTE:
-      if (!is_true(nse_equals(formal.quote->quoted, actual))) {
+      if (!is_true(nse_equals(pattern.quote->quoted, actual))) {
         raise_error(pattern_error, "pattern match failed");
         return 0;
       }
       return 1;
     case INTERNAL_CONS: {
-      Symbol *keyword = to_symbol(head(formal));
+      Symbol *keyword = to_symbol(head(pattern));
       if (keyword) {
-        if (keyword == key_symbol) {
-          return assign_named_parameters(scope, tail(formal), actual);
-        } else if (keyword == opt_symbol) {
-          return assign_opt_parameters(scope, tail(formal), actual);
-        } else if (keyword == rest_symbol) {
-          return assign_rest_parameters(scope, tail(formal), actual);
-        }
+        // TODO: is data tag?
       }
       if (!is_cons(actual)) {
-        raise_error(pattern_error, "expected more parameters");
+        set_debug_form(actual);
+        raise_error(pattern_error, "expected list");
         return 0;
       }
-      return assign_parameters(scope, head(formal), head(actual))
-        && assign_parameters(scope, tail(formal), tail(actual));
+      return match_pattern(scope, head(pattern), head(actual))
+        && match_pattern(scope, tail(pattern), tail(actual));
     }
     case INTERNAL_NIL:
       if (!is_nil(actual)) {
+        set_debug_form(actual);
         raise_error(pattern_error, "too many parameters for function");
         return 0;
       }
@@ -279,6 +275,58 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
       // not ok
       return 0;
   }
+}
+
+int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
+  while (is_cons(formal)) {
+    NseVal h = head(formal);
+    Symbol *param = to_symbol(head(formal));
+    if (!param) {
+      set_debug_form(h);
+      raise_error(syntax_error, "expected a symbol");
+      return 0;
+    }
+    if (param == key_symbol) {
+      return assign_named_parameters(scope, tail(formal), actual);
+    } else if (param == opt_symbol) {
+      return assign_opt_parameters(scope, tail(formal), actual);
+    } else if (param == rest_symbol) {
+      return assign_rest_parameters(scope, tail(formal), actual);
+    }
+    if (!is_cons(actual)) {
+      set_debug_form(actual);
+      raise_error(domain_error, "too few parameters for function");
+      return 0;
+    }
+    NseVal next = head(actual);
+    if (param == match_symbol) {
+      formal = tail(formal);
+      Cons *cons = to_cons(formal);
+      if (!cons) {
+        set_debug_form(formal);
+        raise_error(syntax_error, "&match must be followed by a pattern");
+        return 0;
+      }
+      if (!match_pattern(scope, cons->head, next)) {
+        return 0;
+      }
+    } else {
+      *scope = scope_push(*scope, param, next);
+    }
+    formal = tail(formal);
+    actual = tail(actual);
+  }
+  if (!is_nil(actual)) {
+    set_debug_form(actual);
+    raise_error(domain_error, "too many parameters for function");
+    return 0;
+  }
+  if (!is_nil(formal)) {
+    set_debug_form(formal);
+    raise_error(syntax_error, "formal parameters must be a proper list");
+    return 0;
+  }
+  return 1;
 }
 
 NseVal eval_block(NseVal block, Scope *scope) {

@@ -23,13 +23,15 @@ void init_values() {
   stack_trace = nil;
 }
 
-void set_debug_form(Syntax *syntax) {
-  if (error_form) {
-    del_ref(SYNTAX(error_form));
-  }
-  error_form = syntax;
-  if (error_form) {
-    add_ref(SYNTAX(error_form));
+void set_debug_form(NseVal form) {
+  if (form.type == syntax_type) {
+    if (error_form) {
+      del_ref(SYNTAX(error_form));
+    }
+    error_form = form.syntax;
+    if (error_form) {
+      add_ref(SYNTAX(error_form));
+    }
   }
 }
 
@@ -613,12 +615,12 @@ CType *to_type(NseVal v) {
   return NULL;
 }
 
-int match_symbol(NseVal v, const Symbol *symbol) {
+int compare_symbol(NseVal v, const Symbol *symbol) {
   int result = 0;
   if (v.type == symbol_type) {
     result = v.symbol == symbol;
   } else if (v.type->internal == INTERNAL_SYNTAX) {
-    result = match_symbol(v.syntax->quoted, symbol);
+    result = compare_symbol(v.syntax->quoted, symbol);
   }
   return result;
 }
@@ -641,7 +643,7 @@ int is_special_form(NseVal v) {
 }
 
 int is_true(NseVal b) {
-  return match_symbol(b, t_symbol);
+  return compare_symbol(b, t_symbol);
 }
 
 size_t list_length(NseVal value) {
