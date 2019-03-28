@@ -42,6 +42,18 @@ void set_reader_position(Reader *reader, size_t line, size_t column) {
   reader->column = column;
 }
 
+void get_reader_position(Reader *reader, String **file_name, size_t *line, size_t *column) {
+  if (file_name) {
+    *file_name = reader->file_name;
+  }
+  if (line) {
+    *line = reader->line;
+  }
+  if (column) {
+    *column = reader->column;
+  }
+}
+
 void close_reader(Reader *reader) {
   stream_close(reader->stream);
   del_ref(STRING(reader->file_name));
@@ -239,7 +251,7 @@ static Syntax *read_symbol(Reader *input, int keyword) {
         pop(input);
         c = peek(input);
         if (c == EOF) {
-          raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name->chars, input->line, input->column);
+          raise_error(syntax_error, "unexpected end of input");
           free(buffer);
           delete_syntax(syntax);
           return NULL;
@@ -285,7 +297,7 @@ Syntax *nse_read(Reader *input) {
   skip(input);
   c = peek(input);
   if (c == EOF) {
-    raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name->chars, input->line, input->column);
+    raise_error(syntax_error, "unexpected end of input");
     return NULL;
   }
   if (c == ';') {
@@ -296,7 +308,7 @@ Syntax *nse_read(Reader *input) {
     return nse_read(input);
   }
   if (c == '.' || c == ')') {
-    raise_error(syntax_error, "%s:%zu:%zu: unexpected '%c'", input->file_name->chars, input->line, input->column, c);
+    raise_error(syntax_error, "unexpected '%c'");
     pop(input);
     return NULL;
   }
@@ -335,7 +347,7 @@ Syntax *nse_read(Reader *input) {
       pop(input);
       c = peek(input);
       if (c == EOF) {
-        raise_error(syntax_error, "%s:%zu:%zu: end of input", input->file_name->chars, input->line, input->column);
+        raise_error(syntax_error, "unexpected end of input");
       } else {
         Symbol *s = module_intern_symbol(input->module, (char[]){ c, 0 });
         if (s) {
@@ -367,7 +379,7 @@ Syntax *nse_read(Reader *input) {
           pop(input);
           return end_pos(syntax, input);
         }
-        raise_error(syntax_error, "%s:%zu:%zu: missing ')'", input->file_name->chars, input->line, input->column);
+        raise_error(syntax_error, "missing ')'");
         del_ref(syntax->quoted);
       }
       delete_syntax(syntax);
@@ -433,7 +445,7 @@ NseVal execute_read(Reader *reader, NseVal read, int *skip) {
         pop(reader);
         return I64(c);
       } else {
-        raise_error(syntax_error, "%s:%zu:%zu: end of input", reader->file_name->chars, reader->line, reader->column);
+        raise_error(syntax_error, "unexpected end of input");
         return undefined;
       }
     } else if (action == read_string_symbol) {

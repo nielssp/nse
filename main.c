@@ -312,6 +312,37 @@ char **symbol_completion(const char *text, int start, int end) {
   return rl_completion_matches(text, symbol_generator);
 }
 
+
+void print_error_line(char *line_history, String *file_name, size_t start_line, size_t start_column, size_t end_line, size_t end_column) {
+  printf("\nIn %s on line %zd column %zd", file_name->chars, start_line, start_column);
+  if (start_line > 0) {
+    char *line = NULL;
+    if (strcmp(file_name->chars, "(repl)") == 0) {
+      line = get_line(start_line, line_history);
+    } else {
+      FILE *f = fopen(file_name->chars, "r");
+      if (f) {
+        line = get_line_in_file(start_line, f);
+        fclose(f);
+      }
+    }
+    if (line) {
+      printf("\n%s\n", line);
+      for (size_t i = 1; i < start_column; i++) {
+        printf(" ");
+      }
+      printf("^");
+      if (start_line == end_line && end_column > start_column) {
+        size_t length = end_column - start_column - 1;
+        for (size_t i = 0; i < length; i++) {
+          printf("^");
+        }
+      }
+      free(line);
+    }
+  }
+}
+
 int main(int argc, char *argv[]) {
   int opt;
   int option_index;
@@ -397,14 +428,6 @@ int main(int argc, char *argv[]) {
     NseVal code = check_alloc(SYNTAX(nse_read(reader)));
     int error = 0;
     if (RESULT_OK(code)) {
-      line = code.syntax->end_line + 1;
-      if (line_history) {
-        char *new_line_history = string_printf("%s\n%s", line_history, input);
-        free(line_history);
-        line_history = new_line_history;
-      } else {
-        line_history = string_printf("%s", input);
-      }
       NseVal result = eval(code, current_scope);
       del_ref(code);
       if (RESULT_OK(result)) {
@@ -416,54 +439,42 @@ int main(int argc, char *argv[]) {
     } else {
       error = 1;
     }
+    get_reader_position(reader, NULL, &line, NULL);
+    line += 1;
+    if (line_history) {
+      char *new_line_history = string_printf("%s\n%s", line_history, input);
+      free(line_history);
+      line_history = new_line_history;
+    } else {
+      line_history = string_printf("%s", input);
+    }
     if (error) {
       printf("error(%s): %s", current_error_type()->name, current_error());
-      if (error_form != NULL) {
+      if (!RESULT_OK(code)) {
+        String *file_name;
+        size_t current_line, current_column;
+        get_reader_position(reader, &file_name, &current_line, &current_column);
+        print_error_line(line_history, file_name, current_line, current_column, current_line, current_column);
+      } else if (error_form != NULL) {
         NseVal datum = syntax_to_datum(error_form->quoted);
         printf(": ");
         nse_write(datum, stdout_stream, user_module);
         del_ref(datum);
-        printf("\nIn %s on line %zd column %zd", error_form->file->chars, error_form->start_line, error_form->start_column);
-        if (error_form->start_line > 0) {
-          char *line = NULL;
-          if (strcmp(error_form->file->chars, "(repl)") == 0) {
-            line = get_line(error_form->start_line, line_history);
-          } else {
-            FILE *f = fopen(error_form->file->chars, "r");
-            if (f) {
-              line = get_line_in_file(error_form->start_line, f);
-              fclose(f);
-            }
-          }
-          if (line) {
-            printf("\n%s\n", line);
-            for (size_t i = 1; i < error_form->start_column; i++) {
-              printf(" ");
-            }
-            printf("^");
-            if (error_form->start_line == error_form->end_line && error_form->end_column > error_form->start_column) {
-              size_t length = error_form->end_column - error_form->start_column - 1;
-              for (size_t i = 0; i < length; i++) {
-                printf("^");
-              }
-            }
-            free(line);
-          }
-        }
-        printf("\nStack trace:");
-        NseVal stack_trace = get_stack_trace();
-        for (NseVal it = stack_trace; is_cons(it); it = tail(it)) {
-          NseVal syntax = elem(2, head(it));
-          printf("\n  %s:%zd:%zd", syntax.syntax->file->chars, syntax.syntax->start_line, syntax.syntax->start_column);
-          NseVal datum = syntax_to_datum(syntax.syntax->quoted);
-          printf(": ");
-          nse_write(datum, stdout_stream, user_module);
-          del_ref(datum);
-        }
-        del_ref(stack_trace);
-        clear_error();
-        clear_stack_trace();
+        print_error_line(line_history, error_form->file, error_form->start_line, error_form->start_column, error_form->end_line, error_form->end_column);
       }
+      printf("\nStack trace:");
+      NseVal stack_trace = get_stack_trace();
+      for (NseVal it = stack_trace; is_cons(it); it = tail(it)) {
+        NseVal syntax = elem(2, head(it));
+        printf("\n  %s:%zd:%zd", syntax.syntax->file->chars, syntax.syntax->start_line, syntax.syntax->start_column);
+        NseVal datum = syntax_to_datum(syntax.syntax->quoted);
+        printf(": ");
+        nse_write(datum, stdout_stream, user_module);
+        del_ref(datum);
+      }
+      del_ref(stack_trace);
+      clear_error();
+      clear_stack_trace();
     }
     close_reader(reader);
     free(input);

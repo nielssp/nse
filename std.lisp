@@ -15,9 +15,9 @@
 (export 'compose 'curry 'flip 'negate 'pipe)
 
 (def (compose f g) (fn (x) (f (g x))))
-(def (curry f &rest curried) (fn args (apply f (++ curried args))))
+(def (curry f &rest curried) (fn (&rest args) (apply f (++ curried args))))
 (def (flip f) (fn (x y) (f y x)))
-(def (negate f) (fn args (not (apply f args))))
+(def (negate f) (fn (&rest args) (not (apply f args))))
 (def-macro (pipe x &rest funcs) (foldl list x funcs))
 
 ;;; list fundamentals

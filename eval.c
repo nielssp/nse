@@ -692,6 +692,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       NseVal h = head(args);
       if (RESULT_OK(h)) {
         if (is_cons(h)) {
+          NseVal result = undefined;
           Symbol *symbol = to_symbol(head(h));
           if (symbol) {
             Scope *fn_scope = copy_scope(scope);
@@ -708,28 +709,31 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
                 NseVal def = check_alloc(CONS(create_cons(formal, body)));
                 if (RESULT_OK(def)) {
                   NseVal env[] = {def, scope_ref};
-                  CType *func_type = get_closure_type(0, 1);
-                  NseVal func = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
-                  del_ref(scope_ref);
-                  del_ref(def);
-                  if (RESULT_OK(func)) {
-                    func.closure = optimize_tail_call(func.closure, symbol);
-                    if (func.closure) {
-                      if (doc_string) {
-                        add_ref(STRING(doc_string));
-                        func.closure->doc = doc_string;
+                  CType *func_type = parameters_to_type(head(def));
+                  if (func_type) {
+                    NseVal func = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
+                    if (RESULT_OK(func)) {
+                      func.closure = optimize_tail_call(func.closure, symbol);
+                      if (func.closure) {
+                        if (doc_string) {
+                          add_ref(STRING(doc_string));
+                          func.closure->doc = doc_string;
+                        }
+                        module_define(symbol->module, symbol->name, func);
+                        result = add_ref(SYMBOL(symbol));
                       }
-                      module_define(symbol->module, symbol->name, func);
                       del_ref(func);
-                      return add_ref(SYMBOL(symbol));
                     }
                   }
+                  del_ref(def);
                 }
               }
+              del_ref(scope_ref);
             }
           } else {
             raise_error(syntax_error, "name of function must be a symbol");
           }
+          return result;
         } else {
           Symbol *symbol = to_symbol(h);
           if (symbol) {
