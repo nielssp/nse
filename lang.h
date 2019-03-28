@@ -35,7 +35,7 @@ extern Symbol *read_ignore_symbol;
 extern Symbol *key_keyword;
 extern Symbol *opt_keyword;
 extern Symbol *rest_keyword;
-extern Symbol *match_kyword;
+extern Symbol *match_keyword;
 
 void init_lang_module();
 

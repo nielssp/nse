@@ -1,6 +1,8 @@
 #ifndef ERROR_H
 #define ERROR_H
 
+#include <stdlib.h>
+
 typedef struct Symbol Symbol;
 
 extern Symbol *out_of_memory_error;

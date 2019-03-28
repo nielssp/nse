@@ -7,7 +7,6 @@
 
 #include "value.h"
 
-static void delete_all(NseVal value);
 static void delete(NseVal value);
 
 NseVal undefined = { .type = NULL };
@@ -320,60 +319,42 @@ void del_ref(NseVal value) {
     (*refs)--;
   }
   if (*refs == 0) {
-    delete_all(value);
+    delete(value);
   }
-}
-
-static void delete_all(NseVal value) {
-  if (value.type->internal == INTERNAL_CONS) {
-    del_ref(value.cons->head);
-    del_ref(value.cons->tail);
-  }
-  if (value.type->internal == INTERNAL_QUOTE) {
-    del_ref(value.quote->quoted);
-  }
-  if (value.type->internal == INTERNAL_CLOSURE) {
-    if (value.closure->doc) {
-      del_ref(STRING(value.closure->doc));
-    }
-    delete_type(value.closure->type);
-    for (size_t i = 0; i < value.closure->env_size; i++) {
-      del_ref(value.closure->env[i]);
-    }
-  }
-  if (value.type->internal == INTERNAL_SYNTAX) {
-    if (value.syntax->file) {
-      del_ref(STRING(value.syntax->file));
-    }
-    del_ref(value.syntax->quoted);
-  }
-  if (value.type->internal == INTERNAL_DATA) {
-    del_ref(SYMBOL(value.data->tag));
-    for (size_t i = 0; i < value.data->record_size; i++) {
-      del_ref(value.data->record[i]);
-    }
-  }
-  delete(value);
 }
 
 static void delete(NseVal value) {
   switch (value.type->internal) {
     case INTERNAL_CONS:
+      del_ref(value.cons->head);
+      del_ref(value.cons->tail);
       free(value.cons);
       return;
     case INTERNAL_SYMBOL:
       free(value.symbol);
       return;
     case INTERNAL_QUOTE:
+      del_ref(value.quote->quoted);
       free(value.quote);
       return;
     case INTERNAL_STRING:
       free(value.string);
       return;
     case INTERNAL_SYNTAX:
+      if (value.syntax->file) {
+        del_ref(STRING(value.syntax->file));
+      }
+      del_ref(value.syntax->quoted);
       free(value.syntax);
       return;
     case INTERNAL_CLOSURE:
+      if (value.closure->doc) {
+        del_ref(STRING(value.closure->doc));
+      }
+      delete_type(value.closure->type);
+      for (size_t i = 0; i < value.closure->env_size; i++) {
+        del_ref(value.closure->env[i]);
+      }
       free(value.closure);
       return;
     case INTERNAL_REFERENCE:
@@ -384,6 +365,10 @@ static void delete(NseVal value) {
       free(value.reference);
       return;
     case INTERNAL_DATA:
+      del_ref(SYMBOL(value.data->tag));
+      for (size_t i = 0; i < value.data->record_size; i++) {
+        del_ref(value.data->record[i]);
+      }
       delete_type(value.data->type);
       free(value.data);
       return;
@@ -705,6 +690,7 @@ void clear_stack_trace() {
 
 NseVal nse_apply(NseVal func, NseVal args) {
   NseVal result = undefined;
+  Syntax *old_error_form = error_form;
   if (func.type->internal == INTERNAL_FUNC) {
     if (!stack_trace_push(func, args)) {
       return undefined;
@@ -719,7 +705,9 @@ NseVal nse_apply(NseVal func, NseVal args) {
     raise_error(domain_error, "not a function");
   }
   if (RESULT_OK(result)) {
-    stack_trace_pop();
+    if (old_error_form) {
+      stack_trace_pop();
+    }
   }
   return result;
 }

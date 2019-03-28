@@ -33,28 +33,62 @@ NseVal eval_list(NseVal list, Scope *scope) {
 }
 
 static CType *parameters_to_type(NseVal formal) {
-  if (!formal.type) {
+  int ok = 1;
+  int min_arity = 0;
+  int optional = 0;
+  int key = 0;
+  int variadic = 0;
+  Symbol *param;
+  while (ok && accept_elem_symbol(&formal, &param)) {
+    if (param == key_keyword) {
+      key = 1;
+      while (accept_elem_symbol(&formal, &param)) {
+        // nop
+      }
+      break;
+    } else if (param == opt_keyword) {
+      while (ok && accept_elem_symbol(&formal, &param)) {
+        if (param == key_keyword) {
+          key = 1;
+          while (accept_elem_symbol(&formal, &param)) {
+            // nop
+          }
+          break;
+        } else if (param == rest_keyword) {
+          variadic = 1;
+          if (!expect_elem_symbol(&formal)) {
+            ok = 0;
+          }
+          break;
+        }
+        optional++;
+      }
+      break;
+    } else if (param == rest_keyword) {
+      variadic = 1;
+      if (!expect_elem_symbol(&formal)) {
+        ok = 0;
+      }
+      break;
+    } else if (param == match_keyword) {
+      if (!accept_elem_any(&formal, NULL)) {
+        set_debug_form(formal);
+        raise_error(syntax_error, "&match must be follwed by a pattern");
+        ok = 0;
+        break;
+      }
+    }
+    min_arity++;
+  }
+  if (!ok) {
     return NULL;
   }
-  switch (formal.type->internal) {
-    case INTERNAL_NIL:
-      return copy_type(nil_type);
-    case INTERNAL_CONS:
-      return copy_type(improper_list_type);
-    case INTERNAL_SYMBOL:
-      return copy_type(any_type);
-    case INTERNAL_QUOTE: {
-      NseVal datum = syntax_to_datum(formal.quote->quoted);
-      CType *type = copy_type(datum.type);
-      del_ref(datum);
-      return type;
-    }
-    case INTERNAL_SYNTAX:
-      return parameters_to_type(formal.syntax->quoted);
-    default:
-      raise_error(domain_error, "unexpected value type"); // TODO: type_to_string
-      return NULL;
+  if (!is_nil(formal)) {
+    set_debug_form(formal);
+    raise_error(syntax_error, "formal parameters must be a proper list of symbols");
+    return NULL;
   }
+  return get_closure_type(min_arity, variadic | key | optional);
 }
 
 struct named_parameter {
@@ -306,7 +340,7 @@ int assign_parameters(Scope **scope, NseVal formal, NseVal actual) {
       return 0;
     }
     NseVal next = head(actual);
-    if (param == key_keyword) {
+    if (param == match_keyword) {
       formal = tail(formal);
       Cons *cons = to_cons(formal);
       if (!cons) {
@@ -586,8 +620,10 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       NseVal scope_ref = check_alloc(REFERENCE(create_reference(copy_type(scope_type), fn_scope, (Destructor) delete_scope)));
       if (RESULT_OK(scope_ref)) {
         NseVal env[] = {args, scope_ref};
-        CType *func_type = get_closure_type(0, 1);
-        result = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
+        CType *func_type = parameters_to_type(head(args));
+        if (func_type) {
+          result = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
+        }
         del_ref(scope_ref);
       }
       return result;

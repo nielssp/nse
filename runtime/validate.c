@@ -1,8 +1,10 @@
+#include "error.h"
+
 #include "validate.h"
 
 static int validate(NseVal value, Validator validator) {
-  if (value.type == syntax_type) {
-    value = syntax_to_datum(value);
+  while (value.type == syntax_type) {
+    value = value.syntax->quoted;
   }
   switch (validator.type) {
     case VALIDATOR_EXACT: {
@@ -66,4 +68,55 @@ int validate_list(NseVal value, Validator validators[]) {
     validators++;
   }
   return is_nil(value);
+}
+
+#define DEF_ACCEPT_ELEM(NAME, RETURN_TYPE, CONVERTER) \
+  int accept_elem_ ## NAME (NseVal *next, RETURN_TYPE *out) {\
+    Cons *c = to_cons(*next);\
+    if (c) {\
+      *out = CONVERTER(c->head);\
+      if (*out) {\
+        *next = c->tail;\
+        return 1;\
+      }\
+    }\
+    return 0;\
+  }
+
+int accept_elem_any(NseVal *next, NseVal *out) {
+  Cons *c = to_cons(*next);
+  if (c) {
+    if (out) {
+      *out = c->head;
+    }
+    *next = c->tail;
+    return 1;
+  }
+  return 0;
+}
+
+DEF_ACCEPT_ELEM(cons, Cons *, to_cons)
+DEF_ACCEPT_ELEM(symbol, Symbol *, to_symbol)
+
+#define DEF_EXPECT_ELEM(NAME, RETURN_TYPE, ERROR) \
+  RETURN_TYPE expect_elem_ ## NAME (NseVal *next) {\
+    RETURN_TYPE out;\
+    if (accept_elem_ ## NAME (next, &out)) {\
+      return out;\
+    }\
+    set_debug_form(*next);\
+    raise_error(syntax_error, ERROR);\
+    return NULL;\
+  }
+
+DEF_EXPECT_ELEM(cons, Cons *, "expected a list")
+DEF_EXPECT_ELEM(symbol, Symbol *, "expected a symbol")
+
+int expect_nil(NseVal *next) {
+  if (!is_nil(*next)) {
+    set_debug_form(*next);
+    raise_error(syntax_error, "expected end of list");
+    return 0;
+  }
+  return 1;
 }

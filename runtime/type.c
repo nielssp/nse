@@ -142,12 +142,18 @@ void delete_type(CType *t) {
   if (t->refs > 0) {
     return;
   }
+  FuncType key;
   switch (t->type) {
     case C_TYPE_SIMPLE:
       delete_type(t->super);
       break;
     case C_TYPE_FUNC:
+      key = (FuncType){ .min_arity = t->func.min_arity, .variadic = t->func.variadic };
+      free(func_type_map_remove_entry(func_types, &key).key);
+      break;
     case C_TYPE_CLOSURE:
+      key = (FuncType){ .min_arity = t->func.min_arity, .variadic = t->func.variadic };
+      free(func_type_map_remove_entry(closure_types, &key).key);
       break;
     case C_TYPE_INSTANCE:
       instance_map_remove(t->instance.type->instances, (const CType **)t->instance.parameters);
