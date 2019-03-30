@@ -33,11 +33,11 @@
 ;;; boolean
 (export 'or 'and 'not '!= 'cond)
 
-(def-macro (or a b) (list 'if a ''t b))
-(def-macro (and a b) (list 'if a b ''f))
+(def-macro (or a b) (list 'if a 'true b))
+(def-macro (and a b) (list 'if a b 'false))
 (def (or a b) (or a b))
 (def (and a b) (and a b))
-(def (not a) (if a 'f 't))
+(def (not a) (if a false true))
 (def != (negate =))
 
 (def-macro (cond &rest cases) (if (nil? cases) ''nil (list 'if (head (head cases)) (elem 1 (head cases)) (cons 'cond (tail cases)))))
@@ -83,7 +83,7 @@
   (cond
     ((nil? xs) (f))
     ((nil? (tail xs)) (head xs))
-    ('t (f (head xs) (reduce f (tail xs))))))
+    (true (f (head xs) (reduce f (tail xs))))))
 
 (def (sum xs) (apply + xs))
 
