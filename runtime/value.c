@@ -648,7 +648,7 @@ int is_special_form(NseVal v) {
 }
 
 int is_true(NseVal b) {
-  return compare_symbol(b, t_symbol);
+  return b.type == bool_type && b.data == true_value.data;
 }
 
 size_t list_length(NseVal value) {

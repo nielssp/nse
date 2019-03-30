@@ -307,6 +307,7 @@ Module *get_system_module() {
   del_ref(stderr_val);
 
   module_ext_define_type(system, "any", TYPE(any_type));
+  module_ext_define_type(system, "bool", TYPE(bool_type));
   module_ext_define_type(system, "nil", TYPE(nil_type));
   module_ext_define_type(system, "i64", TYPE(i64_type));
   module_ext_define_type(system, "f64", TYPE(f64_type));

@@ -124,6 +124,7 @@
 (def (read>> r1 r2) (list 'read-bind r1 (fn (v) r2)))
 
 ;;; multiline comment
+(export '|)
 
 (def-read-macro |
   (let ((read-bars (read>>= read-char (fn (c) (if (= c (ascii "#")) read-ignore (if (= c (ascii "|")) read-bars read-until-bar)))))
@@ -131,7 +132,9 @@
     (read>> read-char read-until-bar)))
 
 
-; partial function application
+;;; partial function application
+(export '\()
+
 (def (ascii c) (byte-at 0 c))
 (def (find-params code)
      (if (is-a code ^symbol)

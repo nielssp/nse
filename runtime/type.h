@@ -51,6 +51,7 @@ struct CType {
 };
 
 extern CType *any_type;
+extern CType *bool_type;
 extern CType *improper_list_type;
 extern CType *proper_list_type;
 extern CType *nil_type;

@@ -180,20 +180,103 @@ NseVal describe(NseVal args) {
   ARG_DONE(args);
   nse_write(arg, out, NULL);
   stream_printf(out, "\n");
-  CType *t = arg.type;
-  if (t) {
-    nse_write(TYPE(t), out, current_scope->module);
-    delete_type(t);
-    stream_printf(out, "\n");
-  }
+  nse_write(TYPE(arg.type), out, current_scope->module);
+  stream_printf(out, "\n");
   if (arg.type->internal == INTERNAL_CLOSURE) {
-    stream_printf(out, "\nParameters: ???\n");
+    stream_printf(out, "\n");
     if (arg.closure->doc) {
       const char *doc_string = to_string_constant(STRING(arg.closure->doc));
       stream_printf(out, "Documentation:\n  %s\n", doc_string);
     }
   } else if (is_symbol(arg)) {
-    stream_printf(out, "\n");
+    Symbol *s = to_symbol(arg);
+    NseVal value = scope_get(current_scope, s);
+    if (RESULT_OK(value)) {
+      stream_printf(out, "\n");
+      nse_write(arg, out, NULL);
+      if (value.type->internal == INTERNAL_CLOSURE) {
+        stream_printf(out, " names a function:\n", s->name);
+        stream_printf(out, "Type: ");
+        nse_write(TYPE(value.type), out, current_scope->module);
+        stream_printf(out, "\n");
+        if (value.closure->doc) {
+          const char *doc_string = to_string_constant(STRING(value.closure->doc));
+          stream_printf(out, "Documentation:\n  %s\n", doc_string);
+        }
+      } else if (value.type->internal == INTERNAL_FUNC) {
+        stream_printf(out, " names a compiled function\n", s->name);
+      } else {
+        stream_printf(out, " names a value:\n", s->name);
+        nse_write(value, out, NULL);
+        stream_printf(out, "\n");
+        nse_write(TYPE(value.type), out, current_scope->module);
+        stream_printf(out, "\n");
+      }
+    } else {
+      clear_error();
+    }
+    value = scope_get_macro(current_scope, s);
+    if (RESULT_OK(value)) {
+      stream_printf(out, "\n");
+      nse_write(arg, out, NULL);
+      if (value.type->internal == INTERNAL_CLOSURE) {
+        stream_printf(out, " names a macro:\n", s->name);
+        stream_printf(out, "Type: ");
+        nse_write(TYPE(value.type), out, current_scope->module);
+        stream_printf(out, "\n");
+        if (value.closure->doc) {
+          const char *doc_string = to_string_constant(STRING(value.closure->doc));
+          stream_printf(out, "Documentation:\n  %s\n", doc_string);
+        }
+      } else if (value.type->internal == INTERNAL_FUNC) {
+        stream_printf(out, " names a compiled macro\n", s->name);
+      } else {
+        stream_printf(out, " names a macro:\n", s->name);
+        nse_write(value, out, NULL);
+        stream_printf(out, "\n");
+        nse_write(TYPE(value.type), out, current_scope->module);
+        stream_printf(out, "\n");
+      }
+    } else {
+      clear_error();
+    }
+    Scope *type_scope = use_module_types(current_scope->module);
+    value = scope_get(type_scope, s);
+    scope_pop(type_scope);
+    if (RESULT_OK(value)) {
+      stream_printf(out, "\n");
+      nse_write(arg, out, NULL);
+      if (value.type->internal == INTERNAL_CLOSURE) {
+        stream_printf(out, " names a generic type:\n", s->name);
+        stream_printf(out, "Type: ");
+        nse_write(TYPE(value.type), out, current_scope->module);
+        stream_printf(out, "\n");
+        if (value.closure->doc) {
+          const char *doc_string = to_string_constant(STRING(value.closure->doc));
+          stream_printf(out, "Documentation:\n  %s\n", doc_string);
+        }
+      } else if (value.type->internal == INTERNAL_FUNC) {
+        stream_printf(out, " names a compiled generic type\n", s->name);
+      } else {
+        stream_printf(out, " names a type:\n", s->name);
+        nse_write(value, out, NULL);
+        stream_printf(out, "\n");
+        nse_write(TYPE(value.type), out, current_scope->module);
+        stream_printf(out, "\n");
+      }
+    } else {
+      clear_error();
+    }
+    value = get_read_macro(s);
+    if (RESULT_OK(value)) {
+      stream_printf(out, "\n");
+      nse_write(arg, out, NULL);
+      stream_printf(out, " names a read macro:\n", s->name);
+      nse_write(value, out, NULL);
+      stream_printf(out, "\n");
+    } else {
+      clear_error();
+    }
   }
   return nil;
 }

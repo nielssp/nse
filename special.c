@@ -491,14 +491,16 @@ NseVal eval_def_macro(NseVal args, Scope *scope) {
             NseVal def = check_alloc(CONS(create_cons(formal, body)));
             if (RESULT_OK(def)) {
               NseVal env[] = {def, scope_ref};
-              CType *func_type = get_closure_type(0, 1);
-              NseVal value = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
-              del_ref(scope_ref);
-              del_ref(def);
-              if (RESULT_OK(value)) {
-                module_define_macro(symbol->module, symbol->name, value);
-                del_ref(value);
-                return add_ref(SYMBOL(symbol));
+              CType *func_type = parameters_to_type(head(def));
+              if (func_type) {
+                NseVal value = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
+                del_ref(scope_ref);
+                del_ref(def);
+                if (RESULT_OK(value)) {
+                  module_define_macro(symbol->module, symbol->name, value);
+                  del_ref(value);
+                  return add_ref(SYMBOL(symbol));
+                }
               }
             }
           }

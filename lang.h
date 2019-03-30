@@ -1,15 +1,15 @@
 #ifndef LANG_H
 #define LANG_H
 
-#define TRUE (add_ref(SYMBOL(t_symbol)))
-#define FALSE (add_ref(SYMBOL(f_symbol)))
+#define TRUE (add_ref(true_value))
+#define FALSE (add_ref(false_value))
 
 extern Module *lang_module;
 
 extern Symbol *out_of_memory_error;
 
-extern Symbol *t_symbol;
-extern Symbol *f_symbol;
+extern Symbol *true_symbol;
+extern Symbol *false_symbol;
 extern Symbol *if_symbol;
 extern Symbol *let_symbol;
 extern Symbol *match_symbol;
@@ -36,6 +36,9 @@ extern Symbol *key_keyword;
 extern Symbol *opt_keyword;
 extern Symbol *rest_keyword;
 extern Symbol *match_keyword;
+
+extern NseVal true_value;
+extern NseVal false_value;
 
 void init_lang_module();
 

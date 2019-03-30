@@ -31,6 +31,7 @@ FuncTypeMap func_types;
 FuncTypeMap closure_types;
 
 CType *any_type;
+CType *bool_type;
 CType *proper_list_type;
 CType *improper_list_type;
 CType *nil_type;
@@ -57,6 +58,7 @@ void init_types() {
   func_types = create_func_type_map();
   closure_types = create_func_type_map();
   any_type = create_simple_type(INTERNAL_NOTHING, NULL);
+  bool_type = create_simple_type(INTERNAL_DATA, any_type);
   improper_list_type = create_simple_type(INTERNAL_CONS, any_type);
   proper_list_type = create_simple_type(INTERNAL_NOTHING, improper_list_type);
   list_type = create_generic(1, INTERNAL_CONS, proper_list_type);

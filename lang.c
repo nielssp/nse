@@ -3,8 +3,8 @@
 
 #include "lang.h"
 
-Symbol *t_symbol = NULL;
-Symbol *f_symbol = NULL;
+Symbol *true_symbol = NULL;
+Symbol *false_symbol = NULL;
 Symbol *if_symbol = NULL;
 Symbol *let_symbol = NULL;
 Symbol *match_symbol = NULL;
@@ -32,6 +32,9 @@ Symbol *opt_keyword = NULL;
 Symbol *rest_keyword = NULL;
 Symbol *match_keyword = NULL;
 
+NseVal true_value;
+NseVal false_value;
+
 Module *lang_module = NULL;
 
 void init_lang_module() {
@@ -40,8 +43,8 @@ void init_lang_module() {
 
   lang_module = create_module("lang");
 
-  t_symbol = module_extern_symbol(lang_module, "t");
-  f_symbol = module_extern_symbol(lang_module, "f");
+  true_symbol = module_extern_symbol(lang_module, "true"); 
+  false_symbol = module_extern_symbol(lang_module, "false");
   if_symbol = module_extern_symbol(lang_module, "if");
   let_symbol = module_extern_symbol(lang_module, "let");
   match_symbol = module_extern_symbol(lang_module, "match");
@@ -68,4 +71,9 @@ void init_lang_module() {
   opt_keyword = module_extern_symbol(lang_module, "&opt");
   rest_keyword = module_extern_symbol(lang_module, "&rest");
   match_keyword = module_extern_symbol(lang_module, "&match");
+
+  true_value = DATA(create_data(copy_type(bool_type), true_symbol, NULL, 0));
+  module_define(lang_module, "true", true_value);
+  false_value = DATA(create_data(copy_type(bool_type), false_symbol, NULL, 0));
+  module_define(lang_module, "false", false_value);
 }
