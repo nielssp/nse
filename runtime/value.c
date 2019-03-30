@@ -519,6 +519,15 @@ int is_type(NseVal v) {
   return 0;
 }
 
+int is_data(NseVal v) {
+  if (v.type->internal == INTERNAL_DATA) {
+    return 1;
+  } else if (v.type->internal == INTERNAL_SYNTAX) {
+    return is_data(v.syntax->quoted);
+  }
+  return 0;
+}
+
 NseVal from_cons(Cons *c) {
   return (NseVal){ .type = c->type, .cons = c };
 }

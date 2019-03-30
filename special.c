@@ -81,7 +81,7 @@ NseVal eval_let(NseVal args, Scope *scope) {
 }
 
 NseVal eval_match(NseVal args, Scope *scope) {
-  NseVal result = nil;
+  NseVal result = undefined;
   NseVal h = head(args);
   NseVal value = THEN(h, eval(h, scope));
   if (RESULT_OK(value)) {
@@ -452,7 +452,7 @@ NseVal eval_def_data(NseVal args, Scope *scope) {
           } else {
             Symbol *tag = to_symbol(constructor);
             if (tag) {
-              Data *d = create_data(t, tag, NULL, 0);
+              Data *d = create_data(copy_type(t), tag, NULL, 0);
               if (!d) {
                 delete_type(t);
                 return undefined;

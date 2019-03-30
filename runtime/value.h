@@ -246,6 +246,7 @@ int is_string(NseVal v);
 int is_keyword(NseVal v);
 int is_type(NseVal v);
 int is_true(NseVal b);
+int is_data(NseVal b);
 
 int compare_symbol(NseVal v, const Symbol *sym);
 int is_special_form(NseVal v);

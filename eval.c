@@ -281,17 +281,47 @@ int match_pattern(Scope **scope, NseVal pattern, NseVal actual) {
       *scope = scope_push(*scope, pattern.symbol, actual);
       return 1;
     case INTERNAL_QUOTE:
+      if (actual.type->internal == INTERNAL_DATA) {
+        Symbol *tag = to_symbol(pattern.quote->quoted);
+        if (tag == actual.data->tag && actual.data->record_size == 0) {
+          return 1;
+        }
+      }
       if (!is_true(nse_equals(pattern.quote->quoted, actual))) {
         raise_error(pattern_error, "pattern match failed");
         return 0;
       }
       return 1;
     case INTERNAL_CONS: {
-      Symbol *keyword = to_symbol(head(pattern));
-      if (keyword) {
-        // TODO: is data tag?
-      }
-      if (!is_cons(actual)) {
+      if (actual.type->internal == INTERNAL_DATA && is_quote(head(pattern))) {
+        Symbol *tag = to_symbol(strip_syntax(head(pattern)).quote->quoted);
+        if (tag == actual.data->tag) {
+          NseVal next = tail(pattern);
+          int match = 1;
+          for (int i = 0; i < actual.data->record_size; i++) {
+            if (!is_cons(next)) {
+              match = 0;
+              break;
+            }
+            if (!match_pattern(scope, head(next), actual.data->record[i])) {
+              match = 0;
+              break;
+            }
+            next = tail(next);
+          }
+          if (match) {
+            if (!is_nil(next)) {
+              set_debug_form(actual);
+              raise_error(pattern_error, "pattern match failed");
+              return 0;
+            }
+            return 1;
+          }
+        }
+        set_debug_form(actual);
+        raise_error(pattern_error, "pattern match failed");
+        return 0;
+      } else if (!is_cons(actual)) {
         set_debug_form(actual);
         raise_error(pattern_error, "expected list");
         return 0;
