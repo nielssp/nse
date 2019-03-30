@@ -425,16 +425,102 @@ static NseVal eval_def_data_constructor(NseVal args, CType *t, Scope *scope) {
   }
 }
 
+static NseVal apply_generic_type(NseVal args, NseVal env[]) {
+  size_t arg_s;
+  NseVal *arg_a = list_to_array(args, &arg_s);
+  if (!arg_a) {
+    return undefined;
+  }
+  GType *g = env[0].reference->pointer;
+  if (arg_s != generic_type_arity(g)) {
+    free(arg_a);
+    raise_error(domain_error, "wrong number of parameters for generic type, expected %d, got %d", generic_type_arity(g), arg_s);
+    return undefined;
+  }
+  CType **parameters = allocate(sizeof(CType *) * (arg_s + 1));
+  for (int i = 0; i < arg_s; i++) {
+    CType *t = to_type(arg_a[i]);
+    if (!t) {
+      raise_error(domain_error, "generic type parameter must be a type");
+      free(arg_a);
+      for (int j = 0; j < i; j++) {
+        delete_type(parameters[j]);
+      }
+      free(parameters);
+      return undefined;
+    }
+    parameters[i] = copy_type(t);
+  }
+  parameters[arg_s] = NULL;
+  free(arg_a);
+  CType *instance = get_instance(g, parameters);
+  free(parameters);
+  return check_alloc(TYPE(instance));
+}
+
+static GType *eval_def_generic_type(NseVal args, Scope **scope) {
+  Symbol *name = expect_elem_symbol(&args);
+  if (name) {
+    int arity = 0;
+    Symbol *var;
+    NseVal next_var = args;
+    while (accept_elem_symbol(&next_var, &var)) {
+      arity++;
+    }
+    if (is_nil(next_var) && arity != 0) {
+      GType *g = create_generic(arity, INTERNAL_DATA, copy_type(any_type));
+      set_generic_type_name(g, name);
+      if (g) {
+        for (int i = 0; i < arity; i++) {
+          CType *var = create_poly_var(copy_generic(g), i);
+          if (!var) {
+            delete_generic(g);
+            return NULL;
+          }
+          Symbol *var_name = to_symbol(elem(i, args));
+          *scope = scope_push(*scope, var_name, TYPE(var));
+          delete_type(var);
+        }
+        NseVal g_ref = check_alloc(REFERENCE(create_reference(copy_type(any_type), copy_generic(g), (Destructor) delete_generic)));
+        if (RESULT_OK(g_ref)) {
+          NseVal env[] = {g_ref};
+          CType *func_type = get_closure_type(arity, 0);
+          if (func_type) {
+            NseVal func = check_alloc(CLOSURE(create_closure(apply_generic_type, func_type, env, 1)));
+            if (RESULT_OK(func)) {
+              module_define_type(name->module, name->name, func);
+              del_ref(func);
+              del_ref(g_ref);
+              return g;
+            }
+          }
+          del_ref(g_ref);
+        }
+        delete_generic(g);
+        return NULL;
+      }
+    } else {
+      set_debug_form(args);
+      raise_error(syntax_error, "generic type parameters must be a list containing at least one symbol");
+    }
+  } else {
+    raise_error(syntax_error, "name of type must be a symbol");
+  }
+  return NULL;
+}
+
 NseVal eval_def_data(NseVal args, Scope *scope) {
   NseVal h = head(args);
   if (RESULT_OK(h)) {
     if (is_cons(h)) {
-      Symbol *symbol = to_symbol(head(h));
-      if (symbol) {
+      Scope *type_scope = use_module_types(scope->module);
+      GType *g = eval_def_generic_type(h, &type_scope);
+      if (g) {
         // TODO: not implemented
-      } else {
-        raise_error(syntax_error, "name of type must be a symbol");
+        delete_generic(g);
       }
+      delete_scope(type_scope);
+      return nil;
     } else {
       Symbol *symbol = to_symbol(h);
       if (symbol) {

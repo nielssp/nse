@@ -84,6 +84,7 @@ void init_types() {
 CType *create_simple_type(InternalType internal, CType *super) {
   CType *t = allocate(sizeof(CType));
   if (!t) {
+    delete_type(super);
     return NULL;
   }
   t->refs = 1;
@@ -97,6 +98,7 @@ CType *create_simple_type(InternalType internal, CType *super) {
 GType *create_generic(int arity, InternalType internal, CType *super) {
   GType *t = allocate(sizeof(GType));
   if (!t) {
+    delete_type(super);
     return NULL;
   }
   t->refs = 1;
@@ -106,6 +108,22 @@ GType *create_generic(int arity, InternalType internal, CType *super) {
   t->instances = create_instance_map();
   t->name = NULL;
   t->poly = NULL;
+  return t;
+}
+
+CType *create_poly_var(GType *g, int index) {
+  CType *t = allocate(sizeof(CType));
+  if (!t) {
+    delete_generic(g);
+    return NULL;
+  }
+  t->refs = 1;
+  t->type = C_TYPE_POLY_VAR;
+  t->internal = INTERNAL_NOTHING;
+  t->super = NULL;
+  t->name = NULL;
+  t->poly_var.type = g;
+  t->poly_var.index = index;
   return t;
 }
 
@@ -169,6 +187,9 @@ void delete_type(CType *t) {
     case C_TYPE_POLY_INSTANCE:
       t->poly_instance->poly = NULL;
       delete_generic(t->poly_instance);
+      break;
+    case C_TYPE_POLY_VAR:
+      delete_generic(t->poly_var.type);
       break;
   }
   free(t);

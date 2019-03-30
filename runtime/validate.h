@@ -39,6 +39,8 @@ struct Validator {
 
 int validate_list(NseVal value, Validator validators[]);
 
+NseVal *list_to_array(NseVal list, size_t *length);
+
 int accept_elem_any(NseVal *next, NseVal *out);
 int accept_elem_cons(NseVal *next, Cons **out);
 int accept_elem_symbol(NseVal *next, Symbol **out);

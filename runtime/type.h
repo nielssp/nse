@@ -29,6 +29,7 @@ typedef enum {
   C_TYPE_CLOSURE,
   C_TYPE_INSTANCE,
   C_TYPE_POLY_INSTANCE,
+  C_TYPE_POLY_VAR,
 } CTypeType;
 
 struct CType {
@@ -47,6 +48,10 @@ struct CType {
       CType **parameters;
     } instance;
     GType *poly_instance;
+    struct {
+      GType *type;
+      int index;
+    } poly_var;
   };
 };
 
@@ -78,9 +83,12 @@ void init_types();
 
 CType *create_simple_type(InternalType internal, CType *super);
 GType *create_generic(int arity, InternalType internal, CType *super);
+CType *create_poly_var(GType *g, int index);
 
 CType *copy_type(CType *t);
 void delete_type(CType *t);
+GType *copy_generic(GType *g);
+void delete_generic(GType *g);
 
 Symbol *generic_type_name(GType *g);
 void set_generic_type_name(GType *g, Symbol *s);

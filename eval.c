@@ -614,13 +614,6 @@ NseVal eval(NseVal code, Scope *scope) {
         scope_pop(type_scope);
         return result;
       }
-      if (scope->type == TYPE_SCOPE) {
-        NseVal datum = syntax_to_datum(code.quote->quoted);
-        if (!RESULT_OK(datum)) {
-          return datum;
-        }
-        return check_alloc(TYPE(datum.type));
-      }
       return syntax_to_datum(code.quote->quoted);
     case INTERNAL_SYMBOL:
       if (code.type == keyword_type) {

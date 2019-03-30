@@ -70,6 +70,43 @@ int validate_list(NseVal value, Validator validators[]) {
   return is_nil(value);
 }
 
+NseVal *list_to_array(NseVal list, size_t *length) {
+  Cons *c = to_cons(list);
+  if (!c) {
+    set_debug_form(list);
+    raise_error(domain_error, "expected a list");
+    return NULL;
+  }
+  *length = 0;
+  size_t size = 8;
+  NseVal *buffer = allocate(sizeof(NseVal) * size);
+  if (!buffer) {
+    return buffer;
+  }
+  NseVal elem;
+  while (accept_elem_any(&list, &elem)) {
+    if (*length >= size) {
+      size *= 2;
+      NseVal *new_buffer = realloc(buffer, sizeof(NseVal) * size);
+      if (new_buffer) {
+        buffer = new_buffer;
+      } else {
+        free(buffer);
+        raise_error(out_of_memory_error, "out of memory");
+        return NULL;
+      }
+    }
+    buffer[(*length)++] = elem;
+  }
+  if (!is_nil(list)) {
+    free(buffer);
+    set_debug_form(list);
+    raise_error(domain_error, "not a proper list");
+    return NULL;
+  }
+  return buffer;
+}
+
 #define DEF_ACCEPT_ELEM(NAME, RETURN_TYPE, CONVERTER) \
   int accept_elem_ ## NAME (NseVal *next, RETURN_TYPE *out) {\
     Cons *c = to_cons(*next);\
