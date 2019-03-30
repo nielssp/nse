@@ -535,6 +535,13 @@ NseVal from_data(Data *d) {
   return (NseVal){ .type = d->type, .data = d };
 }
 
+NseVal strip_syntax(NseVal v) {
+  if (v.type->internal == INTERNAL_SYNTAX) {
+    return strip_syntax(v.syntax->quoted);
+  }
+  return v;
+}
+
 Cons *to_cons(NseVal v) {
   if (v.type->internal == INTERNAL_CONS) {
     return v.cons;

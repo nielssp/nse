@@ -206,6 +206,8 @@ NseVal from_closure(Closure *c);
 NseVal from_reference(Reference *r);
 NseVal from_data(Data *d);
 
+NseVal strip_syntax(NseVal v);
+
 Cons *to_cons(NseVal v);
 Symbol *to_symbol(NseVal v);
 String *to_string(NseVal v);

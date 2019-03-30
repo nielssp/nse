@@ -83,6 +83,20 @@ int validate_list(NseVal value, Validator validators[]) {
     return 0;\
   }
 
+#define DEF_ACCEPT_ELEM2(NAME, RETURN_TYPE, TYPE_TEST, PROPERTY) \
+  int accept_elem_ ## NAME (NseVal *next, RETURN_TYPE *out) {\
+    Cons *c = to_cons(*next);\
+    if (c) {\
+      NseVal stripped = strip_syntax(c->head);\
+      if (TYPE_TEST(stripped)) {\
+        *out = stripped.PROPERTY;\
+        *next = c->tail;\
+        return 1;\
+      }\
+    }\
+    return 0;\
+  }
+
 int accept_elem_any(NseVal *next, NseVal *out) {
   Cons *c = to_cons(*next);
   if (c) {
@@ -97,6 +111,7 @@ int accept_elem_any(NseVal *next, NseVal *out) {
 
 DEF_ACCEPT_ELEM(cons, Cons *, to_cons)
 DEF_ACCEPT_ELEM(symbol, Symbol *, to_symbol)
+DEF_ACCEPT_ELEM2(type_quote, TypeQuote *, is_type_quote, quote)
 
 #define DEF_EXPECT_ELEM(NAME, RETURN_TYPE, ERROR) \
   RETURN_TYPE expect_elem_ ## NAME (NseVal *next) {\
@@ -111,6 +126,7 @@ DEF_ACCEPT_ELEM(symbol, Symbol *, to_symbol)
 
 DEF_EXPECT_ELEM(cons, Cons *, "expected a list")
 DEF_EXPECT_ELEM(symbol, Symbol *, "expected a symbol")
+DEF_EXPECT_ELEM(type_quote, TypeQuote *, "expected a type")
 
 int expect_nil(NseVal *next) {
   if (!is_nil(*next)) {

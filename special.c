@@ -2,6 +2,7 @@
 
 #include "eval.h"
 #include "runtime/error.h"
+#include "runtime/validate.h"
 
 #include "special.h"
 
@@ -117,6 +118,8 @@ NseVal eval_fn(NseVal args, Scope *scope) {
       result = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
     }
     del_ref(scope_ref);
+  } else {
+    delete_scope(fn_scope);
   }
   return result;
 }
@@ -226,6 +229,8 @@ static NseVal eval_def_func(NseVal first, NseVal args, Scope *scope) {
         }
       }
       del_ref(scope_ref);
+    } else {
+      delete_scope(fn_scope);
     }
   } else {
     raise_error(syntax_error, "name of function must be a symbol");
@@ -280,9 +285,143 @@ NseVal eval_def_read_macro(NseVal args, Scope *scope) {
 }
 
 NseVal eval_def_type(NseVal args, Scope *scope) {
-  // TODO: to be continue...
+  // TODO: to be continued...
   raise_error(syntax_error, "not implemented");
   return undefined;
+}
+
+static NseVal get_constructor_parameter_types(NseVal args, Scope *scope, int *arity) {
+  if (is_cons(args)) {
+    (*arity)++;
+    NseVal rest = get_constructor_parameter_types(tail(args), scope, arity);
+    if (!RESULT_OK(rest)) {
+      return rest;
+    }
+    NseVal arg = head(args);
+    CType *t;
+    if (is_symbol(arg)) {
+      t = copy_type(any_type);
+    } else {
+      NseVal type_value;
+      if (is_cons(arg)) {
+        Symbol *sym = expect_elem_symbol(&arg);
+        if (!sym) return undefined;
+        TypeQuote *tq = expect_elem_type_quote(&arg);
+        if (!tq) return undefined;
+        if (!expect_nil(&arg)) return undefined;
+        type_value = eval(TQUOTE(tq), scope);
+      } else if (is_type_quote(arg)) {
+        type_value = eval(arg, scope);
+      } else {
+        del_ref(rest);
+        set_debug_form(arg);
+        raise_error(syntax_error, "constructor parameter must be a type, a symbol or a symbol and a type");
+        return undefined;
+      }
+      if (!RESULT_OK(type_value)) {
+        del_ref(rest);
+        return undefined;
+      }
+      t = to_type(type_value);
+      if (!t) {
+        del_ref(rest);
+        del_ref(type_value);
+        set_debug_form(arg);
+        raise_error(syntax_error, "parameter is not a valid type");
+        return undefined;
+      }
+    }
+    Cons *c = create_cons(TYPE(t) ,rest);
+    if (!c) {
+      delete_type(t);
+      del_ref(rest);
+      return undefined;
+    }
+    return CONS(c);
+  } else if (is_nil(args)) {
+    return nil;
+  } else {
+    set_debug_form(args);
+    raise_error(syntax_error, "constructor parameters must be a proper list");
+    return undefined;
+  }
+}
+
+static NseVal apply_constructor(NseVal args, NseVal env[]) {
+  CType *t = env[0].type_val;
+  Symbol *tag = env[1].symbol;
+  int arity = env[2].i64;
+  NseVal types = env[3];
+  NseVal *record = NULL;
+  if (arity > 0) {
+    record = allocate(sizeof(NseVal) * arity);
+    if (!record) {
+      return undefined;
+    }
+    int i = 0;
+    while (is_cons(types)) {
+      NseVal arg;
+      if (!accept_elem_any(&args, &arg)) {
+        raise_error(domain_error, "too few parameters for constructor");
+        free(record);
+        return undefined;
+      }
+      if (!is_subtype_of(arg.type, types.cons->head.type_val)) {
+        // TODO: better error: which parameter? which type?
+        raise_error(domain_error, "parameter has incorrect type");
+        free(record);
+        return undefined;
+      }
+      record[i++] = arg;
+      types = tail(types);
+    }
+  }
+  NseVal result = undefined;
+  if (is_nil(args)) {
+    Data *d = create_data(copy_type(t), tag, record, arity);
+    if (d) {
+      result = DATA(d);
+    }
+  } else {
+    raise_error(domain_error, "too many parameters for constructor");
+  }
+  free(record);
+  return result;
+}
+
+static NseVal eval_def_data_constructor(NseVal args, CType *t, Scope *scope) {
+  Symbol *tag = to_symbol(head(args));
+  if (tag) {
+    NseVal result = undefined;
+    int arity = 0;
+    NseVal types = get_constructor_parameter_types(tail(args), scope, &arity);
+    if (!RESULT_OK(types)) {
+      return types;
+    }
+    Scope *fn_scope = copy_scope(scope);
+    NseVal scope_ref = check_alloc(REFERENCE(create_reference(copy_type(scope_type), fn_scope, (Destructor) delete_scope)));
+    if (RESULT_OK(scope_ref)) {
+      NseVal env[] = {TYPE(t), SYMBOL(tag), I64(arity), types, scope_ref};
+      CType *func_type = get_closure_type(arity, 0);
+      if (func_type) {
+        NseVal func = check_alloc(CLOSURE(create_closure(apply_constructor, func_type, env, 4)));
+        if (RESULT_OK(func)) {
+          module_define(tag->module, tag->name, func);
+          result = nil;
+          del_ref(func);
+        }
+      }
+      del_ref(scope_ref);
+    } else {
+      delete_scope(fn_scope);
+    }
+    del_ref(types);
+    return result;
+  } else {
+    set_debug_form(head(args));
+    raise_error(syntax_error, "name of constructor must be a symbol");
+    return undefined;
+  }
 }
 
 NseVal eval_def_data(NseVal args, Scope *scope) {
@@ -304,22 +443,29 @@ NseVal eval_def_data(NseVal args, Scope *scope) {
         for (NseVal c = tail(args); is_cons(c); c = tail(c)) {
           NseVal constructor = head(c);
           if (is_cons(constructor)) {
-            // TODO: not implemented
+            NseVal constructor_result = eval_def_data_constructor(constructor, t, scope);
+            if (!RESULT_OK(constructor_result)) {
+              delete_type(t);
+              return undefined;
+            }
           } else {
             Symbol *tag = to_symbol(constructor);
             if (tag) {
               Data *d = create_data(t, tag, NULL, 0);
               if (!d) {
+                delete_type(t);
                 return undefined;
               }
               module_define(tag->module, tag->name, DATA(d));
               del_ref(DATA(d));
             } else {
+              delete_type(t);
               raise_error(syntax_error, "name of constructor must be a symbol");
               return undefined;
             }
           }
         }
+        delete_type(t);
         return add_ref(SYMBOL(symbol));
       } else {
         raise_error(syntax_error, "name of type must be a symbol");
@@ -355,6 +501,8 @@ NseVal eval_def_macro(NseVal args, Scope *scope) {
               }
             }
           }
+        } else {
+          delete_scope(macro_scope);
         }
       } else {
         raise_error(syntax_error, "name of macro must be a symbol");

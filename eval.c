@@ -89,7 +89,7 @@ CType *parameters_to_type(NseVal formal) {
     raise_error(syntax_error, "formal parameters must be a proper list of symbols");
     return NULL;
   }
-  return get_closure_type(min_arity, variadic | key | optional);
+  return get_closure_type(min_arity, variadic || key || optional);
 }
 
 struct named_parameter {
@@ -542,40 +542,7 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
     } else if (macro_name == def_data_symbol) {
       return eval_def_data(args, scope);
     } else if (macro_name == def_macro_symbol) {
-      NseVal h = head(args);
-      if (RESULT_OK(h)) {
-        if (is_cons(h)) {
-          Symbol *symbol = to_symbol(head(h));
-          if (symbol) {
-            Scope *macro_scope = copy_scope(scope);
-            NseVal scope_ref = check_alloc(REFERENCE(create_reference(copy_type(scope_type), macro_scope, (Destructor) delete_scope)));
-            if (RESULT_OK(scope_ref)) {
-              NseVal body = tail(args);
-              NseVal formal = tail(h);
-              if (RESULT_OK(formal) && RESULT_OK(body)) {
-                NseVal def = check_alloc(CONS(create_cons(formal, body)));
-                if (RESULT_OK(def)) {
-                  NseVal env[] = {def, scope_ref};
-                  CType *func_type = get_closure_type(0, 1);
-                  NseVal value = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
-                  del_ref(scope_ref);
-                  del_ref(def);
-                  if (RESULT_OK(value)) {
-                    module_define_macro(symbol->module, symbol->name, value);
-                    del_ref(value);
-                    return add_ref(SYMBOL(symbol));
-                  }
-                }
-              }
-            }
-          } else {
-            raise_error(syntax_error, "name of macro must be a symbol");
-          }
-        } else {
-          raise_error(syntax_error, "macro must be a function");
-        }
-      }
-      return undefined;
+      return eval_def_macro(args, scope);
     }
     NseVal macro_function = scope_get_macro(scope, macro_name);
     if (RESULT_OK(macro_function)) {
