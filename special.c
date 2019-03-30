@@ -481,7 +481,7 @@ static GType *eval_def_generic_type(NseVal args, Scope **scope) {
           *scope = scope_push(*scope, var_name, TYPE(var));
           delete_type(var);
         }
-        NseVal g_ref = check_alloc(REFERENCE(create_reference(copy_type(any_type), copy_generic(g), (Destructor) delete_generic)));
+        NseVal g_ref = check_alloc(REFERENCE(create_reference(copy_type(generic_type_type), copy_generic(g), (Destructor) delete_generic)));
         if (RESULT_OK(g_ref)) {
           NseVal env[] = {g_ref};
           CType *func_type = get_closure_type(arity, 0);
@@ -580,16 +580,17 @@ NseVal eval_def_macro(NseVal args, Scope *scope) {
               CType *func_type = parameters_to_type(head(def));
               if (func_type) {
                 NseVal value = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
-                del_ref(scope_ref);
                 del_ref(def);
                 if (RESULT_OK(value)) {
                   module_define_macro(symbol->module, symbol->name, value);
+                  del_ref(scope_ref);
                   del_ref(value);
                   return add_ref(SYMBOL(symbol));
                 }
               }
             }
           }
+          del_ref(scope_ref);
         } else {
           delete_scope(macro_scope);
         }

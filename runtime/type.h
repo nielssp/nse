@@ -76,6 +76,7 @@ extern CType *syntax_type;
 extern CType *func_type;
 extern CType *scope_type;
 extern CType *stream_type;
+extern CType *generic_type_type;
 
 extern GType *list_type;
 

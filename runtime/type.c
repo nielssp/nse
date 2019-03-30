@@ -51,6 +51,7 @@ CType *type_type;
 CType *func_type;
 CType *scope_type;
 CType *stream_type;
+CType *generic_type_type;
 
 GType *list_type;
 
@@ -79,6 +80,7 @@ void init_types() {
   func_type = create_simple_type(INTERNAL_NOTHING, any_type);
   scope_type = create_simple_type(INTERNAL_REFERENCE, any_type);
   stream_type = create_simple_type(INTERNAL_REFERENCE, any_type);
+  generic_type_type = create_simple_type(INTERNAL_REFERENCE, any_type);
 }
 
 CType *create_simple_type(InternalType internal, CType *super) {
@@ -143,7 +145,8 @@ void delete_generic(GType *g) {
     return;
   }
   delete_type(g->super);
-  // TODO: delete instances
+  // weak reference from g -> instance => no need to delete
+  delete_instance_map(g->instances);
   free(g);
 }
 
