@@ -241,7 +241,8 @@ static NseVal eval_def_func(NseVal first, NseVal args, Scope *scope) {
 static NseVal eval_def_var(NseVal first, NseVal args, Scope *scope) {
   Symbol *symbol = to_symbol(first);
   if (symbol) {
-    NseVal value = eval(head(tail(args)), scope);
+    NseVal expr = head(tail(args));
+    NseVal value = THEN(expr, eval(expr, scope));
     if (RESULT_OK(value)) {
       module_define(symbol->module, symbol->name, value);
       del_ref(value);
@@ -331,10 +332,10 @@ static NseVal get_constructor_parameter_types(NseVal args, Scope *scope, int *ar
         return undefined;
       }
     }
-    Cons *c = create_cons(TYPE(t) ,rest);
+    Cons *c = create_cons(TYPE(t), rest);
+    del_ref(rest);
     if (!c) {
       delete_type(t);
-      del_ref(rest);
       return undefined;
     }
     return CONS(c);
