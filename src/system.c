@@ -273,7 +273,7 @@ static NseVal stream_read_(NseVal args) {
 static NseVal get_list_type(NseVal args) {
   ARG_POP_TYPE(CType *, type_a, args, to_type, "a type");
   ARG_DONE(args);
-  return TYPE(get_unary_instance(list_type, copy_type(type_a)));
+  return TYPE(get_unary_instance(copy_generic(list_type), copy_type(type_a)));
 }
 
 Module *get_system_module() {

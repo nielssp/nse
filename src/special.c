@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "eval.h"
+#include "write.h"
 #include "runtime/error.h"
 #include "runtime/validate.h"
 
@@ -394,8 +395,8 @@ static int is_instance_of(CType *actual, const CType *formal, const GType *g, in
         CType **f_param = formal->instance.parameters;
         // Should always have the same arity
         while (*a_param && *f_param) {
-          if (!is_instance_of(copy_type(*a_param), *f_param, g, 1, arity, params)) {
-            result = 0;
+          result = is_instance_of(copy_type(*a_param), *f_param, g, 1, arity, params);
+          if (result != 1) {
             break;
           }
           a_param++;
@@ -432,11 +433,31 @@ static int is_instance_of(CType *actual, const CType *formal, const GType *g, in
   return result;
 }
 
+static void raise_parameter_type_error(Symbol *function_name, CType *expected, CType *actual, int index, const GType *g, CType **params, Scope *scope) {
+  char *function_name_s = nse_write_to_string(SYMBOL(function_name), scope->module);
+  char *expected_s;
+  if (params) {
+    CType *expected_instance = instantiate_type(expected, g, params);
+    expected_s = nse_write_to_string(TYPE(expected_instance), scope->module);
+    delete_type(expected_instance);
+  } else {
+    expected_s = nse_write_to_string(TYPE(expected), scope->module);
+    delete_type(expected);
+  }
+  char *actual_s = nse_write_to_string(TYPE(actual), scope->module);
+  raise_error(domain_error, "%s expects parameter %d to be of type %s, not %s", function_name_s, index, expected_s, actual_s);
+  free(expected_s);
+  free(actual_s);
+  free(function_name_s);
+  delete_type(actual);
+}
+
 static NseVal apply_constructor(NseVal args, NseVal env[]) {
   CType *t = env[0].type_val;
   Symbol *tag = env[1].symbol;
   int arity = env[2].i64;
   NseVal types = env[3];
+  Scope *scope = env[4].reference->pointer;
   NseVal *record = NULL;
   int ok = 1;
   GType *g = NULL;
@@ -455,7 +476,7 @@ static NseVal apply_constructor(NseVal args, NseVal env[]) {
     while (is_cons(types)) {
       NseVal arg;
       if (!accept_elem_any(&args, &arg)) {
-        raise_error(domain_error, "too few parameters for constructor, expected %d parameters", arity);
+        raise_error(domain_error, "%s expects %d parameters, but got %d", tag->name, arity, i);
         ok = 0;
         break;
       }
@@ -465,8 +486,7 @@ static NseVal apply_constructor(NseVal args, NseVal env[]) {
         ok = 0;
         break;
       } else if (!check) {
-        // TODO: better error: which parameter? which type?
-        raise_error(domain_error, "parameter %d has incorrect type", i + 1);
+        raise_parameter_type_error(tag, copy_type(formal), copy_type(arg.type), i + 1, g, g_params, scope);
         ok = 0;
         break;
       }
@@ -478,7 +498,7 @@ static NseVal apply_constructor(NseVal args, NseVal env[]) {
   if (ok) {
     if (is_nil(args)) {
       if (g_params) {
-        t = get_instance(g, g_params);
+        t = get_instance(copy_generic(g), g_params);
         if (t) {
           Data *d = create_data(t, tag, record, arity);
           if (d) {
@@ -492,7 +512,7 @@ static NseVal apply_constructor(NseVal args, NseVal env[]) {
         }
       }
     } else {
-      raise_error(domain_error, "too many parameters for constructor");
+      raise_error(domain_error, "%s expects only %d parameters", tag->name, arity);
     }
   }
   if (g_params) {
@@ -522,7 +542,7 @@ static NseVal eval_def_data_constructor(NseVal args, CType *t, Scope *scope) {
       NseVal env[] = {TYPE(t), SYMBOL(tag), I64(arity), types, scope_ref};
       CType *func_type = get_closure_type(arity, 0);
       if (func_type) {
-        NseVal func = check_alloc(CLOSURE(create_closure(apply_constructor, func_type, env, 4)));
+        NseVal func = check_alloc(CLOSURE(create_closure(apply_constructor, func_type, env, 5)));
         if (RESULT_OK(func)) {
           module_define(tag->module, tag->name, func);
           result = nil;
@@ -570,7 +590,7 @@ static NseVal apply_generic_type(NseVal args, NseVal env[]) {
   }
   parameters[arg_s] = NULL;
   free(arg_a);
-  CType *instance = get_instance(g, parameters);
+  CType *instance = get_instance(copy_generic(g), parameters);
   free(parameters);
   return check_alloc(TYPE(instance));
 }
@@ -634,8 +654,7 @@ NseVal eval_def_data(NseVal args, Scope *scope) {
       Scope *type_scope = use_module_types(scope->module);
       GType *g = eval_def_generic_type(h, &type_scope);
       if (g) {
-        // TODO: not implemented
-        CType *t = get_poly_instance(g);
+        CType *t = get_poly_instance(copy_generic(g));
         for (NseVal c = tail(args); is_cons(c); c = tail(c)) {
           NseVal constructor = head(c);
           if (is_cons(constructor)) {

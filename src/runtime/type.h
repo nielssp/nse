@@ -189,6 +189,8 @@ CType *create_poly_var(GType *g, int index);
 CType *copy_type(CType *t);
 /* Deletes the type (by decrementing its reference counter). */
 void delete_type(CType *t);
+/* Moves the generic type (does not touch reference counter). */
+#define move_generic(g) (g)
 /* Copies the generic type (by incrementing its reference counter). */
 GType *copy_generic(GType *g);
 /* Deletes the generic type (by decrementing its reference counter). */
@@ -240,13 +242,22 @@ CType *get_func_type(int min_arity, int variadic);
  */
 CType *get_closure_type(int min_arity, int variadic);
 
+/* Replace type var occurrences in `t` with corresponding type in `parameters`.
+ * Parameters:
+ *   t - The type.
+ *   g - The generic type.
+ *   parameters - The generic type parameters as a NULL terminated array. Callee
+ *                owns the array and types.
+ */
+CType *instantiate_type(CType *t, const GType *g, CType **parameters);
+
 /* Returns a copy of the supertype of a type if it has one, otherwise NULL. */
 CType *get_super_type(const CType *t);
 /* Returns 1 if `a` is a subtype of or equal to `b`, 0 otherwise. */
 int is_subtype_of(const CType *a, const CType *b);
-/* Returns a copy of a common supertype for types `a` and `b`. A copy of
+/* Returns a common supertype for types `a` and `b`.
  * `any_type` is returned if no such common supertype can be found. */
-CType *unify_types(CType *a, CType *b);
+const CType *unify_types(const CType *a, const CType *b);
 
 #endif
 

@@ -79,7 +79,7 @@ void init_types() {
   improper_list_type = create_simple_type(INTERNAL_CONS, any_type);
   proper_list_type = create_simple_type(INTERNAL_NOTHING, improper_list_type);
   list_type = create_generic(1, INTERNAL_CONS, proper_list_type);
-  nil_type = create_simple_type(INTERNAL_NIL, get_poly_instance(list_type));
+  nil_type = create_simple_type(INTERNAL_NIL, get_poly_instance(copy_generic(list_type)));
   num_type = create_simple_type(INTERNAL_NOTHING, any_type);
   int_type = create_simple_type(INTERNAL_I64, num_type);
   float_type = create_simple_type(INTERNAL_F64, num_type);
@@ -239,9 +239,16 @@ int generic_type_arity(const GType *g) {
   return g->arity;
 }
 
+static void delete_parameters(CType **parameters) {
+  while (*parameters) {
+    delete_type(*parameters);
+  }
+}
+
 CType *get_instance(GType *g, CType **parameters) {
   CType *instance = instance_map_lookup(g->instances, (const CType **)parameters);
   if (instance) {
+    delete_generic(g);
     return copy_type(instance);
   } else {
     CType **param = parameters;
@@ -252,15 +259,21 @@ CType *get_instance(GType *g, CType **parameters) {
     }
     if (arity != 0) {
       raise_error(domain_error, "Invalid number of generic parameters, expected %d, got %d", g->arity, g->arity - arity);
+      delete_generic(g);
+      delete_parameters(parameters);
       return NULL;
     }
     instance = allocate(sizeof(CType));
     if (!instance) {
+      delete_generic(g);
+      delete_parameters(parameters);
       return NULL;
     }
     CType **param_copy = allocate(sizeof(CType *) * (g->arity + 1));
     if (!param_copy) {
       free(instance);
+      delete_generic(g);
+      delete_parameters(parameters);
       return NULL;
     }
     param_copy[g->arity] = NULL;
@@ -272,7 +285,7 @@ CType *get_instance(GType *g, CType **parameters) {
     instance->type = C_TYPE_INSTANCE;
     instance->internal = g->internal;
     instance->name = NULL;
-    instance->instance.type = copy_generic(g);
+    instance->instance.type = g;
     instance->instance.parameters = param_copy;
     instance_map_add(g->instances, param_copy, instance);
     return instance;
@@ -280,24 +293,27 @@ CType *get_instance(GType *g, CType **parameters) {
 }
 
 CType *get_unary_instance(GType *g, CType *parameter) {
-  return get_instance(g, (CType *[]){ parameter, NULL });
+  return get_instance(move_generic(g), (CType *[]){ parameter, NULL });
 }
 
 CType *get_poly_instance(GType *g) {
   if (!g->poly) {
     g->poly = allocate(sizeof(CType));
     if (!g->poly) {
+      delete_generic(g);
       return NULL;
     }
     g->poly->refs = 1;
     g->poly->type = C_TYPE_POLY_INSTANCE;
     g->poly->internal = g->internal;
     g->poly->super = copy_type(g->super);
-    g->poly->poly_instance = copy_generic(g);
+    g->poly->poly_instance = g;
     g->poly->name = NULL;
     return g->poly;
   } else {
-    return copy_type(g->poly);
+    CType *t = copy_type(g->poly);
+    delete_generic(g);
+    return t;
   }
 }
 
@@ -359,6 +375,42 @@ CType *get_closure_type(int min_arity, int variadic) {
   }
 }
 
+CType *instantiate_type(CType *t, const GType *g, CType **parameters) {
+  if (t->type == C_TYPE_POLY_VAR && t->poly_var.type == g) {
+    if (parameters[t->poly_var.index]) {
+      delete_type(t);
+      return copy_type(parameters[t->poly_var.index]);
+    }
+  } else if (t->type == C_TYPE_INSTANCE) {
+    GType *t_g = t->instance.type;
+    CType **t_param = t->instance.parameters;
+    CType **t_param_copy = allocate(sizeof(CType *) * (t_g->arity + 1));
+    t_param_copy[t_g->arity] = NULL;
+    if (!t_param_copy) {
+      delete_type(t);
+      return NULL;
+    }
+    for (int i = 0; i < t_g->arity; i++) {
+      t_param_copy[i] = instantiate_type(copy_type(t_param[i]), g, parameters);
+      if (!t_param_copy[i]) {
+        for (int j = 0; j < i; j++) {
+          delete_type(t_param_copy[j]);
+        }
+        delete_type(t);
+        t = NULL;
+        break;
+      }
+    }
+    if (t) {
+      CType *new_t = get_instance(copy_generic(t_g), t_param_copy);
+      delete_type(t);
+      t = new_t;
+    }
+    free(t_param_copy);
+  }
+  return t;
+}
+
 CType *get_super_type(const CType *t) {
   return copy_type(t->super);
 }
@@ -379,12 +431,12 @@ int is_subtype_of(const CType *a, const CType *b) {
   return 0;
 }
 
-CType *unify_types(CType *a, CType *b) {
+const CType *unify_types(const CType *a, const CType *b) {
   while (b && a) {
-    CType *tmp = a;
+    const CType *tmp = a;
     while (tmp) {
       if (b == tmp) {
-        return copy_type(tmp);
+        return tmp;
       } else if (tmp->type == C_TYPE_POLY_INSTANCE && b->type == C_TYPE_INSTANCE
           && tmp->poly_instance == b->instance.type) {
         return b;
@@ -396,7 +448,7 @@ CType *unify_types(CType *a, CType *b) {
     }
     b = b->super;
   }
-  return copy_type(any_type);
+  return any_type;
 }
 
 /* Hash function for NULL terminated array of CTypes. */
