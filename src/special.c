@@ -311,7 +311,7 @@ static NseVal get_constructor_parameter_types(NseVal args, Scope *scope, int *ar
         TypeQuote *tq = expect_elem_type_quote(&arg);
         if (!tq) return undefined;
         if (!expect_nil(&arg)) return undefined;
-        type_value = eval(TQUOTE(tq), scope);
+        type_value = eval(tq->quoted, scope);
       } else if (is_type_quote(arg)) {
         type_value = eval(strip_syntax(arg).quote->quoted, scope);
       } else {
@@ -694,11 +694,14 @@ NseVal eval_def_data(NseVal args, Scope *scope) {
         for (NseVal c = tail(args); is_cons(c); c = tail(c)) {
           NseVal constructor = head(c);
           if (is_cons(constructor)) {
-            NseVal constructor_result = eval_def_data_constructor(constructor, t, scope);
+            Scope *type_scope = use_module_types(scope->module);
+            NseVal constructor_result = eval_def_data_constructor(constructor, t, type_scope);
             if (!RESULT_OK(constructor_result)) {
+              delete_scope(type_scope);
               delete_type(t);
               return undefined;
             }
+            delete_scope(type_scope);
           } else {
             Symbol *tag = to_symbol(constructor);
             if (tag) {

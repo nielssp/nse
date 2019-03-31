@@ -1,6 +1,6 @@
 GCCARGS = -Wall -pedantic -std=c11 -g
 CC = clang $(GCCARGS)
-LDFLAGS = -lreadline -ldl
+LDFLAGS = -lreadline
 
 src = $(wildcard src/*.c) src/util/stream.c
 obj = $(src:.c=.o)

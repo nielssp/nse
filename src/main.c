@@ -469,9 +469,11 @@ int main(int argc, char *argv[]) {
   module_ext_define(system_module, "describe", FUNC(describe, 1, 0));
 
   Module *user_module = create_module("user");
-  import_module(user_module, lang_module);
-  import_module(user_module, system_module);
-  import_module(system_module, lang_module);
+  if (std) {
+    import_module(user_module, lang_module);
+    import_module(user_module, system_module);
+    import_module(system_module, lang_module);
+  }
 
 
   current_scope = use_module(user_module);
@@ -487,7 +489,9 @@ int main(int argc, char *argv[]) {
     del_ref(load(args));
     del_ref(args);
   }
-  import_module(user_module, system_module);
+  if (std) {
+    import_module(user_module, system_module);
+  }
 
   size_t line = 1;
   char *line_history = NULL;
