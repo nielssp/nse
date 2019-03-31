@@ -312,7 +312,7 @@ static NseVal get_constructor_parameter_types(NseVal args, Scope *scope, int *ar
         if (!expect_nil(&arg)) return undefined;
         type_value = eval(TQUOTE(tq), scope);
       } else if (is_type_quote(arg)) {
-        type_value = eval(arg, scope);
+        type_value = eval(strip_syntax(arg).quote->quoted, scope);
       } else {
         del_ref(rest);
         set_debug_form(arg);
@@ -333,9 +333,9 @@ static NseVal get_constructor_parameter_types(NseVal args, Scope *scope, int *ar
       }
     }
     Cons *c = create_cons(TYPE(t), rest);
+    delete_type(t);
     del_ref(rest);
     if (!c) {
-      delete_type(t);
       return undefined;
     }
     return CONS(c);
@@ -348,12 +348,104 @@ static NseVal get_constructor_parameter_types(NseVal args, Scope *scope, int *ar
   }
 }
 
+/* Checks if `actual` is a subtype of `formal` in the context of the generic
+ * type `g`. If type variables are encountered inside `formal`, they are
+ * assigned to the actual type via the `params` array.
+ * Returns 1 if actual is a subtype of formal, 0 if not, -1 on error.
+ * Parameters:
+ *   actual     - The actual type.
+ *   formal     - The formal type.
+ *   g          - The generic type.
+ *   invariant  - 1 if type check is invariant (i.e. actual must be equal to
+ *                formal), 0 if type check is covariant (i.e. actual must be
+ *                a subtype of formal).
+ *   arity      - The arity of `g`.
+ *   parameters - A pointer to a NULL terminated array of type parameters. The
+ *                array must initialized to NULL by the caller. If no type
+ *                parameters are encountered, the array will still be NULL after
+ *                the function returns.
+ */
+static int is_instance_of(CType *actual, const CType *formal, const GType *g, int invariant, int arity, CType ***params) {
+  int result;
+  switch (formal->type) {
+    case C_TYPE_SIMPLE:
+    case C_TYPE_FUNC:
+    case C_TYPE_CLOSURE:
+    case C_TYPE_POLY_INSTANCE:
+      if (invariant) {
+        result = actual == formal;
+      } else {
+        result = is_subtype_of(actual, formal);
+      }
+      break;
+    case C_TYPE_INSTANCE: {
+      if (actual->type == C_TYPE_POLY_INSTANCE && actual->poly_instance == formal->instance.type) {
+        result = 1;
+      } else if (actual->type != C_TYPE_INSTANCE
+          || actual->instance.type != formal->instance.type) {
+        if (invariant || !actual->super) {
+          result = 0;
+        } else {
+          result = is_instance_of(copy_type(actual->super), formal, g, invariant, arity, params);
+        }
+      } else {
+        result = 1;
+        CType **a_param = actual->instance.parameters;
+        CType **f_param = formal->instance.parameters;
+        // Should always have the same arity
+        while (*a_param && *f_param) {
+          if (!is_instance_of(copy_type(*a_param), *f_param, g, 1, arity, params)) {
+            result = 0;
+            break;
+          }
+          a_param++;
+          f_param++;
+        }
+      }
+      break;
+    }
+    case C_TYPE_POLY_VAR: {
+      if (formal->poly_var.type == g) {
+        if (*params) {
+          if ((*params)[formal->poly_var.index]) {
+            result = is_subtype_of(actual, (*params)[formal->poly_var.index]);
+          } else {
+            (*params)[formal->poly_var.index] = move_type(actual);
+            return 1;
+          }
+        } else {
+          *params = calloc(arity + 1, sizeof(CType *));
+          if (!*params) {
+            raise_error(out_of_memory_error, "out of memory");
+            result = -1;
+          } else {
+            (*params)[formal->poly_var.index] = move_type(actual);
+            return 1;
+          }
+        }
+      } else {
+        result = actual == formal;
+      }
+    }
+  }
+  delete_type(actual);
+  return result;
+}
+
 static NseVal apply_constructor(NseVal args, NseVal env[]) {
   CType *t = env[0].type_val;
   Symbol *tag = env[1].symbol;
   int arity = env[2].i64;
   NseVal types = env[3];
   NseVal *record = NULL;
+  int ok = 1;
+  GType *g = NULL;
+  CType **g_params = NULL;
+  int g_arity = 0;
+  if (t->type == C_TYPE_POLY_INSTANCE) {
+    g = t->poly_instance;
+    g_arity = generic_type_arity(g);
+  }
   if (arity > 0) {
     record = allocate(sizeof(NseVal) * arity);
     if (!record) {
@@ -363,28 +455,53 @@ static NseVal apply_constructor(NseVal args, NseVal env[]) {
     while (is_cons(types)) {
       NseVal arg;
       if (!accept_elem_any(&args, &arg)) {
-        raise_error(domain_error, "too few parameters for constructor");
-        free(record);
-        return undefined;
+        raise_error(domain_error, "too few parameters for constructor, expected %d parameters", arity);
+        ok = 0;
+        break;
       }
-      if (!is_subtype_of(arg.type, types.cons->head.type_val)) {
+      CType *formal = types.cons->head.type_val;
+      int check = is_instance_of(copy_type(arg.type), formal, g, 0, g_arity, &g_params);
+      if (check < 0) {
+        ok = 0;
+        break;
+      } else if (!check) {
         // TODO: better error: which parameter? which type?
-        raise_error(domain_error, "parameter has incorrect type");
-        free(record);
-        return undefined;
+        raise_error(domain_error, "parameter %d has incorrect type", i + 1);
+        ok = 0;
+        break;
       }
       record[i++] = arg;
       types = tail(types);
     }
   }
   NseVal result = undefined;
-  if (is_nil(args)) {
-    Data *d = create_data(copy_type(t), tag, record, arity);
-    if (d) {
-      result = DATA(d);
+  if (ok) {
+    if (is_nil(args)) {
+      if (g_params) {
+        t = get_instance(g, g_params);
+        if (t) {
+          Data *d = create_data(t, tag, record, arity);
+          if (d) {
+            result = DATA(d);
+          }
+        }
+      } else {
+        Data *d = create_data(copy_type(t), tag, record, arity);
+        if (d) {
+          result = DATA(d);
+        }
+      }
+    } else {
+      raise_error(domain_error, "too many parameters for constructor");
     }
-  } else {
-    raise_error(domain_error, "too many parameters for constructor");
+  }
+  if (g_params) {
+    for (int i = 0; i < arity; i++) {
+      if (!g_params[i]) {
+        delete_type(g_params[i]);
+      }
+    }
+    free(g_params);
   }
   free(record);
   return result;
@@ -513,14 +630,42 @@ NseVal eval_def_data(NseVal args, Scope *scope) {
   NseVal h = head(args);
   if (RESULT_OK(h)) {
     if (is_cons(h)) {
+      NseVal result = nil;
       Scope *type_scope = use_module_types(scope->module);
       GType *g = eval_def_generic_type(h, &type_scope);
       if (g) {
         // TODO: not implemented
+        CType *t = get_poly_instance(g);
+        for (NseVal c = tail(args); is_cons(c); c = tail(c)) {
+          NseVal constructor = head(c);
+          if (is_cons(constructor)) {
+            NseVal constructor_result = eval_def_data_constructor(constructor, t, type_scope);
+            if (!RESULT_OK(constructor_result)) {
+              result = undefined;
+              break;
+            }
+          } else {
+            Symbol *tag = to_symbol(constructor);
+            if (tag) {
+              Data *d = create_data(copy_type(t), tag, NULL, 0);
+              if (!d) {
+                result = undefined;
+                break;
+              }
+              module_define(tag->module, tag->name, DATA(d));
+              del_ref(DATA(d));
+            } else {
+              raise_error(syntax_error, "name of constructor must be a symbol");
+              result = undefined;
+              break;
+            }
+          }
+        }
+        delete_type(t);
         delete_generic(g);
       }
       delete_scope(type_scope);
-      return nil;
+      return result;
     } else {
       Symbol *symbol = to_symbol(h);
       if (symbol) {

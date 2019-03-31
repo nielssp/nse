@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2019 Niels Sonnich Poulsen (http://nielssp.dk)
+ */
 #include <stdlib.h>
 #include <string.h>
 
@@ -12,22 +15,35 @@ typedef struct FuncType FuncType;
 DECLARE_HASH_MAP(instance_map, InstanceMap, CType **, CType *)
 DECLARE_HASH_MAP(func_type_map, FuncTypeMap, FuncType *, CType *)
 
+/* A generic type. */
 struct GType {
   size_t refs;
   int arity;
+  /* Optional name. */
   Symbol *name;
+  /* Internal type. */
   InternalType internal;
+  /* Optional super type. */
   CType *super;
+  /* Hash map of instances. Instances are weakly referenced. When an instance is
+   * deleted (refs=0) it is automatically removed from the instance map of the
+   * corresponding generic type by `delete_type()`. */
   InstanceMap instances;
+  /* Optional weak reference to polymorphic instance. When the instance is
+   * deleted (i.e. `poly->refs == 0`), the field is automatically set to NULL by
+   * `delete_type()`. */
   CType *poly;
 };
 
+/* Structure used as a key in function type hash maps. */
 struct FuncType {
   int min_arity;
   int variadic;
 };
 
+/* Map of function type instances. */
 FuncTypeMap func_types;
+/* Map of closure type instances. */
 FuncTypeMap closure_types;
 
 CType *any_type;
@@ -144,8 +160,12 @@ void delete_generic(GType *g) {
   if (g->refs > 0) {
     return;
   }
+  if (g->name) {
+    del_ref(SYMBOL(g->name));
+  }
   delete_type(g->super);
-  // weak reference from g -> instance => no need to delete
+  // weak reference from g to instance (including poly) => no need to delete
+  // each instance
   delete_instance_map(g->instances);
   free(g);
 }
@@ -195,10 +215,13 @@ void delete_type(CType *t) {
       delete_generic(t->poly_var.type);
       break;
   }
+  if (t->name) {
+    del_ref(SYMBOL(t->name));
+  }
   free(t);
 }
 
-Symbol *generic_type_name(GType *g) {
+Symbol *generic_type_name(const GType *g) {
   return g->name;
 }
 
@@ -212,7 +235,7 @@ void set_generic_type_name(GType *g, Symbol *s) {
   }
 }
 
-int generic_type_arity(GType *g) {
+int generic_type_arity(const GType *g) {
   return g->arity;
 }
 
@@ -242,12 +265,13 @@ CType *get_instance(GType *g, CType **parameters) {
     }
     param_copy[g->arity] = NULL;
     for (int i = 0; i < g->arity; i++) {
-      param_copy[i] = copy_type(parameters[i]);
+      param_copy[i] = parameters[i];
     }
     instance->refs = 1;
     instance->super = copy_type(g->super);
     instance->type = C_TYPE_INSTANCE;
     instance->internal = g->internal;
+    instance->name = NULL;
     instance->instance.type = copy_generic(g);
     instance->instance.parameters = param_copy;
     instance_map_add(g->instances, param_copy, instance);
@@ -271,8 +295,10 @@ CType *get_poly_instance(GType *g) {
     g->poly->super = copy_type(g->super);
     g->poly->poly_instance = copy_generic(g);
     g->poly->name = NULL;
+    return g->poly;
+  } else {
+    return copy_type(g->poly);
   }
-  return g->poly;
 }
 
 CType *get_func_type(int min_arity, int variadic) {
@@ -286,6 +312,7 @@ CType *get_func_type(int min_arity, int variadic) {
       return NULL;
     }
     t->refs = 1;
+    t->name = NULL;
     t->super = copy_type(func_type);
     t->type = C_TYPE_FUNC;
     t->internal = INTERNAL_FUNC;
@@ -314,6 +341,7 @@ CType *get_closure_type(int min_arity, int variadic) {
       return NULL;
     }
     t->refs = 1;
+    t->name = NULL;
     t->super = get_func_type(min_arity, variadic);
     t->type = C_TYPE_CLOSURE;
     t->internal = INTERNAL_CLOSURE;
@@ -331,11 +359,11 @@ CType *get_closure_type(int min_arity, int variadic) {
   }
 }
 
-CType *get_super_type(CType *t) {
+CType *get_super_type(const CType *t) {
   return copy_type(t->super);
 }
 
-int is_subtype_of(CType *a, CType *b) {
+int is_subtype_of(const CType *a, const CType *b) {
   while (a) {
     if (a == b) {
       return 1;
@@ -371,6 +399,7 @@ CType *unify_types(CType *a, CType *b) {
   return copy_type(any_type);
 }
 
+/* Hash function for NULL terminated array of CTypes. */
 static size_t c_types_hash(const void *p) {
   CType **head = (CType **)p;
   size_t hash = 0;
@@ -381,6 +410,7 @@ static size_t c_types_hash(const void *p) {
   return hash;
 }
 
+/* Equality function for NULL terminated array of CTypes. */
 static int c_types_equals(const void *a, const void *b) {
   CType **head_a = (CType **)a;
   CType **head_b = (CType **)b;
@@ -394,11 +424,13 @@ static int c_types_equals(const void *a, const void *b) {
   return 1;
 }
 
+/* Hash function for FuncType. */
 static size_t func_type_hash(const void *p) {
   FuncType *ft = (FuncType *)p;
   return (ft->min_arity << 1) | ft->variadic;
 }
 
+/* Equality function for FuncType. */
 static int func_type_equals(const void *a, const void *b) {
   FuncType *ft_a = (FuncType *)a;
   FuncType *ft_b = (FuncType *)b;
