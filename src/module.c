@@ -6,12 +6,20 @@
 
 #include "util/stream.h"
 
-DEFINE_PRIVATE_HASH_MAP(namespace, Namespace, char *, NseVal *, string_hash, string_equals)
+size_t symbol_hash(const void *p) {
+  return (size_t)p;
+}
+
+int symbol_equals(const void *a, const void *b) {
+  return a == b;
+}
+
+DEFINE_PRIVATE_HASH_MAP(namespace, Namespace, Symbol *, NseVal *, symbol_hash, symbol_equals)
 DEFINE_PRIVATE_HASH_MAP(symmap, SymMap, char *, Symbol *, string_hash, string_equals)
 DEFINE_PRIVATE_HASH_MAP(module_map, ModuleMap, char *, Module *, string_hash, string_equals)
 
 struct module {
-  const char *name;
+  char *name;
   SymMap internal;
   SymMap external;
   Namespace defs;
@@ -163,10 +171,10 @@ NseVal scope_get(Scope *scope, Symbol *symbol) {
     NseVal *value;
     switch (scope->type) {
       case VALUE_SCOPE:
-        value = namespace_lookup(symbol->module->defs, symbol->name);
+        value = namespace_lookup(symbol->module->defs, symbol);
         break;
       case TYPE_SCOPE:
-        value = namespace_lookup(symbol->module->type_defs, symbol->name);
+        value = namespace_lookup(symbol->module->type_defs, symbol);
         break;
     }
     if (value) {
@@ -179,7 +187,7 @@ NseVal scope_get(Scope *scope, Symbol *symbol) {
 
 NseVal scope_get_macro(Scope *scope, Symbol *symbol) {
   if (symbol->module) {
-    NseVal *value = namespace_lookup(symbol->module->macro_defs, symbol->name);
+    NseVal *value = namespace_lookup(symbol->module->macro_defs, symbol);
     if (value) {
       return *value;
     }
@@ -190,7 +198,7 @@ NseVal scope_get_macro(Scope *scope, Symbol *symbol) {
 
 NseVal get_read_macro(Symbol *symbol) {
   if (symbol->module) {
-    NseVal *value = namespace_lookup(symbol->module->read_macro_defs, symbol->name);
+    NseVal *value = namespace_lookup(symbol->module->read_macro_defs, symbol);
     if (value) {
       return *value;
     }
@@ -237,6 +245,7 @@ static void delete_defs(Namespace namespace) {
   NamespaceIterator it = create_namespace_iterator(namespace);
   for (NamespaceEntry entry = namespace_next(it); entry.key; entry = namespace_next(it)) {
     if (entry.value) {
+      del_ref(SYMBOL(entry.key));
       del_ref(*entry.value);
       free(entry.value);
     }
@@ -253,6 +262,7 @@ void delete_module(Module *module) {
   delete_defs(module->read_macro_defs);
   delete_symbols(module->internal);
   delete_symbols(module->external);
+  free(module->name);
   free(module);
 }
 
@@ -422,62 +432,72 @@ void import_module_symbol(Module *dest, Symbol *symbol) {
   symmap_add(dest->internal, symbol->name, symbol);
 }
 
-void module_define(Module *module, const char *name, NseVal value) {
-  NseVal *existing = namespace_remove(module->defs, name);
+void module_define(Symbol *s, NseVal value) {
+  NseVal *existing = namespace_remove(s->module->defs, s);
   if (existing) {
     del_ref(*existing);
     free(existing);
+  } else {
+    add_ref(SYMBOL(s));
   }
   NseVal *copy = malloc(sizeof(NseVal));
   memcpy(copy, &value, sizeof(NseVal));
-  namespace_add(module->defs, name, copy);
+  namespace_add(s->module->defs, s, copy);
   add_ref(value);
 }
 
-void module_define_macro(Module *module, const char *name, NseVal value) {
-  NseVal *existing = namespace_remove(module->macro_defs, name);
+void module_define_macro(Symbol *s, NseVal value) {
+  NseVal *existing = namespace_remove(s->module->macro_defs, s);
   if (existing) {
     del_ref(*existing);
     free(existing);
+  } else {
+    add_ref(SYMBOL(s));
   }
   NseVal *copy = malloc(sizeof(NseVal));
   memcpy(copy, &value, sizeof(NseVal));
-  namespace_add(module->macro_defs, name, copy);
+  namespace_add(s->module->macro_defs, s, copy);
   add_ref(value);
 }
 
-void module_define_type(Module *module, const char *name, NseVal value) {
-  NseVal *existing = namespace_remove(module->type_defs, name);
+void module_define_type(Symbol *s, NseVal value) {
+  NseVal *existing = namespace_remove(s->module->type_defs, s);
   if (existing) {
     del_ref(*existing);
     free(existing);
+  } else {
+    add_ref(SYMBOL(s));
   }
   NseVal *copy = malloc(sizeof(NseVal));
   memcpy(copy, &value, sizeof(NseVal));
-  namespace_add(module->type_defs, name, copy);
+  namespace_add(s->module->type_defs, s, copy);
   add_ref(value);
 }
 
-void module_define_read_macro(Module *module, const char *name, NseVal value) {
-  NseVal *existing = namespace_remove(module->read_macro_defs, name);
+void module_define_read_macro(Symbol *s, NseVal value) {
+  NseVal *existing = namespace_remove(s->module->read_macro_defs, s);
   if (existing) {
     del_ref(*existing);
     free(existing);
+  } else {
+    add_ref(SYMBOL(s));
   }
   NseVal *copy = malloc(sizeof(NseVal));
   memcpy(copy, &value, sizeof(NseVal));
-  namespace_add(module->read_macro_defs, name, copy);
+  namespace_add(s->module->read_macro_defs, s, copy);
   add_ref(value);
 }
 
 Symbol *module_ext_define(Module *module, const char *name, NseVal value) {
-  module_define(module, name, value);
-  return module_extern_symbol(module, name);
+  Symbol *symbol = module_extern_symbol(module, name);
+  module_define(symbol, value);
+  return symbol;
 }
 
 Symbol *module_ext_define_macro(Module *module, const char *name, NseVal value) {
-  module_define_macro(module, name, value);
-  return module_extern_symbol(module, name);
+  Symbol *symbol = module_extern_symbol(module, name);
+  module_define_macro(symbol, value);
+  return symbol;
 }
 
 Symbol *module_ext_define_type(Module *module, const char *name, NseVal value) {
@@ -485,6 +505,6 @@ Symbol *module_ext_define_type(Module *module, const char *name, NseVal value) {
   if (value.type == type_type && value.type_val->name == NULL) {
     value.type_val->name = add_ref(SYMBOL(symbol)).symbol;
   }
-  module_define_type(module, name, value);
+  module_define_type(symbol, value);
   return symbol;
 }

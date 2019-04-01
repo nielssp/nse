@@ -88,6 +88,9 @@ static void write_type(CType *type, Stream *stream, Module *module) {
       }
       stream_printf(stream, ")");
       break;
+    case C_TYPE_POLY_VAR:
+      stream_printf(stream, "t%d", type->poly_var.index);
+      break;
   }
 }
 

@@ -220,7 +220,7 @@ static NseVal eval_def_func(NseVal first, NseVal args, Scope *scope) {
                   add_ref(STRING(doc_string));
                   func.closure->doc = doc_string;
                 }
-                module_define(symbol->module, symbol->name, func);
+                module_define(symbol, func);
                 result = add_ref(SYMBOL(symbol));
               }
               del_ref(func);
@@ -245,7 +245,7 @@ static NseVal eval_def_var(NseVal first, NseVal args, Scope *scope) {
     NseVal expr = head(tail(args));
     NseVal value = THEN(expr, eval(expr, scope));
     if (RESULT_OK(value)) {
-      module_define(symbol->module, symbol->name, value);
+      module_define(symbol, value);
       del_ref(value);
       return add_ref(SYMBOL(symbol));
     }
@@ -275,7 +275,7 @@ NseVal eval_def_read_macro(NseVal args, Scope *scope) {
     if (symbol) {
       NseVal value = eval(head(tail(args)), scope);
       if (RESULT_OK(value)) {
-        module_define_read_macro(symbol->module, symbol->name, value);
+        module_define_read_macro(symbol, value);
         del_ref(value);
         return add_ref(SYMBOL(symbol));
       }
@@ -544,7 +544,7 @@ static NseVal eval_def_data_constructor(NseVal args, CType *t, Scope *scope) {
       if (func_type) {
         NseVal func = check_alloc(CLOSURE(create_closure(apply_constructor, func_type, env, 5)));
         if (RESULT_OK(func)) {
-          module_define(tag->module, tag->name, func);
+          module_define(tag, func);
           result = nil;
           del_ref(func);
         }
@@ -625,7 +625,7 @@ static GType *eval_def_generic_type(NseVal args, Scope **scope) {
           if (func_type) {
             NseVal func = check_alloc(CLOSURE(create_closure(apply_generic_type, func_type, env, 1)));
             if (RESULT_OK(func)) {
-              module_define_type(name->module, name->name, func);
+              module_define_type(name, func);
               del_ref(func);
               del_ref(g_ref);
               return g;
@@ -671,7 +671,7 @@ NseVal eval_def_data(NseVal args, Scope *scope) {
                 result = undefined;
                 break;
               }
-              module_define(tag->module, tag->name, DATA(d));
+              module_define(tag, DATA(d));
               del_ref(DATA(d));
             } else {
               raise_error(syntax_error, "name of constructor must be a symbol");
@@ -690,7 +690,7 @@ NseVal eval_def_data(NseVal args, Scope *scope) {
       if (symbol) {
         CType *t = create_simple_type(INTERNAL_DATA, copy_type(any_type));
         t->name = add_ref(SYMBOL(symbol)).symbol;
-        module_define_type(symbol->module, symbol->name, TYPE(t));
+        module_define_type(symbol, TYPE(t));
         for (NseVal c = tail(args); is_cons(c); c = tail(c)) {
           NseVal constructor = head(c);
           if (is_cons(constructor)) {
@@ -710,7 +710,7 @@ NseVal eval_def_data(NseVal args, Scope *scope) {
                 delete_type(t);
                 return undefined;
               }
-              module_define(tag->module, tag->name, DATA(d));
+              module_define(tag, DATA(d));
               del_ref(DATA(d));
             } else {
               delete_type(t);
@@ -749,7 +749,7 @@ NseVal eval_def_macro(NseVal args, Scope *scope) {
                 NseVal value = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
                 del_ref(def);
                 if (RESULT_OK(value)) {
-                  module_define_macro(symbol->module, symbol->name, value);
+                  module_define_macro(symbol, value);
                   del_ref(scope_ref);
                   del_ref(value);
                   return add_ref(SYMBOL(symbol));

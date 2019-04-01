@@ -73,7 +73,7 @@ void init_lang_module() {
   match_keyword = module_extern_symbol(lang_module, "&match");
 
   true_value = DATA(create_data(copy_type(bool_type), true_symbol, NULL, 0));
-  module_define(lang_module, "true", true_value);
+  module_define(true_symbol, true_value);
   false_value = DATA(create_data(copy_type(bool_type), false_symbol, NULL, 0));
-  module_define(lang_module, "false", false_value);
+  module_define(false_symbol, false_value);
 }
