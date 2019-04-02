@@ -498,6 +498,11 @@ static NseVal apply_constructor(NseVal args, NseVal env[]) {
   if (ok) {
     if (is_nil(args)) {
       if (g_params) {
+        for (int i = 0; i < g_arity; i++) {
+          if (!g_params[i]) {
+            g_params[i] = copy_type(any_type);
+          }
+        }
         t = get_instance(copy_generic(g), g_params);
         if (t) {
           Data *d = create_data(t, tag, record, arity);
@@ -517,7 +522,7 @@ static NseVal apply_constructor(NseVal args, NseVal env[]) {
   }
   if (g_params) {
     for (int i = 0; i < g_arity; i++) {
-      if (!g_params[i]) {
+      if (g_params[i]) {
         delete_type(g_params[i]);
       }
     }
