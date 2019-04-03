@@ -21,6 +21,10 @@ static void write_cons(Cons *cons, Stream *stream, Module *module) {
 }
 
 static void write_type(CType *type, Stream *stream, Module *module) {
+  if (!type) {
+    stream_printf(stream, "#<undefined>");
+    return;
+  }
   Symbol *name;
   switch (type->type) {
     case C_TYPE_SIMPLE:
@@ -81,10 +85,10 @@ static void write_type(CType *type, Stream *stream, Module *module) {
       } else {
         stream_printf(stream, "#<generic-type>");
       }
-      CType **param = type->instance.parameters;
-      while (*param) {
+      CTypeArray *params = type->instance.parameters;
+      for (int i = 0; i < params->size; i++) {
         stream_printf(stream, " ");
-        write_type(*(param++), stream, module);
+        write_type(params->elements[i], stream, module);
       }
       stream_printf(stream, ")");
       break;

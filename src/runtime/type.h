@@ -40,6 +40,7 @@ typedef struct Symbol Symbol;
 typedef struct PolyParam PolyParam;
 typedef struct CType CType;
 typedef struct GType GType;
+typedef struct CTypeArray CTypeArray;
 
 /* Internal value types. */
 typedef enum {
@@ -94,7 +95,7 @@ struct CType {
       /* Generic type. */
       GType *type;
       /* NULL terminated array of type parameters. */
-      CType **parameters;
+      CTypeArray *parameters;
     } instance;
     /* C_TYPE_POLY_INSTANCE */
     GType *poly_instance;
@@ -106,6 +107,12 @@ struct CType {
       int index;
     } poly_var;
   };
+};
+
+struct CTypeArray {
+  size_t refs;
+  size_t size;
+  CType *elements[];
 };
 
 /* any */
@@ -166,6 +173,31 @@ void init_types();
  *   super - The supertype, not implicitly copied. Deleted on error.
  */
 CType *create_simple_type(InternalType internal, CType *super);
+/* Moves the type (does not touch reference counter). */
+#define move_type(t) (t)
+/* Copies the type (by incrementing its reference counter). */
+CType *copy_type(CType *t);
+/* Deletes the type (by decrementing its reference counter). */
+void delete_type(CType *t);
+
+/* Create a type array. May raise an error and return NULL if allocation fails.
+ * Parameters:
+ *   size - Size of array.
+ *   elements - Elements of array.
+ */
+CTypeArray *create_type_array(size_t size, CType * const elements[]);
+
+/* Create a type array with all elements initialized to NULL. May raise an
+ * error and return NULL if allocation fails.
+ */
+CTypeArray *create_type_array_null(size_t size);
+/* Moves the type array (does not touch reference counter). */
+#define move_type_array(a) (a)
+/* Copies the type array (by incrementing its reference counter). */
+CTypeArray *copy_type_array(CTypeArray *a);
+/* Deletes the type array (by decrementing its reference counter). */
+void delete_type_array(CTypeArray *a);
+
 /* Creates a generic type. May raise an error and return NULL if allocation
  * fails.
  * Parameters:
@@ -174,6 +206,13 @@ CType *create_simple_type(InternalType internal, CType *super);
  *   super - The supertype, not implicitly copied. Deleted on error.
  */
 GType *create_generic(int arity, InternalType internal, CType *super);
+/* Moves the generic type (does not touch reference counter). */
+#define move_generic(g) (g)
+/* Copies the generic type (by incrementing its reference counter). */
+GType *copy_generic(GType *g);
+/* Deletes the generic type (by decrementing its reference counter). */
+void delete_generic(GType *g);
+
 /* Creates a polymorphic type variable. May raise an error and return NULL if
  * allocation fails.
  * Parameters:
@@ -182,19 +221,6 @@ GType *create_generic(int arity, InternalType internal, CType *super);
  *   index - The index of the generic type parameter this variable is bound to.
  */
 CType *create_poly_var(GType *g, int index);
-
-/* Moves the type (does not touch reference counter). */
-#define move_type(t) (t)
-/* Copies the type (by incrementing its reference counter). */
-CType *copy_type(CType *t);
-/* Deletes the type (by decrementing its reference counter). */
-void delete_type(CType *t);
-/* Moves the generic type (does not touch reference counter). */
-#define move_generic(g) (g)
-/* Copies the generic type (by incrementing its reference counter). */
-GType *copy_generic(GType *g);
-/* Deletes the generic type (by decrementing its reference counter). */
-void delete_generic(GType *g);
 
 /* Returns the name of a generic type if it has one. */
 Symbol *generic_type_name(const GType *g);
@@ -214,11 +240,10 @@ int generic_type_arity(const GType *g);
  * same parameters, the same object is returned (unless deleted).
  * Parameters:
  *   g - The generic type.
- *   parameters - An array of type parameters terminated by NULL. The length of
- *                the array must be `generic_type_arity(g) + 1`. Each type is
- *                must be copied to the callee. Array is owned by caller.
+ *   parameters - An array of type parameters. The length of the array must be
+ *                `generic_type_arity(g) + 1`.
  */
-CType *get_instance(GType *g, CType **parameters);
+CType *get_instance(GType *g, CTypeArray *parameters);
 /* A shorthand for `get_instance()` for unary generic types.
  * Parameters:
  *   g - The generic type. Must have an arity of 1.
@@ -246,10 +271,9 @@ CType *get_closure_type(int min_arity, int variadic);
  * Parameters:
  *   t - The type.
  *   g - The generic type.
- *   parameters - The generic type parameters as a NULL terminated array. Callee
- *                owns the array and types.
+ *   parameters - The generic type parameters.
  */
-CType *instantiate_type(CType *t, const GType *g, CType **parameters);
+CType *instantiate_type(CType *t, const GType *g, const CTypeArray *parameters);
 
 /* Returns a copy of the supertype of a type if it has one, otherwise NULL. */
 CType *get_super_type(const CType *t);

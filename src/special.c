@@ -361,12 +361,12 @@ static NseVal get_constructor_parameter_types(NseVal args, Scope *scope, int *ar
  *                formal), 0 if type check is covariant (i.e. actual must be
  *                a subtype of formal).
  *   arity      - The arity of `g`.
- *   parameters - A pointer to a NULL terminated array of type parameters. The
+ *   parameters - A pointer to an array of type parameters. The
  *                array must initialized to NULL by the caller. If no type
  *                parameters are encountered, the array will still be NULL after
  *                the function returns.
  */
-static int is_instance_of(CType *actual, const CType *formal, const GType *g, int invariant, int arity, CType ***params) {
+static int is_instance_of(CType *actual, const CType *formal, const GType *g, int invariant, int arity, CTypeArray **params) {
   int result;
   switch (formal->type) {
     case C_TYPE_SIMPLE:
@@ -391,16 +391,14 @@ static int is_instance_of(CType *actual, const CType *formal, const GType *g, in
         }
       } else {
         result = 1;
-        CType **a_param = actual->instance.parameters;
-        CType **f_param = formal->instance.parameters;
+        CTypeArray *a_params = actual->instance.parameters;
+        CTypeArray *f_params = formal->instance.parameters;
         // Should always have the same arity
-        while (*a_param && *f_param) {
-          result = is_instance_of(copy_type(*a_param), *f_param, g, 1, arity, params);
+        for (int i = 0; i < a_params->size; i++) {
+          result = is_instance_of(copy_type(a_params->elements[i]), f_params->elements[i], g, 1, arity, params);
           if (result != 1) {
             break;
           }
-          a_param++;
-          f_param++;
         }
       }
       break;
@@ -408,19 +406,18 @@ static int is_instance_of(CType *actual, const CType *formal, const GType *g, in
     case C_TYPE_POLY_VAR: {
       if (formal->poly_var.type == g) {
         if (*params) {
-          if ((*params)[formal->poly_var.index]) {
-            result = is_subtype_of(actual, (*params)[formal->poly_var.index]);
+          if ((*params)->elements[formal->poly_var.index]) {
+            result = is_subtype_of(actual, (*params)->elements[formal->poly_var.index]);
           } else {
-            (*params)[formal->poly_var.index] = move_type(actual);
+            (*params)->elements[formal->poly_var.index] = move_type(actual);
             return 1;
           }
         } else {
-          *params = calloc(arity + 1, sizeof(CType *));
+          *params = create_type_array_null(arity);
           if (!*params) {
-            raise_error(out_of_memory_error, "out of memory");
             result = -1;
           } else {
-            (*params)[formal->poly_var.index] = move_type(actual);
+            (*params)->elements[formal->poly_var.index] = move_type(actual);
             return 1;
           }
         }
@@ -433,7 +430,7 @@ static int is_instance_of(CType *actual, const CType *formal, const GType *g, in
   return result;
 }
 
-static void raise_parameter_type_error(Symbol *function_name, CType *expected, CType *actual, int index, const GType *g, CType **params, Scope *scope) {
+static void raise_parameter_type_error(Symbol *function_name, CType *expected, CType *actual, int index, const GType *g, const CTypeArray *params, Scope *scope) {
   char *function_name_s = nse_write_to_string(SYMBOL(function_name), scope->module);
   char *expected_s;
   if (params) {
@@ -461,7 +458,7 @@ static NseVal apply_constructor(NseVal args, NseVal env[]) {
   NseVal *record = NULL;
   int ok = 1;
   GType *g = NULL;
-  CType **g_params = NULL;
+  CTypeArray *g_params = NULL;
   int g_arity = 0;
   if (t->type == C_TYPE_POLY_INSTANCE) {
     g = t->poly_instance;
@@ -498,12 +495,8 @@ static NseVal apply_constructor(NseVal args, NseVal env[]) {
   if (ok) {
     if (is_nil(args)) {
       if (g_params) {
-        for (int i = 0; i < g_arity; i++) {
-          if (!g_params[i]) {
-            g_params[i] = copy_type(any_type);
-          }
-        }
-        t = get_instance(copy_generic(g), g_params);
+        t = get_instance(copy_generic(g), move_type_array(g_params));
+        g_params = NULL;
         if (t) {
           Data *d = create_data(t, tag, record, arity);
           if (d) {
@@ -521,12 +514,7 @@ static NseVal apply_constructor(NseVal args, NseVal env[]) {
     }
   }
   if (g_params) {
-    for (int i = 0; i < g_arity; i++) {
-      if (g_params[i]) {
-        delete_type(g_params[i]);
-      }
-    }
-    free(g_params);
+    delete_type_array(g_params);
   }
   free(record);
   return result;
@@ -579,24 +567,19 @@ static NseVal apply_generic_type(NseVal args, NseVal env[]) {
     raise_error(domain_error, "wrong number of parameters for generic type, expected %d, got %d", generic_type_arity(g), arg_s);
     return undefined;
   }
-  CType **parameters = allocate(sizeof(CType *) * (arg_s + 1));
+  CTypeArray *parameters = create_type_array_null(arg_s);
   for (int i = 0; i < arg_s; i++) {
     CType *t = to_type(arg_a[i]);
     if (!t) {
       raise_error(domain_error, "generic type parameter must be a type");
       free(arg_a);
-      for (int j = 0; j < i; j++) {
-        delete_type(parameters[j]);
-      }
-      free(parameters);
+      delete_type_array(parameters);
       return undefined;
     }
-    parameters[i] = copy_type(t);
+    parameters->elements[i] = copy_type(t);
   }
-  parameters[arg_s] = NULL;
   free(arg_a);
-  CType *instance = get_instance(copy_generic(g), parameters);
-  free(parameters);
+  CType *instance = get_instance(copy_generic(g), move_type_array(parameters));
   return check_alloc(TYPE(instance));
 }
 

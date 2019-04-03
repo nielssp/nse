@@ -12,7 +12,7 @@
 
 typedef struct FuncType FuncType;
 
-DECLARE_HASH_MAP(instance_map, InstanceMap, CType **, CType *)
+DECLARE_HASH_MAP(instance_map, InstanceMap, CTypeArray *, CType *)
 DECLARE_HASH_MAP(func_type_map, FuncTypeMap, FuncType *, CType *)
 
 /* A generic type. */
@@ -199,13 +199,9 @@ void delete_type(CType *t) {
       free(func_type_map_remove_entry(closure_types, &key).key);
       break;
     case C_TYPE_INSTANCE:
-      instance_map_remove(t->instance.type->instances, (const CType **)t->instance.parameters);
+      instance_map_remove(t->instance.type->instances, t->instance.parameters);
       delete_generic(t->instance.type);
-      CType **param = t->instance.parameters;
-      while (*param) {
-        delete_type(*(param++));
-      }
-      free(t->instance.parameters);
+      delete_type_array(t->instance.parameters);
       break;
     case C_TYPE_POLY_INSTANCE:
       t->poly_instance->poly = NULL;
@@ -219,6 +215,54 @@ void delete_type(CType *t) {
     del_ref(SYMBOL(t->name));
   }
   free(t);
+}
+
+CTypeArray *create_type_array(size_t size, CType * const elements[]) {
+  CTypeArray *a = allocate(sizeof(CTypeArray) + sizeof(CType *) * size);
+  if (!a) {
+    for (int i = 0; i < size; i++) {
+      delete_type(elements[i]);
+    }
+    return NULL;
+  }
+  a->refs = 1;
+  a->size = size;
+  memcpy(a->elements, elements, sizeof(CType *) * size);
+  return a;
+}
+
+CTypeArray *create_type_array_null(size_t size) {
+  CTypeArray *a = allocate(sizeof(CTypeArray) + sizeof(CType *) * size);
+  if (!a) {
+    return NULL;
+  }
+  a->refs = 1;
+  a->size = size;
+  for (int i = 0; i < size; i++) {
+    a->elements[i] = NULL;
+  }
+  return a;
+}
+
+CTypeArray *copy_type_array(CTypeArray *a) {
+  if (a) {
+    a->refs++;
+  }
+  return a;
+}
+
+void delete_type_array(CTypeArray *a) {
+  if (!a) {
+    return;
+  }
+  a->refs--;
+  if (a->refs > 0) {
+    return;
+  }
+  for (int i = 0; i < a->size; i++) {
+    delete_type(a->elements[i]);
+  }
+  free(a);
 }
 
 Symbol *generic_type_name(const GType *g) {
@@ -239,46 +283,24 @@ int generic_type_arity(const GType *g) {
   return g->arity;
 }
 
-static void delete_parameters(CType **parameters) {
-  while (*parameters) {
-    delete_type(*parameters);
-  }
-}
-
-CType *get_instance(GType *g, CType **parameters) {
-  CType *instance = instance_map_lookup(g->instances, (const CType **)parameters);
+CType *get_instance(GType *g, CTypeArray *parameters) {
+  CType *instance = instance_map_lookup(g->instances, parameters);
   if (instance) {
     delete_generic(g);
+    delete_type_array(parameters);
     return copy_type(instance);
   } else {
-    CType **param = parameters;
-    int arity = g->arity;
-    while (*param) {
-      arity--;
-      param++;
-    }
-    if (arity != 0) {
-      raise_error(domain_error, "Invalid number of generic parameters, expected %d, got %d", g->arity, g->arity - arity);
+    if (g->arity != parameters->size) {
+      raise_error(domain_error, "Invalid number of generic parameters, expected %d, got %d", g->arity, parameters->size);
       delete_generic(g);
-      delete_parameters(parameters);
+      delete_type_array(parameters);
       return NULL;
     }
     instance = allocate(sizeof(CType));
     if (!instance) {
       delete_generic(g);
-      delete_parameters(parameters);
+      delete_type_array(parameters);
       return NULL;
-    }
-    CType **param_copy = allocate(sizeof(CType *) * (g->arity + 1));
-    if (!param_copy) {
-      free(instance);
-      delete_generic(g);
-      delete_parameters(parameters);
-      return NULL;
-    }
-    param_copy[g->arity] = NULL;
-    for (int i = 0; i < g->arity; i++) {
-      param_copy[i] = parameters[i];
     }
     instance->refs = 1;
     instance->super = copy_type(g->super);
@@ -286,14 +308,15 @@ CType *get_instance(GType *g, CType **parameters) {
     instance->internal = g->internal;
     instance->name = NULL;
     instance->instance.type = g;
-    instance->instance.parameters = param_copy;
-    instance_map_add(g->instances, param_copy, instance);
+    instance->instance.parameters = parameters;
+    instance_map_add(g->instances, parameters, instance);
     return instance;
   }
 }
 
 CType *get_unary_instance(GType *g, CType *parameter) {
-  return get_instance(move_generic(g), (CType *[]){ parameter, NULL });
+  CTypeArray *a = create_type_array(1, (CType *[]){ move_type(parameter) });
+  return get_instance(move_generic(g), move_type_array(a));
 }
 
 CType *get_poly_instance(GType *g) {
@@ -375,26 +398,26 @@ CType *get_closure_type(int min_arity, int variadic) {
   }
 }
 
-CType *instantiate_type(CType *t, const GType *g, CType **parameters) {
+CType *instantiate_type(CType *t, const GType *g, const CTypeArray *parameters) {
   if (t->type == C_TYPE_POLY_VAR && t->poly_var.type == g) {
-    if (parameters[t->poly_var.index]) {
+    if (parameters->elements[t->poly_var.index]) {
       delete_type(t);
-      return copy_type(parameters[t->poly_var.index]);
+      return copy_type(parameters->elements[t->poly_var.index]);
     }
   } else if (t->type == C_TYPE_INSTANCE) {
     GType *t_g = t->instance.type;
-    CType **t_param = t->instance.parameters;
-    CType **t_param_copy = allocate(sizeof(CType *) * (t_g->arity + 1));
-    t_param_copy[t_g->arity] = NULL;
+    CTypeArray *t_param = t->instance.parameters;
+    CTypeArray *t_param_copy = create_type_array_null(t_param->size);
     if (!t_param_copy) {
       delete_type(t);
       return NULL;
     }
     for (int i = 0; i < t_g->arity; i++) {
-      t_param_copy[i] = instantiate_type(copy_type(t_param[i]), g, parameters);
-      if (!t_param_copy[i]) {
+      t_param_copy->elements[i] = instantiate_type(copy_type(t_param->elements[i]), g, parameters);
+      if (!t_param_copy->elements[i]) {
         for (int j = 0; j < i; j++) {
-          delete_type(t_param_copy[j]);
+          delete_type(t_param_copy->elements[j]);
+          t_param_copy->elements[j] = NULL;
         }
         delete_type(t);
         t = NULL;
@@ -405,8 +428,9 @@ CType *instantiate_type(CType *t, const GType *g, CType **parameters) {
       CType *new_t = get_instance(copy_generic(t_g), t_param_copy);
       delete_type(t);
       t = new_t;
+    } else {
+      delete_type_array(t_param_copy);
     }
-    free(t_param_copy);
   }
   return t;
 }
@@ -451,24 +475,27 @@ const CType *unify_types(const CType *a, const CType *b) {
   return any_type;
 }
 
-/* Hash function for NULL terminated array of CTypes. */
-static Hash c_types_hash(const CType **head) {
+/* Hash function for type arrays. */
+static Hash type_array_hash(const CTypeArray *a) {
   Hash hash = INIT_HASH;
-  while (*head) {
-    hash = HASH_ADD_PTR(*head, hash);
-    head++;
+  for (int i = 0; i < a->size; i++) {
+    hash = HASH_ADD_PTR(a->elements[i], hash);
   }
   return hash;
 }
 
-/* Equality function for NULL terminated array of CTypes. */
-static int c_types_equals(const CType **a, const CType **b) {
-  while (*a && *b) {
-    if (!*b || !*a || *a != *b) {
+/* Equality function for type arrays. */
+static int type_array_equals(const CTypeArray *a, const CTypeArray *b) {
+  if (a == b) {
+    return 1;
+  }
+  if (a->size != b->size) {
+    return 0;
+  }
+  for (int i = 0; i < a->size; i++) {
+    if (a->elements[i] != b->elements[i]) {
       return 0;
     }
-    a++;
-    b++;
   }
   return 1;
 }
@@ -480,10 +507,10 @@ static Hash func_type_hash(const FuncType *ft) {
 
 /* Equality function for FuncType. */
 static int func_type_equals(const FuncType *a, const FuncType *b) {
-  return a == b && a->variadic == b->variadic;
+  return a->min_arity == b->min_arity && a->variadic == b->variadic;
 }
 
 DEFINE_HASH_MAP(func_type_map, FuncTypeMap, FuncType *, CType *, func_type_hash, func_type_equals)
 
-DEFINE_HASH_MAP(instance_map, InstanceMap, CType **, CType *, c_types_hash, c_types_equals)
+DEFINE_HASH_MAP(instance_map, InstanceMap, CTypeArray *, CType *, type_array_hash, type_array_equals)
 

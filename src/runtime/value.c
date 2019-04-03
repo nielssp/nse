@@ -66,7 +66,7 @@ Cons *create_cons(NseVal h, NseVal t) {
   if (t.type == nil_type) {
     cons->type = get_unary_instance(copy_generic(list_type), copy_type(h.type));
   } else if (t.type->type == C_TYPE_INSTANCE && t.type->instance.type == list_type) {
-    CType *existing = t.type->instance.parameters[0];
+    CType *existing = t.type->instance.parameters->elements[0];
     if (existing == h.type) {
       cons->type = copy_type(t.type);
     } else {

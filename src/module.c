@@ -27,8 +27,7 @@ struct module {
 
 struct Method {
   Symbol *symbol;
-  size_t arity;
-  CType *parameters[];
+  CTypeArray *parameters;
 };
 
 struct binding {
@@ -236,21 +235,16 @@ Module *create_module(const char *name) {
 
 static void delete_method(Method *method) {
   del_ref(SYMBOL(method->symbol));
-  CType **param = method->parameters;
-  while (*param) {
-    delete_type(*(param++));
-  }
+  delete_type_array(method->parameters);
   free(method);
 }
 
 static void delete_methods(MethodMap methods) {
   MethodMapIterator it = create_method_map_iterator(methods);
   for (MethodMapEntry entry = method_map_next(it); entry.key; entry = method_map_next(it)) {
-    if (entry.value) {
-      delete_method(entry.key);
-      del_ref(*entry.value);
-      free(entry.value);
-    }
+    delete_method(entry.key);
+    del_ref(*entry.value);
+    free(entry.value);
   }
   delete_method_map_iterator(it);
   delete_method_map(methods);
@@ -446,21 +440,52 @@ char **get_symbols(Module *module) {
   return symbols;
 }
 
-void import_method(Module *dest, Symbol *symbol, size_t arity, CType **parameters, NseVal value) {
-  Method *m = allocate(sizeof(Method) + arity);
+int import_method(Module *dest, Symbol *symbol, CTypeArray *parameters, NseVal value) {
+  Method *m = allocate(sizeof(Method));
+  if (!m) {
+    return 0;
+  }
   m->symbol = symbol;
-  m->arity = arity;
   NseVal *value_box = allocate(sizeof(NseVal));
-  // TODO
+  if (!value_box) {
+    free(m);
+    return 0;
+  }
+  *value_box = value;
+  m->parameters = parameters;
+  if (method_map_add(dest->methods, m, value_box)) {
+    add_ref(SYMBOL(symbol));
+    copy_type_array(parameters);
+    add_ref(value);
+  } else {
+    free(value_box);
+    free(m);
+  }
+  return 1;
+}
+
+int import_methods(Module *dest, Module *src) {
+  MethodMapIterator it = create_method_map_iterator(src->methods);
+  for (MethodMapEntry entry = method_map_next(it); entry.key; entry = method_map_next(it)) {
+    if (!import_method(dest, entry.key->symbol, entry.key->parameters, *entry.value)) {
+      delete_method_map_iterator(it);
+      return 0;
+    }
+  }
+  delete_method_map_iterator(it);
+  return 1;
 }
 
 void import_module(Module *dest, Module *src) {
   SymMapIterator it = create_symmap_iterator(src->external);
   for (SymMapEntry entry = symmap_next(it); entry.key; entry = symmap_next(it)) {
     // TODO: detect conflict
-    symmap_add(dest->internal, entry.value->name, entry.value);
+    if (symmap_add(dest->internal, entry.value->name, entry.value)) {
+      add_ref(SYMBOL(entry.value));
+    }
   }
   delete_symmap_iterator(it);
+  import_methods(dest, src);
 }
 
 void import_module_symbol(Module *dest, Symbol *symbol) {
@@ -547,8 +572,9 @@ Symbol *module_ext_define_type(Module *module, const char *name, NseVal value) {
 static size_t method_hash(const Method *m) {
   Hash hash = INIT_HASH;
   hash = HASH_ADD_PTR(m->symbol, hash);
-  for (int i = 0; i < m->arity; i++) {
-    hash = HASH_ADD_PTR(m->parameters[i], hash);
+  for (int i = 0; i < m->parameters->size; i++) {
+    CType *t = m->parameters->elements[i];
+    hash = HASH_ADD_PTR(t, hash);
   }
   return 0;
 }
@@ -557,11 +583,11 @@ static size_t method_equals(const Method *a, const Method *b) {
   if (a->symbol != b->symbol) {
     return 0;
   }
-  if (a->arity != b->arity) {
+  if (a->parameters->size != b->parameters->size) {
     return 0;
   }
-  for (int i = 0; i < a->arity; i++) {
-    if (a->parameters[i] != b->parameters[i]) {
+  for (int i = 0; i < a->parameters->size; i++) {
+    if (a->parameters->elements[i] != b->parameters->elements[i]) {
       return 0;
     }
   }
