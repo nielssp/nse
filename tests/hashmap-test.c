@@ -1,17 +1,17 @@
 #include "test.h"
 
-#include "util/hash_map.c"
+#include "../src/runtime/hashmap.c"
 
 void test_iterator() {
   Dictionary d = create_dictionary();
   dictionary_add(d, "key1", "value1");
   dictionary_add(d, "key2", "value2");
   dictionary_add(d, "key3", "value3");
-  HashMapIterator *it = create_dictionary_iterator(d);
+  DictionaryIterator it = create_dictionary_iterator(d);
   int seen1 = 0;
   int seen2 = 0;
   int seen3 = 0;
-  for (HashMapEntry entry = next_entry(it); entry.key; entry = next_entry(it)) {
+  for (DictionaryEntry entry = dictionary_next(it); entry.key; entry = dictionary_next(it)) {
     if (strcmp(entry.key, "key1") == 0) {
       assert(!seen1);
       assert(strcmp(entry.value, "value1") == 0);
@@ -31,7 +31,7 @@ void test_iterator() {
   assert(seen1);
   assert(seen2);
   assert(seen3);
-  delete_hash_map_iterator(it);
+  delete_dictionary_iterator(it);
   delete_dictionary(d);
 }
 

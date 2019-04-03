@@ -452,41 +452,35 @@ const CType *unify_types(const CType *a, const CType *b) {
 }
 
 /* Hash function for NULL terminated array of CTypes. */
-static size_t c_types_hash(const void *p) {
-  CType **head = (CType **)p;
-  size_t hash = 0;
+static Hash c_types_hash(const CType **head) {
+  Hash hash = INIT_HASH;
   while (*head) {
-    hash ^= (size_t)*head;
+    hash = HASH_ADD_PTR(*head, hash);
     head++;
   }
   return hash;
 }
 
 /* Equality function for NULL terminated array of CTypes. */
-static int c_types_equals(const void *a, const void *b) {
-  CType **head_a = (CType **)a;
-  CType **head_b = (CType **)b;
-  while (*head_a && *head_b) {
-    if (!*head_b || !*head_a || *head_a != *head_b) {
+static int c_types_equals(const CType **a, const CType **b) {
+  while (*a && *b) {
+    if (!*b || !*a || *a != *b) {
       return 0;
     }
-    head_a++;
-    head_b++;
+    a++;
+    b++;
   }
   return 1;
 }
 
 /* Hash function for FuncType. */
-static size_t func_type_hash(const void *p) {
-  FuncType *ft = (FuncType *)p;
+static Hash func_type_hash(const FuncType *ft) {
   return (ft->min_arity << 1) | ft->variadic;
 }
 
 /* Equality function for FuncType. */
-static int func_type_equals(const void *a, const void *b) {
-  FuncType *ft_a = (FuncType *)a;
-  FuncType *ft_b = (FuncType *)b;
-  return ft_a->min_arity == ft_b->min_arity && ft_a->variadic == ft_b->variadic;
+static int func_type_equals(const FuncType *a, const FuncType *b) {
+  return a == b && a->variadic == b->variadic;
 }
 
 DEFINE_HASH_MAP(func_type_map, FuncTypeMap, FuncType *, CType *, func_type_hash, func_type_equals)

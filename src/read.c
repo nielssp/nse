@@ -20,6 +20,12 @@ struct reader {
   Module *module;
 };
 
+typedef enum {
+  SYMBOL_KEYWORD,
+  SYMBOL_INTERNED,
+  SYMBOL_UNINTERNED,
+} SymbolType;
+
 static Syntax *read_list(Reader *input);
 
 Reader *open_reader(Stream *stream, const char *file_name, Module *module) {
@@ -235,7 +241,7 @@ static Syntax *read_string(Reader *input) {
 }
 
 
-static Syntax *read_symbol(Reader *input, int keyword) {
+static Syntax *read_symbol(Reader *input, SymbolType type) {
   size_t l = 0;
   size_t size = 10;
   char *buffer = allocate(size);
@@ -276,9 +282,11 @@ static Syntax *read_symbol(Reader *input, int keyword) {
       }
     }
     buffer[l] = '\0';
-    if (keyword) {
+    if (type == SYMBOL_KEYWORD) {
       syntax->quoted = check_alloc(SYMBOL(intern_keyword(buffer)));
-    } else  if (qualified) {
+    } else if (type == SYMBOL_UNINTERNED) {
+      syntax->quoted = check_alloc(SYMBOL(create_symbol(buffer, NULL)));
+    } else if (qualified) {
       syntax->quoted = check_alloc(SYMBOL(find_symbol(buffer)));
     } else {
       syntax->quoted = check_alloc(SYMBOL(module_intern_symbol(input->module, buffer)));
@@ -314,7 +322,7 @@ Syntax *nse_read(Reader *input) {
   }
   if (c == ':') {
     pop(input);
-    Syntax *s = read_symbol(input, 1);
+    Syntax *s = read_symbol(input, SYMBOL_KEYWORD);
     if (s) {
       s->quoted.type = keyword_type;
     }
@@ -348,6 +356,14 @@ Syntax *nse_read(Reader *input) {
       c = peek(input);
       if (c == EOF) {
         raise_error(syntax_error, "unexpected end of input");
+      } else if (c == ':') {
+        pop(input);
+        Syntax *s = read_symbol(input, SYMBOL_UNINTERNED);
+        if (s) {
+          syntax->quoted = s->quoted;
+          delete_syntax(s);
+          return end_pos(syntax, input);
+        }
       } else {
         Symbol *s = module_intern_symbol(input->module, (char[]){ c, 0 });
         if (s) {
@@ -395,7 +411,7 @@ Syntax *nse_read(Reader *input) {
   if (c == '"') {
     return read_string(input);
   }
-  return read_symbol(input, 0);
+  return read_symbol(input, SYMBOL_INTERNED);
 }
 
 static Syntax *read_list(Reader *input) {
@@ -451,7 +467,7 @@ NseVal execute_read(Reader *reader, NseVal read, int *skip) {
     } else if (action == read_string_symbol) {
       return check_alloc(SYNTAX(read_string(reader)));
     } else if (action == read_symbol_symbol) {
-      return check_alloc(SYNTAX(read_symbol(reader, 0)));
+      return check_alloc(SYNTAX(read_symbol(reader, SYMBOL_INTERNED)));
     } else if (action == read_int_symbol) {
       return check_alloc(SYNTAX(read_int(reader)));
     } else if (action == read_any_symbol) {

@@ -6,7 +6,7 @@
 typedef struct bucket Bucket;
 struct bucket {
   HashMapEntry entry;
-  size_t hash;
+  Hash hash;
   char defined;
   char deleted;
 };
@@ -17,8 +17,8 @@ struct hash_map {
   size_t mask;
   size_t upper_cap;
   size_t lower_cap;
-  size_t (* hash_code_func)(const void *);
-  int (* equals_func)(const void *, const void *);
+  HashFunc hash_code_func;
+  EqualityFunc equals_func;
   Bucket *buckets;
 };
 
@@ -28,7 +28,7 @@ struct hash_map_iterator {
   Bucket *current;
 };
 
-HashMap *create_hash_map(size_t hash_code_func(const void *), int equals_func(const void *, const void *)) {
+HashMap *create_hash_map(HashFunc hash_code_func, EqualityFunc equals_func) {
   HashMap *map = malloc(sizeof(HashMap));
   map->size = 0;
   map->capacity = 8;
@@ -84,8 +84,8 @@ static void hash_map_resize(HashMap *map, size_t new_capacity) {
   map->buckets = calloc(map->capacity, sizeof(Bucket));
   for (int i = 0; i < old_capacity; i++) {
     if (old_buckets[i].defined && !old_buckets[i].deleted) {
-      size_t hash_code = old_buckets[i].hash;
-      size_t hash = hash_code & map->mask;
+      Hash hash_code = old_buckets[i].hash;
+      Hash hash = hash_code & map->mask;
       Bucket *bucket = map->buckets + hash;
       while (bucket->defined) {
         hash = (hash + 1) & map->mask;
@@ -103,8 +103,8 @@ int hash_map_add_generic(HashMap *map, void *key, void *value) {
   if (map->size > map->upper_cap) {
     hash_map_resize(map, map->capacity << 1);
   }
-  size_t hash_code = map->hash_code_func(key);
-  size_t hash = hash_code & map->mask;
+  Hash hash_code = map->hash_code_func(key);
+  Hash hash = hash_code & map->mask;
   Bucket *bucket = map->buckets + hash;
   while (bucket->defined && !bucket->deleted) {
     if (map->equals_func(bucket->entry.key, key)) {
@@ -123,8 +123,8 @@ int hash_map_add_generic(HashMap *map, void *key, void *value) {
 }
 
 HashMapEntry hash_map_remove_generic_entry(HashMap *map, const void *key) {
-  size_t hash_code = map->hash_code_func(key);
-  size_t hash = hash_code & map->mask;
+  Hash hash_code = map->hash_code_func(key);
+  Hash hash = hash_code & map->mask;
   Bucket *bucket = map->buckets + hash;
   while (bucket->defined) {
     if (!bucket->deleted && hash_code == bucket->hash && map->equals_func(bucket->entry.key, key)) {
@@ -143,8 +143,8 @@ HashMapEntry hash_map_remove_generic_entry(HashMap *map, const void *key) {
 }
 
 HashMapEntry hash_map_lookup_generic_entry(HashMap *map, const void *key) {
-  size_t hash_code = map->hash_code_func(key);
-  size_t hash = hash_code & map->mask;
+  Hash hash_code = map->hash_code_func(key);
+  Hash hash = hash_code & map->mask;
   Bucket *bucket = map->buckets + hash;
   while (bucket->defined) {
     if (!bucket->deleted && hash_code == bucket->hash && map->equals_func(bucket->entry.key, key)) {
@@ -164,10 +164,9 @@ void *hash_map_lookup_generic(HashMap *map, const void *key) {
   return hash_map_lookup_generic_entry(map, key).value;
 }
 
-size_t string_hash(const void *p) {
+Hash string_hash(const char *key) {
   // jenkins
-  const char *key = (const char *)p;
-  size_t hash = 0;
+  Hash hash = 0;
   while (*key) {
     hash += *(key++);
     hash += hash << 10;
@@ -179,8 +178,16 @@ size_t string_hash(const void *p) {
   return hash;
 }
 
-int string_equals(const void *a, const void *b) {
+int string_equals(const char *a, const char *b) {
   return strcmp(a, b) == 0;
+}
+
+Hash pointer_hash(const void *p) {
+  return HASH_ADD_PTR(p, INIT_HASH);
+}
+
+int pointer_equals(const void *a, const void *b) {
+  return a == b;
 }
 
 DEFINE_HASH_MAP(dictionary, Dictionary, char *, char *, string_hash, string_equals)

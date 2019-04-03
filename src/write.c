@@ -146,8 +146,12 @@ NseVal nse_write(NseVal value, Stream *stream, Module *module) {
           stream_printf(stream, "%s", value.symbol->name);
           break;
         }
-      } 
-      stream_printf(stream, "%s/%s", module_name(value.symbol->module), value.symbol->name);
+      }
+      if (value.symbol->module) { 
+        stream_printf(stream, "%s/%s", module_name(value.symbol->module), value.symbol->name);
+      } else {
+        stream_printf(stream, "#:%s", value.symbol->name);
+      }
       break;
     }
     case INTERNAL_I64:

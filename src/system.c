@@ -159,6 +159,9 @@ static NseVal symbol_name(NseVal args) {
 static NseVal symbol_module(NseVal args) {
   ARG_POP_TYPE(Symbol *, symbol, args, to_symbol, "a symbol");
   ARG_DONE(args);
+  if (!symbol->module) {
+    return nil;
+  }
   const char *name = module_name(symbol->module);
   return check_alloc(STRING(create_string(name, strlen(name))));
 }
@@ -301,7 +304,7 @@ Module *get_system_module() {
   NseVal stderr_val = REFERENCE(create_reference(stream_type, stderr_stream, void_destructor));
   module_ext_define(system, "*stdin*", stdin_val);
   module_ext_define(system, "*stdout*", stdout_val);
-  module_ext_define(system, "*sterr*", stderr_val);
+  module_ext_define(system, "*stderr*", stderr_val);
   del_ref(stdin_val);
   del_ref(stdout_val);
   del_ref(stderr_val);

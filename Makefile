@@ -1,3 +1,4 @@
+TARGET = nse
 GCCARGS = -Wall -pedantic -std=c11 -g
 CC = clang $(GCCARGS)
 LDFLAGS = -lreadline
@@ -8,7 +9,10 @@ obj = $(src:.c=.o)
 runtime_src = $(wildcard src/runtime/*.c)
 runtime_obj = $(runtime_src:.c=.o)
 
-nse: $(obj) libnsert.a
+test_src = $(wildcard tests/*.c)
+test_obj = $(test_src:.c=)
+
+$(TARGET): $(obj) libnsert.a
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 libnsert.a: $(runtime_obj)
@@ -16,4 +20,4 @@ libnsert.a: $(runtime_obj)
 
 .PHONY: clean
 clean:
-	rm -f $(obj) nse
+	rm -f $(obj) $(runtime_obj) $(test_obj) $(TARGET)

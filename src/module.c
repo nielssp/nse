@@ -6,17 +6,13 @@
 
 #include "util/stream.h"
 
-size_t symbol_hash(const void *p) {
-  return (size_t)p;
-}
+typedef struct Method Method;
 
-int symbol_equals(const void *a, const void *b) {
-  return a == b;
-}
+DECLARE_HASH_MAP(namespace, Namespace, Symbol *, NseVal *)
+DECLARE_HASH_MAP(symmap, SymMap, char *, Symbol *)
+DECLARE_HASH_MAP(module_map, ModuleMap, char *, Module *)
 
-DEFINE_PRIVATE_HASH_MAP(namespace, Namespace, Symbol *, NseVal *, symbol_hash, symbol_equals)
-DEFINE_PRIVATE_HASH_MAP(symmap, SymMap, char *, Symbol *, string_hash, string_equals)
-DEFINE_PRIVATE_HASH_MAP(module_map, ModuleMap, char *, Module *, string_hash, string_equals)
+DECLARE_HASH_MAP(method_map, MethodMap, Method *, NseVal *)
 
 struct module {
   char *name;
@@ -26,6 +22,13 @@ struct module {
   Namespace macro_defs;
   Namespace type_defs;
   Namespace read_macro_defs;
+  MethodMap methods;
+};
+
+struct Method {
+  Symbol *symbol;
+  size_t arity;
+  CType *parameters[];
 };
 
 struct binding {
@@ -226,8 +229,31 @@ Module *create_module(const char *name) {
   module->macro_defs = create_namespace();
   module->type_defs = create_namespace();
   module->read_macro_defs = create_namespace();
+  module->methods = create_method_map();
   module_map_add(loaded_modules, module->name, module);
   return module;
+}
+
+static void delete_method(Method *method) {
+  del_ref(SYMBOL(method->symbol));
+  CType **param = method->parameters;
+  while (*param) {
+    delete_type(*(param++));
+  }
+  free(method);
+}
+
+static void delete_methods(MethodMap methods) {
+  MethodMapIterator it = create_method_map_iterator(methods);
+  for (MethodMapEntry entry = method_map_next(it); entry.key; entry = method_map_next(it)) {
+    if (entry.value) {
+      delete_method(entry.key);
+      del_ref(*entry.value);
+      free(entry.value);
+    }
+  }
+  delete_method_map_iterator(it);
+  delete_method_map(methods);
 }
 
 static void delete_symbols(SymMap symbols) {
@@ -262,6 +288,7 @@ void delete_module(Module *module) {
   delete_defs(module->read_macro_defs);
   delete_symbols(module->internal);
   delete_symbols(module->external);
+  delete_methods(module->methods);
   free(module->name);
   free(module);
 }
@@ -419,6 +446,14 @@ char **get_symbols(Module *module) {
   return symbols;
 }
 
+void import_method(Module *dest, Symbol *symbol, size_t arity, CType **parameters, NseVal value) {
+  Method *m = allocate(sizeof(Method) + arity);
+  m->symbol = symbol;
+  m->arity = arity;
+  NseVal *value_box = allocate(sizeof(NseVal));
+  // TODO
+}
+
 void import_module(Module *dest, Module *src) {
   SymMapIterator it = create_symmap_iterator(src->external);
   for (SymMapEntry entry = symmap_next(it); entry.key; entry = symmap_next(it)) {
@@ -508,3 +543,32 @@ Symbol *module_ext_define_type(Module *module, const char *name, NseVal value) {
   module_define_type(symbol, value);
   return symbol;
 }
+
+static size_t method_hash(const Method *m) {
+  Hash hash = INIT_HASH;
+  hash = HASH_ADD_PTR(m->symbol, hash);
+  for (int i = 0; i < m->arity; i++) {
+    hash = HASH_ADD_PTR(m->parameters[i], hash);
+  }
+  return 0;
+}
+
+static size_t method_equals(const Method *a, const Method *b) {
+  if (a->symbol != b->symbol) {
+    return 0;
+  }
+  if (a->arity != b->arity) {
+    return 0;
+  }
+  for (int i = 0; i < a->arity; i++) {
+    if (a->parameters[i] != b->parameters[i]) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+DEFINE_HASH_MAP(namespace, Namespace, Symbol *, NseVal *, pointer_hash, pointer_equals)
+DEFINE_HASH_MAP(symmap, SymMap, char *, Symbol *, string_hash, string_equals)
+DEFINE_HASH_MAP(module_map, ModuleMap, char *, Module *, string_hash, string_equals)
+DEFINE_HASH_MAP(method_map, MethodMap, Method *, NseVal *, method_hash, method_equals)

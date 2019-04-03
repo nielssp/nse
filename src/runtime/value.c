@@ -70,7 +70,7 @@ Cons *create_cons(NseVal h, NseVal t) {
     if (existing == h.type) {
       cons->type = copy_type(t.type);
     } else {
-      cons->type = get_unary_instance(copy_generic(list_type), copy_type(unify_types(h.type, existing)));
+      cons->type = get_unary_instance(copy_generic(list_type), copy_type((CType *)unify_types(h.type, existing)));
     }
   } else {
     cons->type = copy_type(improper_list_type);
