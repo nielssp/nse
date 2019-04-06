@@ -26,6 +26,7 @@
 
 #define RESULT_OK(value) ((value).type != NULL)
 #define THEN(previous, next) ((RESULT_OK(previous)) ? (next) : undefined)
+#define THENP(previous, next) ((previous) ? (next) : NULL)
 
 #define ARG_POP_ANY(name, args) NseVal name = head(args);\
   if (!RESULT_OK(name)) {\

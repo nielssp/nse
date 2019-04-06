@@ -372,6 +372,7 @@ static int is_instance_of(CType *actual, const CType *formal, const GType *g, in
     case C_TYPE_SIMPLE:
     case C_TYPE_FUNC:
     case C_TYPE_CLOSURE:
+    case C_TYPE_GFUNC:
     case C_TYPE_POLY_INSTANCE:
       if (invariant) {
         result = actual == formal;
@@ -759,11 +760,169 @@ NseVal eval_def_macro(NseVal args, Scope *scope) {
   return undefined;
 }
 
-NseVal eval_def_generic(NseVal args, Scope *scope) {
-  return undefined;
+static CType *parameters_to_gfunc_type(NseVal formal) {
+  int min_arity = 0;
+  int variadic = 0;
+  Symbol *param;
+  while (accept_elem_symbol(&formal, &param)) {
+    if (param == rest_keyword) {
+      variadic = 1;
+      if (!expect_elem_symbol(&formal)) {
+        return NULL;
+      }
+      break;
+    }
+    min_arity++;
+  }
+  if (!is_nil(formal)) {
+    set_debug_form(formal);
+    raise_error(syntax_error, "formal parameters must be a proper list of symbols");
+    return NULL;
+  }
+  return get_generic_func_type(min_arity, variadic);
 }
 
+/* (def-generic (SYMBOL {SYMBOL} [&rest SYMBOL])) */
+NseVal eval_def_generic(NseVal args, Scope *scope) {
+  Cons *sig = expect_elem_cons(&args);
+  if (!sig) {
+    return undefined;
+  }
+  NseVal sig_current = CONS(sig);
+  Symbol *symbol = expect_elem_symbol(&sig_current);
+  if (!symbol) {
+    return undefined;
+  }
+  CType *t = parameters_to_gfunc_type(sig_current);
+  if (!t) {
+    return undefined;
+  }
+  GFunc *gfunc = create_gfunc(symbol, t, NULL);
+  if (!gfunc) {
+    return undefined;
+  }
+  module_define(symbol, GFUNC(gfunc));
+  del_ref(GFUNC(gfunc));
+  return add_ref(SYMBOL(symbol));
+}
+
+static NseVal get_method_parameters(NseVal args, int index, CTypeArray *types, int variadic, Scope *scope) {
+  if (index >= types->size) {
+    if (is_cons(args)) {
+      set_debug_form(args);
+      raise_error(domain_error, "too many parameters for method");
+      return undefined;
+    } else  if (is_nil(args)) {
+      return nil;
+    } else {
+      set_debug_form(args);
+      raise_error(syntax_error, "method parameters must be a proper list");
+      return undefined;
+    }
+  }
+  if (is_cons(args)) {
+    NseVal rest = get_method_parameters(tail(args), index + 1, types, variadic, scope);
+    if (!RESULT_OK(rest)) {
+      return rest;
+    }
+    NseVal arg = head(args);
+    if (variadic && index == types->size - 1) {
+      if (!expect_elem_exact_symbol(&arg, rest_keyword)) {
+        del_ref(rest);
+        return undefined;
+      }
+    }
+    Symbol *sym = expect_elem_symbol(&arg);
+    TypeQuote *tq = THENP(sym, expect_elem_type_quote(&arg));
+    NseVal type_value = THEN(check_alloc(TQUOTE(tq)), eval(tq->quoted, scope));
+    if (!RESULT_OK(type_value) || !expect_nil(&arg)) {
+      del_ref(rest);
+      return undefined;
+    }
+    CType *t = to_type(type_value);
+    if (!t) {
+      del_ref(rest);
+      del_ref(type_value);
+      set_debug_form(arg);
+      raise_error(syntax_error, "parameter is not a valid type");
+      return undefined;
+    }
+    types->elements[index] = t;
+    Cons *c = create_cons(SYMBOL(sym), rest);
+    del_ref(rest);
+    if (!c) {
+      return undefined;
+    }
+    if (variadic && index == types->size - 1) {
+      Cons *new_c = create_cons(SYMBOL(rest_keyword), CONS(c));
+      del_ref(CONS(c));
+      if (!new_c) {
+        return undefined;
+      }
+      c = new_c;
+    }
+    return CONS(c);
+  } else {
+    set_debug_form(args);
+    raise_error(syntax_error, "too few parameters for method");
+    return undefined;
+  }
+}
+
+/* (def-method (SYMBOL {(SYMBOL TQUOTE)} [&rest (SYMBOL TQUOTE)]) ANY) */
 NseVal eval_def_method(NseVal args, Scope *scope) {
-  return undefined;
+  Cons *sig = expect_elem_cons(&args);
+  if (!sig) {
+    return undefined;
+  }
+  NseVal sig_current = CONS(sig);
+  Symbol *symbol = expect_elem_symbol(&sig_current);
+  if (!symbol) {
+    return undefined;
+  }
+  NseVal gfunc = scope_get(scope, symbol);
+  if (!RESULT_OK(gfunc)) {
+    return undefined;
+  }
+  if (gfunc.type->internal != INTERNAL_GFUNC) {
+    set_debug_form(sig->head);
+    char *function_name = nse_write_to_string(SYMBOL(symbol), scope->module);
+    raise_error(domain_error, "%s is not a generic function", function_name);
+    free(function_name);
+    return undefined;
+  }
+  int variadic = gfunc.type->func.variadic;
+  int arity = gfunc.type->func.min_arity + variadic;
+  CTypeArray *types = create_type_array_null(arity);
+  Scope *type_scope = use_module_types(scope->module);
+  NseVal parameters = get_method_parameters(sig_current, 0, types, variadic, type_scope);
+  delete_scope(type_scope);
+  NseVal result = undefined;
+  if (RESULT_OK(parameters)) {
+    Scope *fn_scope = copy_scope(scope);
+    NseVal scope_ref = check_alloc(REFERENCE(create_reference(copy_type(scope_type), fn_scope, (Destructor) delete_scope)));
+    if (RESULT_OK(scope_ref)) {
+      NseVal func_def = check_alloc(CONS(create_cons(parameters, args)));
+      if (RESULT_OK(func_def)) {
+        NseVal env[] = {func_def, scope_ref};
+        CType *func_type = get_closure_type(arity - variadic, variadic);
+        if (func_type) {
+          NseVal func = check_alloc(CLOSURE(create_closure(eval_anon, func_type, env, 2)));
+          if (RESULT_OK(func)) {
+            module_define_method(scope->module, symbol, copy_type_array(types), func);
+            del_ref(func);
+            result = add_ref(SYMBOL(symbol));
+          }
+        }
+        del_ref(func_def);
+      }
+      del_ref(scope_ref);
+    } else {
+      delete_scope(fn_scope);
+    }
+    del_ref(parameters);
+  }
+  delete_type_array(types);
+  return result;
 }
 

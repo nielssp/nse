@@ -165,6 +165,17 @@ DEF_EXPECT_ELEM(cons, Cons *, "expected a list")
 DEF_EXPECT_ELEM(symbol, Symbol *, "expected a symbol")
 DEF_EXPECT_ELEM(type_quote, TypeQuote *, "expected a type")
 
+int expect_elem_exact_symbol(NseVal *next, Symbol *expected) {
+  NseVal next_ = *next;
+  Symbol *actual = expect_elem_symbol(next);
+  if (actual && actual != expected) {
+    set_debug_form(next_);
+    raise_error(syntax_error, "expected the symbol '%s'", expected->name);
+    return 0;
+  }
+  return actual != NULL;
+}
+
 int expect_nil(NseVal *next) {
   if (!is_nil(*next)) {
     set_debug_form(*next);

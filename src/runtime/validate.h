@@ -49,6 +49,7 @@ int accept_elem_type_quote(NseVal *next, TypeQuote **out);
 Cons *expect_elem_cons(NseVal *next);
 Symbol *expect_elem_symbol(NseVal *next);
 TypeQuote *expect_elem_type_quote(NseVal *next);
+int expect_elem_exact_symbol(NseVal *next, Symbol *expected);
 int expect_nil(NseVal *next);
 
 #endif

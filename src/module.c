@@ -562,6 +562,7 @@ void module_define_method(Module *module, Symbol *symbol, CTypeArray *parameters
   if (existing.key) {
     key = existing.key;
     del_ref(*existing.value);
+    free(existing.value);
     delete_type_array(parameters);
   } else {
     key = malloc(sizeof(Method));
