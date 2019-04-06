@@ -45,6 +45,8 @@ struct FuncType {
 FuncTypeMap func_types;
 /* Map of closure type instances. */
 FuncTypeMap closure_types;
+/* Map of generic function type instances. */
+FuncTypeMap gfunc_types;
 
 CType *any_type;
 CType *bool_type;
@@ -74,6 +76,7 @@ GType *list_type;
 void init_types() {
   func_types = create_func_type_map();
   closure_types = create_func_type_map();
+  gfunc_types = create_func_type_map();
   any_type = create_simple_type(INTERNAL_NOTHING, NULL);
   bool_type = create_simple_type(INTERNAL_DATA, any_type);
   improper_list_type = create_simple_type(INTERNAL_CONS, any_type);
@@ -197,6 +200,10 @@ void delete_type(CType *t) {
     case C_TYPE_CLOSURE:
       key = (FuncType){ .min_arity = t->func.min_arity, .variadic = t->func.variadic };
       free(func_type_map_remove_entry(closure_types, &key).key);
+      break;
+    case C_TYPE_GFUNC:
+      key = (FuncType){ .min_arity = t->func.min_arity, .variadic = t->func.variadic };
+      free(func_type_map_remove_entry(gfunc_types, &key).key);
       break;
     case C_TYPE_INSTANCE:
       instance_map_remove(t->instance.type->instances, t->instance.parameters);
@@ -340,9 +347,9 @@ CType *get_poly_instance(GType *g) {
   }
 }
 
-CType *get_func_type(int min_arity, int variadic) {
+static CType *get_func_subtype(int min_arity, int variadic, FuncTypeMap map, CTypeType type, InternalType internal) {
   FuncType key = (FuncType){ .min_arity = min_arity, .variadic = variadic };
-  CType *t = func_type_map_lookup(func_types, &key);
+  CType *t = func_type_map_lookup(map, &key);
   if (t) {
     return copy_type(t);
   } else {
@@ -352,9 +359,13 @@ CType *get_func_type(int min_arity, int variadic) {
     }
     t->refs = 1;
     t->name = NULL;
-    t->super = copy_type(func_type);
-    t->type = C_TYPE_FUNC;
-    t->internal = INTERNAL_FUNC;
+    if (type == C_TYPE_FUNC) {
+      t->super = copy_type(func_type);
+    } else {
+      t->super = get_func_type(min_arity, variadic);
+    }
+    t->type = type;
+    t->internal = internal;
     t->func.min_arity = min_arity;
     t->func.variadic = variadic;
     FuncType *key_copy = allocate(sizeof(FuncType));
@@ -364,38 +375,21 @@ CType *get_func_type(int min_arity, int variadic) {
       return NULL;
     }
     *key_copy = key;
-    func_type_map_add(func_types, key_copy, t);
+    func_type_map_add(map, key_copy, t);
     return t;
   }
 }
 
+CType *get_func_type(int min_arity, int variadic) {
+  return get_func_subtype(min_arity, variadic, func_types, C_TYPE_FUNC, INTERNAL_FUNC);
+}
+
 CType *get_closure_type(int min_arity, int variadic) {
-  FuncType key = (FuncType){ .min_arity = min_arity, .variadic = variadic };
-  CType *t = func_type_map_lookup(closure_types, &key);
-  if (t) {
-    return copy_type(t);
-  } else {
-    t = allocate(sizeof(CType));
-    if (!t) {
-      return NULL;
-    }
-    t->refs = 1;
-    t->name = NULL;
-    t->super = get_func_type(min_arity, variadic);
-    t->type = C_TYPE_CLOSURE;
-    t->internal = INTERNAL_CLOSURE;
-    t->func.min_arity = min_arity;
-    t->func.variadic = variadic;
-    FuncType *key_copy = allocate(sizeof(FuncType));
-    if (!key_copy) {
-      free(t);
-      delete_type(func_type);
-      return NULL;
-    }
-    *key_copy = key;
-    func_type_map_add(closure_types, key_copy, t);
-    return t;
-  }
+  return get_func_subtype(min_arity, variadic, closure_types, C_TYPE_CLOSURE, INTERNAL_CLOSURE);
+}
+
+CType *get_generic_func_type(int min_arity, int variadic) {
+  return get_func_subtype(min_arity, variadic, gfunc_types, C_TYPE_GFUNC, INTERNAL_GFUNC);
 }
 
 CType *instantiate_type(CType *t, const GType *g, const CTypeArray *parameters) {

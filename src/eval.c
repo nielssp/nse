@@ -573,6 +573,10 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       return eval_def_data(args, scope);
     } else if (macro_name == def_macro_symbol) {
       return eval_def_macro(args, scope);
+    } else if (macro_name == def_generic_symbol) {
+      return eval_def_generic(args, scope);
+    } else if (macro_name == def_method_symbol) {
+      return eval_def_method(args, scope);
     }
     NseVal macro_function = scope_get_macro(scope, macro_name);
     if (RESULT_OK(macro_function)) {
@@ -619,7 +623,11 @@ NseVal eval(NseVal code, Scope *scope) {
       if (code.type == keyword_type) {
         return add_ref(code);
       }
-      return add_ref(scope_get(scope, code.symbol));
+      NseVal value = scope_get(scope, code.symbol);
+      if (RESULT_OK(value) && value.type->internal == INTERNAL_GFUNC && !value.gfunc->context) {
+        return check_alloc(GFUNC(create_gfunc(value.gfunc->name, copy_type(value.gfunc->type), scope->module)));
+      }
+      return add_ref(value);
     case INTERNAL_SYNTAX: {
       Syntax *previous = push_debug_form(code.syntax);
       return pop_debug_form(eval(code.syntax->quoted, scope), previous);

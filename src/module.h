@@ -42,9 +42,12 @@ void module_define(Symbol *s, NseVal value);
 void module_define_macro(Symbol *s, NseVal value);
 void module_define_type(Symbol *s, NseVal value);
 void module_define_read_macro(Symbol *s, NseVal value);
+void module_define_method(Module *module, Symbol *symbol, CTypeArray *parameters, NseVal value);
 Symbol *module_ext_define(Module *module, const char *name, NseVal value);
 Symbol *module_ext_define_macro(Module *module, const char *name, NseVal value);
 Symbol *module_ext_define_type(Module *module, const char *name, NseVal value);
+
+NseVal module_find_method(Module *module, Symbol *symbol, const CTypeArray *parameters);
 
 Module *find_module(const char *s);
 Symbol *find_symbol(const char *s);

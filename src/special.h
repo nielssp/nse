@@ -15,5 +15,7 @@ NseVal eval_def_read_macro(NseVal args, Scope *scope);
 NseVal eval_def_type(NseVal args, Scope *scope);
 NseVal eval_def_data(NseVal args, Scope *scope);
 NseVal eval_def_macro(NseVal args, Scope *scope);
+NseVal eval_def_generic(NseVal args, Scope *scope);
+NseVal eval_def_method(NseVal args, Scope *scope);
 
 #endif

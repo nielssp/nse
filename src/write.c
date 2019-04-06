@@ -36,6 +36,7 @@ static void write_type(CType *type, Stream *stream, Module *module) {
       break;
     case C_TYPE_FUNC:
     case C_TYPE_CLOSURE:
+    case C_TYPE_GFUNC:
         stream_printf(stream, "(-> (");
         if (type->func.min_arity) {
           stream_printf(stream, "any");
@@ -192,6 +193,9 @@ NseVal nse_write(NseVal value, Stream *stream, Module *module) {
       break;
     case INTERNAL_CLOSURE:
       stream_printf(stream, "#<lambda>");
+      break;
+    case INTERNAL_GFUNC:
+      stream_printf(stream, "#<generic function>");
       break;
     case INTERNAL_REFERENCE:
       stream_printf(stream, "#<");

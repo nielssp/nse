@@ -758,3 +758,12 @@ NseVal eval_def_macro(NseVal args, Scope *scope) {
   }
   return undefined;
 }
+
+NseVal eval_def_generic(NseVal args, Scope *scope) {
+  return undefined;
+}
+
+NseVal eval_def_method(NseVal args, Scope *scope) {
+  return undefined;
+}
+

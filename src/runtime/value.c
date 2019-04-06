@@ -4,6 +4,7 @@
 
 #include "hashmap.h"
 #include "error.h"
+#include "../write.h"
 
 #include "value.h"
 
@@ -167,6 +168,21 @@ Closure *create_closure(NseVal f(NseVal, NseVal[]), CType *type, NseVal env[], s
   return closure;
 }
 
+GFunc *create_gfunc(Symbol *name, CType *type, Module *context) {
+  GFunc *g_func = allocate(sizeof(GFunc));
+  if (!g_func) {
+    delete_type(type);
+    return NULL;
+  }
+  g_func->refs = 1;
+  g_func->name = name;
+  add_ref(SYMBOL(name));
+  g_func->type = type;
+  g_func->doc = NULL;
+  g_func->context = context;
+  return g_func;
+}
+
 Reference *create_reference(CType *type, void *pointer, void destructor(void *)) {
   Reference *reference = allocate(sizeof(Reference));
   if (!reference) {
@@ -225,6 +241,7 @@ NseVal check_alloc(NseVal v) {
   switch (v.type->internal) {
     case INTERNAL_CONS:
     case INTERNAL_CLOSURE:
+    case INTERNAL_GFUNC:
     case INTERNAL_QUOTE:
     case INTERNAL_SYNTAX:
     case INTERNAL_REFERENCE:
@@ -250,6 +267,9 @@ NseVal add_ref(NseVal value) {
       break;
     case INTERNAL_CLOSURE:
       value.closure->refs++;
+      break;
+    case INTERNAL_GFUNC:
+      value.gfunc->refs++;
       break;
     case INTERNAL_QUOTE:
       value.quote->refs++;
@@ -289,6 +309,9 @@ void del_ref(NseVal value) {
       break;
     case INTERNAL_CLOSURE:
       refs = &value.closure->refs;
+      break;
+    case INTERNAL_GFUNC:
+      refs = &value.gfunc->refs;
       break;
     case INTERNAL_QUOTE:
       refs = &value.quote->refs;
@@ -356,6 +379,11 @@ static void delete(NseVal value) {
         del_ref(value.closure->env[i]);
       }
       free(value.closure);
+      return;
+    case INTERNAL_GFUNC:
+      del_ref(SYMBOL(value.gfunc->name));
+      delete_type(value.gfunc->type);
+      free(value.gfunc);
       return;
     case INTERNAL_REFERENCE:
       if (value.reference->destructor) {
@@ -457,7 +485,8 @@ int is_f64(NseVal v) {
 }
 
 int is_function(NseVal v) {
-  if (v.type->internal == INTERNAL_FUNC || v.type->internal == INTERNAL_CLOSURE) {
+  if (v.type->internal == INTERNAL_FUNC || v.type->internal == INTERNAL_CLOSURE
+      || v.type->internal == INTERNAL_GFUNC) {
     return 1;
   } else if (v.type->internal == INTERNAL_SYNTAX) {
     return is_function(v.syntax->quoted);
@@ -534,6 +563,10 @@ NseVal from_cons(Cons *c) {
 
 NseVal from_closure(Closure *c) {
   return (NseVal){ .type = c->type, .closure = c };
+}
+
+NseVal from_gfunc(GFunc *g) {
+  return (NseVal){ .type = g->type, .gfunc = g };
 }
 
 NseVal from_reference(Reference *r) {
@@ -704,6 +737,34 @@ void clear_stack_trace() {
   stack_trace = nil;
 }
 
+static NseVal apply_generic(GFunc *func, NseVal args) {
+  if (!func->context) {
+    raise_error(name_error, "generic function has no methods in the current module");
+    return undefined;
+  }
+  CTypeArray *types = create_type_array_null(func->type->func.min_arity + func->type->func.variadic);
+  NseVal current = args;
+  for (int i = 0; i < func->type->func.min_arity; i++) {
+    if (!is_cons(current)) {
+      char *function_name = nse_write_to_string(SYMBOL(func->name), func->context);
+      raise_error(domain_error, "not enough parameters for generic function %s, expected at least %d", function_name, func->type->func.min_arity);
+      free(function_name);
+      free(types);
+      return undefined;
+    }
+    types->elements[i] = head(current).type;
+    current = tail(current);
+  }
+  NseVal method = module_find_method(func->context, func->name, types);
+  if (!RESULT_OK(method)) {
+    free(types);
+    raise_error(name_error, "no method matching types found");
+    return undefined;
+  }
+  free(types);
+  return nse_apply(method, args);
+}
+
 NseVal nse_apply(NseVal func, NseVal args) {
   NseVal result = undefined;
   Syntax *old_error_form = error_form;
@@ -717,6 +778,11 @@ NseVal nse_apply(NseVal func, NseVal args) {
       return undefined;
     }
     result = func.closure->f(args, func.closure->env);
+  } else if (func.type->internal == INTERNAL_GFUNC) {
+    if (!stack_trace_push(func, args)) {
+      return undefined;
+    }
+    result = apply_generic(func.gfunc, args);
   } else {
     raise_error(domain_error, "not a function");
   }

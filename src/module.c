@@ -304,6 +304,15 @@ Scope *use_module_types(Module *module) {
   return scope;
 }
 
+NseVal module_find_method(Module *module, Symbol *symbol, const CTypeArray *parameters) {
+  Method query = (Method){ .symbol = symbol, .parameters = (CTypeArray *)parameters };
+  NseVal *method = method_map_lookup(module->methods, &query);
+  if (method) {
+    return *method;
+  }
+  return undefined;
+}
+
 Module *find_module(const char *name) {
   if (!HASH_MAP_INITIALIZED(loaded_modules)) {
     init_modules();
@@ -402,15 +411,13 @@ Symbol *module_find_internal(Module *module, const char *s) {
 
 Symbol *module_intern_symbol(Module *module, const char *s) {
   Symbol *value = symmap_lookup(module->internal, s);
-  if (value) {
-    value->refs++;
-    return value;
+  if (!value) {
+    value = create_symbol(s, module);
+    if (!s) {
+      return NULL;
+    }
+    symmap_add(module->internal, value->name, value);
   }
-  value = create_symbol(s, module);
-  if (!s) {
-    return NULL;
-  }
-  symmap_add(module->internal, value->name, value);
   value->refs++;
   return value;
 }
@@ -545,6 +552,25 @@ void module_define_read_macro(Symbol *s, NseVal value) {
   NseVal *copy = malloc(sizeof(NseVal));
   memcpy(copy, &value, sizeof(NseVal));
   namespace_add(s->module->read_macro_defs, s, copy);
+  add_ref(value);
+}
+
+void module_define_method(Module *module, Symbol *symbol, CTypeArray *parameters, NseVal value) {
+  Method query = (Method){ .symbol = symbol, .parameters = parameters };
+  Method *key = NULL;
+  MethodMapEntry existing = method_map_remove_entry(module->methods, &query);
+  if (existing.key) {
+    key = existing.key;
+    del_ref(*existing.value);
+    delete_type_array(parameters);
+  } else {
+    key = malloc(sizeof(Method));
+    *key = query;
+    add_ref(SYMBOL(symbol));
+  }
+  NseVal *copy = malloc(sizeof(NseVal));
+  memcpy(copy, &value, sizeof(NseVal));
+  method_map_add(module->methods, key, copy);
   add_ref(value);
 }
 

@@ -51,6 +51,7 @@ typedef enum {
   INTERNAL_F64,
   INTERNAL_FUNC,
   INTERNAL_CLOSURE,
+  INTERNAL_GFUNC,
   INTERNAL_STRING,
   INTERNAL_SYNTAX,
   INTERNAL_SYMBOL,
@@ -65,6 +66,7 @@ typedef enum {
   C_TYPE_SIMPLE,
   C_TYPE_FUNC,
   C_TYPE_CLOSURE,
+  C_TYPE_GFUNC,
   C_TYPE_INSTANCE,
   C_TYPE_POLY_INSTANCE,
   C_TYPE_POLY_VAR,
@@ -83,14 +85,13 @@ struct CType {
   /* Optional name. */
   Symbol *name;
   union {
-    /* C_TYPE_FUNC / C_TYPE_CLOSURE */
+    /* C_TYPE_FUNC / C_TYPE_CLOSURE | C_TYPE_GFUNC */
     struct {
       /* Minimum arity. */
       int min_arity;
       /* Variadic = 1, Not variadoc = 0. */
       int variadic;
     } func;
-    /* C_TYPE_INSTANCE */
     struct {
       /* Generic type. */
       GType *type;
@@ -266,6 +267,11 @@ CType *get_func_type(int min_arity, int variadic);
  * `is_subtype_of(get_closure_type(a, v), get_func_type(a, v))`.
  */
 CType *get_closure_type(int min_arity, int variadic);
+/* Same as `get_func_type()` but for generic functions. All generic function types
+ * are subtypes of the function types with the same arity and variadicity, i.e.
+ * `is_subtype_of(get_generic_func_type(a, v), get_func_type(a, v))`.
+ */
+CType *get_generic_func_type(int min_arity, int variadic);
 
 /* Replace type var occurrences in `t` with corresponding type in `parameters`.
  * Parameters:

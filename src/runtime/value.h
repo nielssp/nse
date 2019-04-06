@@ -13,6 +13,7 @@
 #define CONS(c) from_cons(c)
 #define SYNTAX(c) ((NseVal) { .type = syntax_type, .syntax = (c) })
 #define CLOSURE(c) from_closure(c)
+#define GFUNC(c) from_gfunc(c)
 #define SYMBOL(s) ((NseVal) { .type = symbol_type, .symbol = (s) })
 #define KEYWORD(s) ((NseVal) { .type = keyword_type, .symbol = (s) })
 #define STRING(s) ((NseVal) { .type = string_type, .string = (s) })
@@ -90,6 +91,7 @@
 typedef struct NseVal NseVal;
 typedef struct Cons Cons;
 typedef struct Closure Closure;
+typedef struct GFunc GFunc;
 typedef struct Quote Quote;
 typedef struct Quote TypeQuote;
 typedef struct Quote Continue;
@@ -117,6 +119,7 @@ struct NseVal {
     NseVal (*func)(NseVal);
     CType *type_val;
     Closure *closure;
+    GFunc *gfunc;
     Reference *reference;
     Data *data;
   };
@@ -136,6 +139,14 @@ struct Closure {
   CType *type;
   size_t env_size;
   NseVal env[];
+};
+
+struct GFunc {
+  size_t refs;
+  Symbol *name;
+  String *doc;
+  CType *type;
+  Module *context;
 };
 
 struct Quote {
@@ -194,6 +205,7 @@ Symbol *create_symbol(const char *s, Module *module);
 Symbol *create_keyword(const char *s, Module *module);
 String *create_string(const char *s, size_t length);
 Closure *create_closure(NseVal f(NseVal, NseVal[]), CType *type, NseVal env[], size_t env_size);
+GFunc *create_gfunc(Symbol *name, CType *type, Module *context);
 Reference *create_reference(CType *type, void *pointer, void destructor(void *));
 void void_destructor(void * p);
 Data *create_data(CType *type, Symbol *tag, NseVal record[], size_t record_size);
@@ -203,6 +215,7 @@ NseVal check_alloc(NseVal v);
 
 NseVal from_cons(Cons *c);
 NseVal from_closure(Closure *c);
+NseVal from_gfunc(GFunc *g);
 NseVal from_reference(Reference *r);
 NseVal from_data(Data *d);
 

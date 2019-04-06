@@ -292,6 +292,12 @@ Module *get_system_module() {
   module_ext_define(system, "module-symbols", FUNC(module_symbols, 1, 0));
   module_ext_define(system, "byte-length", FUNC(byte_length, 1, 0));
   module_ext_define(system, "byte-at", FUNC(byte_at, 2, 0));
+  Symbol *elem_at_symbol = module_extern_symbol(system, "elem-at");
+  module_define(elem_at_symbol, GFUNC(create_gfunc(elem_at_symbol, get_generic_func_type(2, 0), NULL)));
+  CTypeArray *elem_at_types = create_type_array(2, (CType *[]){ copy_type(i64_type), copy_type(string_type) });
+  module_define_method(system, elem_at_symbol, elem_at_types, FUNC(byte_at, 2, 0));
+  del_ref(SYMBOL(elem_at_symbol));
+
   module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_, 1, 0));
   module_ext_define(system, "update-head", FUNC(update_head, 2, 0));
   module_ext_define(system, "is-a", FUNC(is_a, 2, 0));
