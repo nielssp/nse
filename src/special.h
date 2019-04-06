@@ -9,7 +9,7 @@ NseVal eval_match(NseVal args, Scope *scope);
 NseVal eval_fn(NseVal args, Scope *scope);
 NseVal eval_try(NseVal args, Scope *scope);
 NseVal eval_continue(NseVal args, Scope *scope);
-NseVal eval_loop(NseVal args, Scope *scope);
+NseVal eval_recur(NseVal args, Scope *scope);
 NseVal eval_def(NseVal args, Scope *scope);
 NseVal eval_def_read_macro(NseVal args, Scope *scope);
 NseVal eval_def_type(NseVal args, Scope *scope);

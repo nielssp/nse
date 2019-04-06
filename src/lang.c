@@ -12,6 +12,7 @@ Symbol *do_symbol = NULL;
 Symbol *fn_symbol = NULL;
 Symbol *try_symbol = NULL;
 Symbol *loop_symbol = NULL;
+Symbol *recur_symbol = NULL;
 Symbol *continue_symbol = NULL;
 Symbol *def_symbol = NULL;
 Symbol *def_macro_symbol = NULL;
@@ -55,6 +56,7 @@ void init_lang_module() {
   fn_symbol = module_extern_symbol(lang_module, "fn");
   try_symbol = module_extern_symbol(lang_module, "try");
   loop_symbol = module_extern_symbol(lang_module, "loop");
+  recur_symbol = module_extern_symbol(lang_module, "recur");
   continue_symbol = module_extern_symbol(lang_module, "continue");
   def_symbol = module_extern_symbol(lang_module, "def");
   def_macro_symbol = module_extern_symbol(lang_module, "def-macro");

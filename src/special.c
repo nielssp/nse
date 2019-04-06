@@ -166,7 +166,7 @@ NseVal eval_continue(NseVal args, Scope *scope) {
   return result;
 }
 
-NseVal eval_loop(NseVal args, Scope *scope) {
+NseVal eval_recur(NseVal args, Scope *scope) {
   NseVal pattern = head(args);
   NseVal body = THEN(pattern, elem(1, args));
   Scope *loop_scope = scope;

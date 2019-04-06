@@ -90,11 +90,11 @@
 (def (product xs) (apply * xs))
 
 (def (range start end)
-  (let ((acc '()))
-    (loop (start end acc)
-      (if (= start end)
-        (cons start acc)
-        (continue start (- end 1) (cons end acc))))))
+  (let acc '())
+  (recur (start end acc)
+    (if (= start end)
+      (cons start acc)
+      (continue start (- end 1) (cons end acc)))))
 
 (def iota (curry range 1))
 

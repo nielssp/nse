@@ -527,7 +527,7 @@ Closure *optimize_tail_call(Closure *closure, Symbol *name) {
       NseVal loop1 = check_alloc(CONS(create_cons(body, nil)));
       NseVal loop2 = THEN(loop1, check_alloc(CONS(create_cons(definition->head, loop1))));
       del_ref(loop1);
-      NseVal loop3 = THEN(loop2, check_alloc(CONS(create_cons(SYMBOL(loop_symbol), loop2))));
+      NseVal loop3 = THEN(loop2, check_alloc(CONS(create_cons(SYMBOL(recur_symbol), loop2))));
       del_ref(loop2);
       NseVal new_tail = THEN(loop3, check_alloc(CONS(create_cons(loop3, nil))));
       del_ref(loop3);
@@ -563,8 +563,8 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       return eval_try(args, scope);
     } else if (macro_name == continue_symbol) {
       return eval_continue(args, scope);
-    } else if (macro_name == loop_symbol) {
-      return eval_loop(args, scope);
+    } else if (macro_name == recur_symbol) {
+      return eval_recur(args, scope);
     } else if (macro_name == def_symbol) {
       return eval_def(args, scope);
     } else if (macro_name == def_read_macro_symbol) {
