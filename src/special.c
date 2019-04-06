@@ -28,7 +28,7 @@ NseVal eval_let(NseVal args, Scope *scope) {
   Scope *let_scope = scope;
   NseVal result = undefined;
   NseVal defs = head(args);
-  NseVal body = THEN(defs, elem(1, args));
+  NseVal body = THEN(defs, tail(args));
   if (RESULT_OK(body)) {
     int ok = 1;
     while (is_cons(defs)) {
@@ -74,7 +74,7 @@ NseVal eval_let(NseVal args, Scope *scope) {
       defs = tail(defs);
     }
     if (ok) {
-      result = eval(body, let_scope);
+      result = eval_block(body, let_scope);
     }
     scope_pop_until(let_scope, scope);
   }

@@ -13,6 +13,7 @@ extern Symbol *false_symbol;
 extern Symbol *if_symbol;
 extern Symbol *let_symbol;
 extern Symbol *match_symbol;
+extern Symbol *do_symbol;
 extern Symbol *fn_symbol;
 extern Symbol *try_symbol;
 extern Symbol *loop_symbol;

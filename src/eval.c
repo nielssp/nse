@@ -555,6 +555,8 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       return eval_let(args, scope);
     } else if (macro_name == match_symbol) {
       return eval_match(args, scope);
+    } else if (macro_name == do_symbol) {
+      return eval_block(args, scope);
     } else if (macro_name == fn_symbol) {
       return eval_fn(args, scope);
     } else if (macro_name == try_symbol) {

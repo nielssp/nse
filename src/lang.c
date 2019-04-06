@@ -8,6 +8,7 @@ Symbol *false_symbol = NULL;
 Symbol *if_symbol = NULL;
 Symbol *let_symbol = NULL;
 Symbol *match_symbol = NULL;
+Symbol *do_symbol = NULL;
 Symbol *fn_symbol = NULL;
 Symbol *try_symbol = NULL;
 Symbol *loop_symbol = NULL;
@@ -50,6 +51,7 @@ void init_lang_module() {
   if_symbol = module_extern_symbol(lang_module, "if");
   let_symbol = module_extern_symbol(lang_module, "let");
   match_symbol = module_extern_symbol(lang_module, "match");
+  do_symbol = module_extern_symbol(lang_module, "do");
   fn_symbol = module_extern_symbol(lang_module, "fn");
   try_symbol = module_extern_symbol(lang_module, "try");
   loop_symbol = module_extern_symbol(lang_module, "loop");
