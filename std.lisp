@@ -4,12 +4,19 @@
 (in-module :system)
 
 ;;; stdio
-(export 'print 'println)
+(export 'print 'println 'get-char)
 
-(def (print str) (stream-write str *stdout*))
-(def (println str)
-     (stream-write str *stdout*)
-     (stream-write "\n" *stdout*))
+(def (print str &key (to *stdout*))
+     "Prints str to standard output"
+     (stream-write str to))
+(def (println str &key (to *stdout*))
+     "Prints str and a newline to standard output"
+     (stream-write str to)
+     (stream-write "\n" to))
+
+(def (get-byte &key (from *stdin*))
+     "Reads a single byte from standard input"
+     (elem-at 0 (stream-read 1 from)))
 
 ;;; function composition
 (export 'compose 'curry 'flip 'negate 'pipe)

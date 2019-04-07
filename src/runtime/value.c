@@ -83,6 +83,18 @@ Cons *create_cons(NseVal h, NseVal t) {
   return cons;
 }
 
+ListBuilder *create_list_builder() {
+  ListBuilder *lb = allocate(sizeof(ListBuilder));
+  if (!lb) {
+    return NULL;
+  }
+  lb->refs = 1;
+  lb->first = NULL;
+  lb->last = NULL;
+  lb->copied = 0;
+  return lb;
+}
+
 Quote *create_quote(NseVal quoted) {
   Quote *quote = allocate(sizeof(Quote));
   if (!quote) {
@@ -240,6 +252,7 @@ NseVal check_alloc(NseVal v) {
   }
   switch (v.type->internal) {
     case INTERNAL_CONS:
+    case INTERNAL_LIST_BUILDER:
     case INTERNAL_CLOSURE:
     case INTERNAL_GFUNC:
     case INTERNAL_QUOTE:
@@ -264,6 +277,9 @@ NseVal add_ref(NseVal value) {
   switch (value.type->internal) {
     case INTERNAL_CONS:
       value.cons->refs++;
+      break;
+    case INTERNAL_LIST_BUILDER:
+      value.list_builder->refs++;
       break;
     case INTERNAL_CLOSURE:
       value.closure->refs++;
@@ -310,6 +326,8 @@ void del_ref(NseVal value) {
     case INTERNAL_CLOSURE:
       refs = &value.closure->refs;
       break;
+    case INTERNAL_LIST_BUILDER:
+      refs = &value.list_builder->refs;
     case INTERNAL_GFUNC:
       refs = &value.gfunc->refs;
       break;
@@ -352,6 +370,12 @@ static void delete(NseVal value) {
       del_ref(value.cons->head);
       del_ref(value.cons->tail);
       free(value.cons);
+      return;
+    case INTERNAL_LIST_BUILDER:
+      if (value.list_builder->first) {
+        del_ref(CONS(value.list_builder->first));
+      }
+      free(value.list_builder);
       return;
     case INTERNAL_SYMBOL:
       free(value.symbol);
@@ -691,6 +715,49 @@ size_t list_length(NseVal value) {
     value = value.cons->tail;
   }
   return count;
+}
+
+int list_builder_append(NseVal elem, ListBuilder *lb) {
+  if (lb->copied) {
+    // TODO: modifying last cons is no longer allowed... copy list before
+    // proceding
+    return 0;
+  }
+  Cons *c = create_cons(elem, nil);
+  if (!c) {
+    return 0;
+  }
+  if (lb->last) {
+    lb->last->tail = CONS(c);
+    lb->last = c;
+  } else {
+    lb->first = lb->last = c;
+  }
+  return 1;
+}
+
+int list_builder_prepend(NseVal elem, ListBuilder *lb) {
+  if (lb->first) {
+    Cons *c = create_cons(elem, CONS(lb->first));
+    if (!c) {
+      return 0;
+    }
+    lb->first->refs--;
+    lb->first = c;
+  } else {
+    Cons *c = create_cons(elem, nil);
+    if (!c) {
+      return 0;
+    }
+    lb->first = lb->last = c;
+  }
+  return 1;
+}
+
+Cons *list_builder_finalize(ListBuilder *lb) {
+  lb->copied = 1;
+  lb->first->refs++;
+  return lb->first;
 }
 
 static int stack_trace_push(NseVal func, NseVal args) {

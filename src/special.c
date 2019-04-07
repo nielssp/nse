@@ -926,3 +926,175 @@ NseVal eval_def_method(NseVal args, Scope *scope) {
   return result;
 }
 
+static int eval_loop_ins(NseVal args, Scope *scope, ListBuilder *lb);
+
+/* (for PATTERN EXPR) */
+static int eval_loop_for(NseVal operands, NseVal rest, Scope *scope, ListBuilder *lb) {
+  NseVal pattern, sequence;
+  if (!accept_elem_any(&operands, &pattern)) {
+    set_debug_form(operands);
+    raise_error(syntax_error, "expected a pattern");
+    return 0;
+  }
+  if (!accept_elem_any(&operands, &sequence)) {
+    set_debug_form(operands);
+    raise_error(syntax_error, "expected a sequence");
+    return 0;
+  }
+  if (!expect_nil(&operands)) {
+    return 0;
+  }
+  NseVal sequence_value = eval(sequence, scope);
+  if (!RESULT_OK(sequence_value)) {
+    return 0;
+  }
+  int ok = 1;
+  NseVal current = sequence_value;
+  while (ok && is_cons(current)) {
+    Scope *loop_scope = scope;
+    if (!match_pattern(&loop_scope, pattern, head(current))) {
+      ok = 0;
+    } else {
+      current = tail(current);
+      if (!eval_loop_ins(rest, loop_scope, lb)) {
+        ok = 0;
+      }
+    }
+    scope_pop_until(loop_scope, scope);
+  }
+  if (ok && !is_nil(current)) {
+  }
+  del_ref(sequence_value);
+  return ok;
+}
+
+/* (let PATTERN EXPR) */
+static int eval_loop_let(NseVal operands, NseVal rest, Scope *scope, ListBuilder *lb) {
+  NseVal pattern, assignment;
+  if (!accept_elem_any(&operands, &pattern)) {
+    set_debug_form(operands);
+    raise_error(syntax_error, "expected a pattern");
+    return 0;
+  }
+  if (!accept_elem_any(&operands, &assignment)) {
+    set_debug_form(operands);
+    raise_error(syntax_error, "expected an assignment");
+    return 0;
+  }
+  if (!expect_nil(&operands)) {
+    return 0;
+  }
+  NseVal assignment_value = eval(assignment, scope);
+  if (!RESULT_OK(assignment_value)) {
+    return 0;
+  }
+  Scope *let_scope = scope;
+  int result = 0;
+  if (match_pattern(&let_scope, pattern, assignment_value)) {
+    result = eval_loop_ins(rest, let_scope, lb);
+  }
+  scope_pop_until(let_scope, scope);
+  del_ref(assignment_value);
+  return result;
+}
+
+/* (if EXPR) */
+static int eval_loop_if(NseVal operands, NseVal rest, Scope *scope, ListBuilder *lb) {
+  NseVal condition;
+  if (!accept_elem_any(&operands, &condition)) {
+    set_debug_form(operands);
+    raise_error(syntax_error, "expected a condition");
+    return 0;
+  }
+  if (!expect_nil(&operands)) {
+    return 0;
+  }
+  NseVal condition_value = eval(condition, scope);
+  if (!RESULT_OK(condition_value)) {
+    return 0;
+  }
+  int result = 1;
+  if (is_true(condition_value)) {
+    result = eval_loop_ins(rest, scope, lb);
+  }
+  del_ref(condition_value);
+  return result;
+}
+
+/* (collect EXPR) */
+static int eval_loop_collect(NseVal operands, NseVal rest, Scope *scope, ListBuilder *lb) {
+  NseVal expr;
+  if (!accept_elem_any(&operands, &expr)) {
+    set_debug_form(operands);
+    raise_error(syntax_error, "expected an expression");
+    return 0;
+  }
+  if (!expect_nil(&operands)) {
+    return 0;
+  }
+  NseVal expr_value = eval(expr, scope);
+  if (!RESULT_OK(expr_value)) {
+    return 0;
+  }
+  if (!list_builder_append(expr_value, lb)) {
+    return 0;
+  }
+  return eval_loop_ins(rest, scope, lb);
+}
+
+/* (do {STMT}) */
+static int eval_loop_do(NseVal operands, NseVal rest, Scope *scope, ListBuilder *lb) {
+  if (RESULT_OK(eval_block(operands, scope))) {
+    return eval_loop_ins(rest, scope, lb);
+  }
+  return 0;
+}
+
+static int eval_loop_ins(NseVal args, Scope *scope, ListBuilder *lb) {
+  if (is_cons(args)) {
+    Cons *ins = to_cons(head(args));
+    if (!ins) {
+      set_debug_form(head(args));
+      raise_error(syntax_error, "loop instruction must be a list");
+    } else {
+      Symbol *op = to_symbol(ins->head);
+      if (!op) {
+        set_debug_form(ins->head);
+        raise_error(syntax_error, "loop operator must be a symbol");
+      } else if (op == for_symbol) {
+        return eval_loop_for(ins->tail, tail(args), scope, lb);
+      } else if (op == let_symbol) {
+        return eval_loop_let(ins->tail, tail(args), scope, lb);
+      } else if (op == if_symbol) {
+        return eval_loop_if(ins->tail, tail(args), scope, lb);
+      } else if (op == collect_symbol) {
+        return eval_loop_collect(ins->tail, tail(args), scope, lb);
+      } else if (op == do_symbol) {
+        return eval_loop_do(ins->tail, tail(args), scope, lb);
+      } else {
+        set_debug_form(ins->head);
+        raise_error(syntax_error, "unrecognized loop operator");
+      }
+    }
+  } else if (is_nil(args)) {
+    return 1;
+  } else {
+    set_debug_form(args);
+    raise_error(syntax_error, "expected a proper list");
+  }
+  return 0;
+}
+
+/* (loop {LOOP_INS}) */
+NseVal eval_loop(NseVal args, Scope *scope) {
+  ListBuilder *lb = create_list_builder();
+  if (!lb) {
+    return undefined;
+  }
+  NseVal result = undefined;
+  if (eval_loop_ins(args, scope, lb)) {
+    result = CONS(list_builder_finalize(lb));
+  }
+  del_ref(LIST_BUILDER(lb));
+  return result;
+}

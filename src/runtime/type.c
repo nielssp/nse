@@ -53,6 +53,7 @@ CType *bool_type;
 CType *proper_list_type;
 CType *improper_list_type;
 CType *nil_type;
+CType *list_builder_type;
 CType *num_type;
 CType *int_type;
 CType *float_type;
@@ -83,6 +84,7 @@ void init_types() {
   proper_list_type = create_simple_type(INTERNAL_NOTHING, improper_list_type);
   list_type = create_generic(1, INTERNAL_CONS, proper_list_type);
   nil_type = create_simple_type(INTERNAL_NIL, get_poly_instance(copy_generic(list_type)));
+  list_builder_type = create_simple_type(INTERNAL_LIST_BUILDER, any_type);
   num_type = create_simple_type(INTERNAL_NOTHING, any_type);
   int_type = create_simple_type(INTERNAL_I64, num_type);
   float_type = create_simple_type(INTERNAL_F64, num_type);
@@ -127,6 +129,12 @@ GType *create_generic(int arity, InternalType internal, CType *super) {
   t->internal = internal;
   t->super = super;
   t->instances = create_instance_map();
+  if (!t->instances.map) {
+    delete_type(super);
+    free(t);
+    raise_error(out_of_memory_error, "could not allocate memory");
+    return NULL;
+  }
   t->name = NULL;
   t->poly = NULL;
   return t;

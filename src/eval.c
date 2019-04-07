@@ -40,26 +40,31 @@ CType *parameters_to_type(NseVal formal) {
   int key = 0;
   int variadic = 0;
   Symbol *param;
+  Cons *cons_param;
   while (ok && accept_elem_symbol(&formal, &param)) {
     if (param == key_keyword) {
       key = 1;
-      while (accept_elem_symbol(&formal, &param)) {
+      while (accept_elem_symbol(&formal, &param) || accept_elem_cons(&formal, &cons_param)) {
         // nop
       }
       break;
     } else if (param == opt_keyword) {
-      while (ok && accept_elem_symbol(&formal, &param)) {
-        if (param == key_keyword) {
-          key = 1;
-          while (accept_elem_symbol(&formal, &param)) {
-            // nop
+      while (ok) {
+        if (accept_elem_symbol(&formal, &param)) {
+          if (param == key_keyword) {
+            key = 1;
+            while (accept_elem_symbol(&formal, &param) || accept_elem_cons(&formal, &cons_param)) {
+              // nop
+            }
+            break;
+          } else if (param == rest_keyword) {
+            variadic = 1;
+            if (!expect_elem_symbol(&formal)) {
+              ok = 0;
+            }
+            break;
           }
-          break;
-        } else if (param == rest_keyword) {
-          variadic = 1;
-          if (!expect_elem_symbol(&formal)) {
-            ok = 0;
-          }
+        } else if (!accept_elem_cons(&formal, &cons_param)) {
           break;
         }
         optional++;
@@ -144,6 +149,7 @@ int assign_named_parameters(Scope **scope, NseVal formal, NseVal actual) {
       symbol = to_symbol(head(head(formal)));
       default_value = elem(1, head(formal));
       if (!RESULT_OK(default_value)) {
+        set_debug_form(tail(head(formal)));
         raise_error(domain_error, "expected a default value");
         result = 0;
         break;
@@ -579,6 +585,8 @@ NseVal eval_cons(Cons *cons, Scope *scope) {
       return eval_def_generic(args, scope);
     } else if (macro_name == def_method_symbol) {
       return eval_def_method(args, scope);
+    } else if (macro_name == loop_symbol) {
+      return eval_loop(args, scope);
     }
     NseVal macro_function = scope_get_macro(scope, macro_name);
     if (RESULT_OK(macro_function)) {

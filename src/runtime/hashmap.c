@@ -30,12 +30,19 @@ struct hash_map_iterator {
 
 HashMap *create_hash_map(HashFunc hash_code_func, EqualityFunc equals_func) {
   HashMap *map = malloc(sizeof(HashMap));
+  if (!map) {
+    return NULL;
+  }
   map->size = 0;
   map->capacity = 8;
   map->mask = map->capacity - 1;
   map->upper_cap = map->capacity * 3 / 4;
   map->lower_cap = map->capacity / 4;
   map->buckets = calloc(map->capacity, sizeof(Bucket));
+  if (!map->buckets) {
+    free(map);
+    return NULL;
+  }
   map->hash_code_func = hash_code_func;
   map->equals_func = equals_func;
   return map;
@@ -52,6 +59,9 @@ size_t get_hash_map_size(HashMap *map) {
 
 HashMapIterator *create_hash_map_iterator(HashMap *map) {
   HashMapIterator *iterator = malloc(sizeof(HashMapIterator));
+  if (!iterator) {
+    return NULL;
+  }
   iterator->map = map;
   iterator->next_bucket = 0;
   iterator->current = NULL;
@@ -74,14 +84,19 @@ HashMapEntry next_entry(HashMapIterator *iterator) {
   return (HashMapEntry){.key = NULL, .value = NULL};
 }
 
-static void hash_map_resize(HashMap *map, size_t new_capacity) {
+static int hash_map_resize(HashMap *map, size_t new_capacity) {
   size_t old_capacity = map->capacity;
   Bucket *old_buckets = map->buckets;
   map->capacity = new_capacity;
+  map->buckets = calloc(map->capacity, sizeof(Bucket));
+  if (!map->buckets) {
+    map->buckets = old_buckets;
+    map->capacity = old_capacity;
+    return 0;
+  }
   map->mask = new_capacity - 1;
   map->upper_cap = map->capacity * 3 / 4;
   map->lower_cap = map->capacity / 4;
-  map->buckets = calloc(map->capacity, sizeof(Bucket));
   for (int i = 0; i < old_capacity; i++) {
     if (old_buckets[i].defined && !old_buckets[i].deleted) {
       Hash hash_code = old_buckets[i].hash;
@@ -97,11 +112,14 @@ static void hash_map_resize(HashMap *map, size_t new_capacity) {
     }
   }
   free(old_buckets);
+  return 1;
 }
 
 int hash_map_add_generic(HashMap *map, void *key, void *value) {
   if (map->size > map->upper_cap) {
-    hash_map_resize(map, map->capacity << 1);
+    if (!hash_map_resize(map, map->capacity << 1)) {
+      return 0;
+    }
   }
   Hash hash_code = map->hash_code_func(key);
   Hash hash = hash_code & map->mask;

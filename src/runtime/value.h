@@ -11,6 +11,7 @@
 #define FUNC(f, arity, variadic) ((NseVal) { .type = get_func_type(arity, variadic), .func = (f) })
 
 #define CONS(c) from_cons(c)
+#define LIST_BUILDER(lb) ((NseVal) { .type = list_builder_type, .list_builder = (lb) })
 #define SYNTAX(c) ((NseVal) { .type = syntax_type, .syntax = (c) })
 #define CLOSURE(c) from_closure(c)
 #define GFUNC(c) from_gfunc(c)
@@ -91,6 +92,7 @@
 
 typedef struct NseVal NseVal;
 typedef struct Cons Cons;
+typedef struct ListBuilder ListBuilder;
 typedef struct Closure Closure;
 typedef struct GFunc GFunc;
 typedef struct Quote Quote;
@@ -113,6 +115,7 @@ struct NseVal {
     int64_t i64;
     double f64;
     Cons *cons;
+    ListBuilder *list_builder;
     Syntax *syntax;
     Quote *quote;
     Symbol *symbol;
@@ -131,6 +134,13 @@ struct Cons {
   CType *type;
   NseVal head;
   NseVal tail;
+};
+
+struct ListBuilder {
+  size_t refs;
+  Cons *first;
+  Cons *last;
+  int copied;
 };
 
 struct Closure {
@@ -198,6 +208,7 @@ extern NseVal nil;
 void init_values();
 
 Cons *create_cons(NseVal h, NseVal t);
+ListBuilder *create_list_builder();
 Quote *create_quote(NseVal quoted);
 TypeQuote *create_type_quote(NseVal quoted);
 Continue *create_continue(NseVal args);
@@ -240,11 +251,14 @@ void clear_stack_trace();
 NseVal add_ref(NseVal p);
 void del_ref(NseVal p);
 
-
 NseVal head(NseVal cons);
 NseVal tail(NseVal cons);
 NseVal elem(size_t n, NseVal cons);
 size_t list_length(NseVal list);
+
+int list_builder_append(NseVal elem, ListBuilder *lb);
+int list_builder_prepend(NseVal elem, ListBuilder *lb);
+Cons *list_builder_finalize(ListBuilder *lb);
 
 int is_cons(NseVal v);
 int is_nil(NseVal v);

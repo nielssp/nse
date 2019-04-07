@@ -80,6 +80,25 @@ NseVal read_(NseVal args) {
   return return_value;
 }
 
+NseVal write_(NseVal args) {
+  ARG_POP_ANY(arg, args);
+  ARG_DONE(args);
+  char *buffer = malloc(50);
+  if (!buffer) {
+    raise_error(out_of_memory_error, "could not allocate 50 bytes of memory");
+    return undefined;
+  }
+  Stream *output = stream_buffer(buffer, 50);
+  NseVal result = nse_write(arg, output, current_scope->module);
+  buffer = stream_get_content(output);
+  if (RESULT_OK(result)) {
+    result = check_alloc(STRING(create_string(buffer, strlen(buffer))));
+  }
+  stream_close(output);
+  free(buffer);
+  return result;
+}
+
 NseVal eval_(NseVal args) {
   ARG_POP_ANY(arg, args);
   ARG_DONE(args);
@@ -337,6 +356,7 @@ char *get_line_in_file(size_t line, FILE *f) {
   }
   char *line_buf = malloc(length + 1);
   if (length == 0) {
+    line_buf[0] = 0;
     return line_buf;
   }
   fseek(f, offset, SEEK_SET);
@@ -461,6 +481,7 @@ int main(int argc, char *argv[]) {
   module_ext_define(system_module, "load", FUNC(load, 1, 0));
   module_ext_define(system_module, "read", FUNC(read_, 1, 0));
   module_ext_define(system_module, "eval", FUNC(eval_, 1, 0));
+  module_ext_define(system_module, "write", FUNC(write_, 1, 0));
   module_ext_define(system_module, "in-module", FUNC(in_module, 1, 0));
   module_ext_define(system_module, "def-module", FUNC(def_module, 1, 0));
   module_ext_define(system_module, "export", FUNC(export, 1, 0));

@@ -197,6 +197,9 @@ NseVal nse_write(NseVal value, Stream *stream, Module *module) {
     case INTERNAL_GFUNC:
       stream_printf(stream, "#<generic function>");
       break;
+      stream_printf(stream, "#<list builder>");
+      break;
+    case INTERNAL_LIST_BUILDER:
     case INTERNAL_REFERENCE:
       stream_printf(stream, "#<");
       write_type(value.type, stream, module);

@@ -47,6 +47,7 @@ typedef enum {
   INTERNAL_NOTHING,
   INTERNAL_NIL,
   INTERNAL_CONS,
+  INTERNAL_LIST_BUILDER,
   INTERNAL_I64,
   INTERNAL_F64,
   INTERNAL_FUNC,
@@ -126,6 +127,8 @@ extern CType *improper_list_type;
 extern CType *proper_list_type;
 /* nil < (forall (t) (list t)) < proper-list < improper-list < any */
 extern CType *nil_type;
+/* list-builder < any */
+extern CType *list_builder_type;
 /* num < any */
 extern CType *num_type;
 /* int < num < any */
