@@ -1037,8 +1037,10 @@ static int eval_loop_collect(NseVal operands, NseVal rest, Scope *scope, ListBui
     return 0;
   }
   if (!list_builder_append(expr_value, lb)) {
+    del_ref(expr_value);
     return 0;
   }
+  del_ref(expr_value);
   return eval_loop_ins(rest, scope, lb);
 }
 
