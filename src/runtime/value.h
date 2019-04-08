@@ -258,7 +258,7 @@ size_t list_length(NseVal list);
 
 int list_builder_append(NseVal elem, ListBuilder *lb);
 int list_builder_prepend(NseVal elem, ListBuilder *lb);
-Cons *list_builder_finalize(ListBuilder *lb);
+NseVal list_builder_finalize(ListBuilder *lb);
 
 int is_cons(NseVal v);
 int is_nil(NseVal v);

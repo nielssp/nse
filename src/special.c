@@ -1095,7 +1095,7 @@ NseVal eval_loop(NseVal args, Scope *scope) {
   }
   NseVal result = undefined;
   if (eval_loop_ins(args, scope, lb)) {
-    result = CONS(list_builder_finalize(lb));
+    result = list_builder_finalize(lb);
   }
   del_ref(LIST_BUILDER(lb));
   return result;

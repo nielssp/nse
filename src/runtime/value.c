@@ -754,10 +754,13 @@ int list_builder_prepend(NseVal elem, ListBuilder *lb) {
   return 1;
 }
 
-Cons *list_builder_finalize(ListBuilder *lb) {
+NseVal list_builder_finalize(ListBuilder *lb) {
+  if (!lb->first) {
+    return nil;
+  }
   lb->copied = 1;
   lb->first->refs++;
-  return lb->first;
+  return CONS(lb->first);
 }
 
 static int stack_trace_push(NseVal func, NseVal args) {
