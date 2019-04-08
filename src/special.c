@@ -821,17 +821,16 @@ static NseVal get_method_parameters(NseVal args, int index, CTypeArray *types, i
     }
   }
   if (is_cons(args)) {
+    if (variadic && index == types->size - 1) {
+      if (!expect_elem_exact_symbol(&args, rest_keyword)) {
+        return undefined;
+      }
+    }
     NseVal rest = get_method_parameters(tail(args), index + 1, types, variadic, scope);
     if (!RESULT_OK(rest)) {
       return rest;
     }
     NseVal arg = head(args);
-    if (variadic && index == types->size - 1) {
-      if (!expect_elem_exact_symbol(&arg, rest_keyword)) {
-        del_ref(rest);
-        return undefined;
-      }
-    }
     Symbol *sym = expect_elem_symbol(&arg);
     TypeQuote *tq = THENP(sym, expect_elem_type_quote(&arg));
     NseVal type_value = THEN(check_alloc(TQUOTE(tq)), eval(tq->quoted, scope));

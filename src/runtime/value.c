@@ -825,6 +825,17 @@ static NseVal apply_generic(GFunc *func, NseVal args) {
     types->elements[i] = head(current).type;
     current = tail(current);
   }
+  if (func->type->func.variadic) {
+    if (current.type->type == C_TYPE_INSTANCE && current.type->instance.type == list_type) {
+      types->elements[types->size - 1] = current.type->instance.parameters->elements[0];
+    } else if (!is_nil(current)) {
+      free(types);
+      raise_error(domain_error, "parameter list must be a proper list");
+      return undefined;
+    } else {
+      types->elements[types->size - 1] = any_type;
+    }
+  }
   NseVal method = module_find_method(func->context, func->name, types);
   if (!RESULT_OK(method)) {
     free(types);
