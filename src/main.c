@@ -73,7 +73,7 @@ NseVal load(NseVal args) {
 NseVal read_(NseVal args) {
   ARG_POP_TYPE(String *, string, args, to_string, "a string");
   ARG_DONE(args);
-  Stream *input = stream_buffer(string->chars, string->length);
+  Stream *input = stream_buffer(string->chars, string->length, string->length);
   Reader *reader = open_reader(input, "(read)", current_scope->module);
   NseVal return_value = check_alloc(SYNTAX(nse_read(reader)));
   close_reader(reader);
@@ -88,7 +88,7 @@ NseVal write_(NseVal args) {
     raise_error(out_of_memory_error, "could not allocate 50 bytes of memory");
     return undefined;
   }
-  Stream *output = stream_buffer(buffer, 50);
+  Stream *output = stream_buffer(buffer, 50, 0);
   NseVal result = nse_write(arg, output, current_scope->module);
   buffer = stream_get_content(output);
   if (RESULT_OK(result)) {
@@ -530,7 +530,8 @@ int main(int argc, char *argv[]) {
       continue;
     }
     add_history(input);
-    Stream *input_buffer = stream_buffer(input, strlen(input));
+    size_t input_length = strlen(input);
+    Stream *input_buffer = stream_buffer(input, input_length, input_length);
     Reader *reader = open_reader(input_buffer, "(repl)", current_scope->module);
     set_reader_position(reader, line, 1);
     NseVal code = check_alloc(SYNTAX(nse_read(reader)));

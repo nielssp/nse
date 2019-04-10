@@ -227,7 +227,7 @@ NseVal nse_write(NseVal value, Stream *stream, Module *module) {
 char *nse_write_to_string(NseVal value, Module *module) {
   size_t size = 32;
   char *buffer = (char *)malloc(size);
-  Stream *stream = stream_buffer(buffer, size);
+  Stream *stream = stream_buffer(buffer, size, 0);
   nse_write(value, stream, module);
   buffer = stream_get_content(stream);
   stream_close(stream);

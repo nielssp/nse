@@ -19,6 +19,7 @@ typedef enum {
 struct stream {
   StreamType type;
   size_t length;
+  size_t capacity;
   size_t pos;
   union {
     FILE *file;
@@ -69,10 +70,14 @@ Stream *stream_file(const char *filename, const char *mode) {
   return stream;
 }
 
-Stream *stream_buffer(char *buffer, size_t length) {
+Stream *stream_buffer(char *buffer, size_t initial_capacity, size_t length) {
   Stream *stream = (Stream *)malloc(sizeof(Stream));
+  if (!stream) {
+    return NULL;
+  }
   stream->type = STREAM_TYPE_BUFFER;
   stream->buffer = buffer;
+  stream->capacity = initial_capacity;
   stream->length = length;
   stream->pos = 0;
   return stream;
@@ -158,7 +163,7 @@ size_t stream_read(void *ptr, size_t size, size_t nmemb, Stream *input) {
         char *src = input->buffer + input->pos;
         memcpy(ptr, src, bytes);
         input->pos += bytes;
-        return bytes;
+        return nmemb;
       }
     case STREAM_TYPE_STRING:
       bytes = size * nmemb;
@@ -170,7 +175,7 @@ size_t stream_read(void *ptr, size_t size, size_t nmemb, Stream *input) {
         }
         dest[i++] = input->string[input->pos++];
       }
-      return i;
+      return i / size;
   }
 }
 
@@ -224,6 +229,27 @@ int stream_eof(Stream *input) {
   }
 }
 
+size_t stream_write(const void *ptr, size_t size, size_t nmemb, Stream *output) {
+  size_t bytes;
+  switch (output->type) {
+    case STREAM_TYPE_FILE_NOCLOSE:
+    case STREAM_TYPE_FILE:
+      return fwrite(ptr, size, nmemb, output->file);
+    case STREAM_TYPE_BUFFER:
+      bytes = size * nmemb;
+      if (output->pos + bytes >= output->capacity) {
+        output->buffer = resize_buffer(output->buffer, output->capacity, output->capacity + bytes);
+        output->capacity += bytes;
+      }
+      memcpy(output->buffer + output->pos, ptr, bytes);
+      output->pos += bytes;
+      output->length += bytes;
+      return nmemb;
+    case STREAM_TYPE_STRING:
+      return EOF;
+  }
+}
+
 int stream_putc(int c, Stream *output) {
   unsigned char ch = (unsigned char)c;
   switch (output->type) {
@@ -231,11 +257,12 @@ int stream_putc(int c, Stream *output) {
     case STREAM_TYPE_FILE:
       return fputc(c, output->file);
     case STREAM_TYPE_BUFFER:
-      if (output->pos >= output->length) {
-        output->buffer = resize_buffer(output->buffer, output->length, output->length + 100);
-        output->length += 100;
+      if (output->pos >= output->capacity) {
+        output->buffer = resize_buffer(output->buffer, output->capacity, output->capacity + 100);
+        output->capacity += 100;
       }
       output->buffer[output->pos++] = ch;
+      output->length++;
       return ch;
     case STREAM_TYPE_STRING:
       return EOF;
@@ -254,10 +281,10 @@ int stream_vprintf(Stream *output, const char *format, va_list va) {
       va_end(va2);
       break;
     case STREAM_TYPE_BUFFER:
-      size = output->length - output->pos;
+      size = output->capacity - output->pos;
       if (size <= 0) {
-        output->buffer = resize_buffer(output->buffer, output->length, output->length + 100);
-        output->length += 100;
+        output->buffer = resize_buffer(output->buffer, output->capacity, output->capacity + 100);
+        output->capacity += 100;
       }
       while (1) {
         char *dest = output->buffer + output->pos;
@@ -269,11 +296,12 @@ int stream_vprintf(Stream *output, const char *format, va_list va) {
         }
         if (n < size) {
           output->pos += n;
+          output->length += n;
           break;
         }
         size = n + 1;
-        output->buffer = resize_buffer(output->buffer, output->length, size + output->pos);
-        output->length = size + output->pos;
+        output->buffer = resize_buffer(output->buffer, output->capacity, size + output->pos);
+        output->capacity = size + output->pos;
       }
       break;
     case STREAM_TYPE_STRING:
@@ -295,7 +323,7 @@ char *string_vprintf(const char *format, va_list va) {
   size_t size = 32;
   char *buffer = (char *)malloc(size);
   va_list va2;
-  Stream *stream = stream_buffer(buffer, size);
+  Stream *stream = stream_buffer(buffer, size, 0);
   va_copy(va2, va);
   stream_vprintf(stream, format, va2);
   va_end(va2);

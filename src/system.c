@@ -3,6 +3,7 @@
 
 #include "runtime/value.h"
 #include "runtime/error.h"
+#include "runtime/validate.h"
 #include "util/stream.h"
 #include "write.h"
 
@@ -251,7 +252,7 @@ static NseVal open_stream(NseVal args) {
   return undefined;
 }
 
-static NseVal stream_write(NseVal args) {
+static NseVal stream_write_(NseVal args) {
   ARG_POP_TYPE(String *, str, args, to_string, "a string");
   ARG_POP_REF(Stream *, f, args, stream_type);
   ARG_DONE(args);
@@ -279,6 +280,29 @@ static NseVal get_list_type(NseVal args) {
   return TYPE(get_unary_instance(copy_generic(list_type), copy_type(type_a)));
 }
 
+static NseVal construct_string(NseVal args) {
+  size_t size = 32;
+  char *buffer = (char *)malloc(size);
+  Stream *stream = stream_buffer(buffer, 32, 0);
+  if (!stream) {
+    raise_error(out_of_memory_error, "could not allocate stream");
+    return undefined;
+  }
+  NseVal elem;
+  while (accept_elem_any(&args, &elem)) {
+    String *s = to_string(elem);
+    if (s) {
+      stream_write(s->chars, 1, s->length, stream);
+    } else {
+      nse_write(elem, stream, NULL);
+    }
+  }
+  String *result = create_string(stream_get_content(stream), stream_get_size(stream));
+  free(stream_get_content(stream));
+  stream_close(stream);
+  return check_alloc(STRING(result));
+}
+
 Module *get_system_module() {
   Module *system = create_module("system");
   module_ext_define(system, "+", FUNC(sum, 0, 1));
@@ -290,6 +314,7 @@ Module *get_system_module() {
   module_ext_define(system, "symbol-name", FUNC(symbol_name, 1, 0));
   module_ext_define(system, "symbol-module", FUNC(symbol_module, 1, 0));
   module_ext_define(system, "module-symbols", FUNC(module_symbols, 1, 0));
+  module_ext_define(system, "string", FUNC(construct_string, 0, 0));
   module_ext_define(system, "byte-length", FUNC(byte_length, 1, 0));
   module_ext_define(system, "byte-at", FUNC(byte_at, 2, 0));
   Symbol *elem_at_symbol = module_extern_symbol(system, "elem-at");
@@ -303,7 +328,7 @@ Module *get_system_module() {
   module_ext_define(system, "is-a", FUNC(is_a, 2, 0));
   module_ext_define(system, "type-of", FUNC(type_of, 1, 0));
   module_ext_define(system, "open", FUNC(open_stream, 2, 0));
-  module_ext_define(system, "stream-write", FUNC(stream_write, 2, 0));
+  module_ext_define(system, "stream-write", FUNC(stream_write_, 2, 0));
   module_ext_define(system, "stream-read", FUNC(stream_read_, 2, 0));
   NseVal stdin_val = REFERENCE(create_reference(stream_type, stdin_stream, void_destructor));
   NseVal stdout_val = REFERENCE(create_reference(stream_type, stdout_stream, void_destructor));

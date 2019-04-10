@@ -4,7 +4,7 @@
 (in-module :system)
 
 ;;; stdio
-(export 'print 'println 'get-char)
+(export 'print 'println 'get-byte)
 
 (def (print str &key (to *stdout*))
      "Prints str to standard output"

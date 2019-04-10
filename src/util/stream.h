@@ -26,7 +26,7 @@ Stream *stream_stderr();
 /* Open a file as a stream (see fopen()). */
 Stream *stream_file(const char *filename, const char *mode);
 /* Open a buffer as a stream. */
-Stream *stream_buffer(char *buffer, size_t length);
+Stream *stream_buffer(char *buffer, size_t initial_capacity, size_t length);
 /* Open a nul-terminated string as a stream */
 Stream *stream_string(const char *string);
 /* Get buffer content (only for buffer streams). */
@@ -44,6 +44,8 @@ int stream_getc(Stream *input);
 void stream_ungetc(int c, Stream *input);
 /* Check for EOF (see feof()). */
 int stream_eof(Stream *input);
+/* Write to stream (see fwrite()(). */
+size_t stream_write(const void *ptr, size_t size, size_t nmemb, Stream *stream);
 /* Write a character (see fputc()). */
 int stream_putc(int c, Stream *output);
 /* Print to stream (see vfprintf()) */
