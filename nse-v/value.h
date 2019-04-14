@@ -17,6 +17,7 @@ typedef struct Type Type;
 
 typedef struct Vector Vector;
 typedef struct VectorSlice VectorSlice;
+typedef struct List List;
 typedef struct String String;
 typedef struct Quote Quote;
 typedef struct WeakRef WeakRef;
@@ -28,7 +29,7 @@ typedef struct Syntax Syntax;
 
 enum {
   /* Object type bit */
-  VALUE_OBJECT = 0x10
+  VALUE_OBJECT = 0x20
 };
 
 /* Types of values in NSE. */
@@ -56,28 +57,30 @@ typedef enum {
   VALUE_ARRAY        = VALUE_OBJECT | 0x03,
   /* Slice of array */
   VALUE_ARRAY_SLICE  = VALUE_OBJECT | 0x04,
+  /* Immutable linked list */
+  VALUE_LIST         = VALUE_OBJECT | 0x05,
   /* Byte array */
-  VALUE_STRING       = VALUE_OBJECT | 0x05,
+  VALUE_STRING       = VALUE_OBJECT | 0x06,
   /* Quote */
-  VALUE_QUOTE        = VALUE_OBJECT | 0x06,
+  VALUE_QUOTE        = VALUE_OBJECT | 0x07,
   /* Type quote */
-  VALUE_TYPE_QUOTE   = VALUE_OBJECT | 0x07,
+  VALUE_TYPE_QUOTE   = VALUE_OBJECT | 0x08,
   /* Weak reference */
-  VALUE_WEAK_REF     = VALUE_OBJECT | 0x08,
+  VALUE_WEAK_REF     = VALUE_OBJECT | 0x09,
   /* Symbol */
-  VALUE_SYMBOL       = VALUE_OBJECT | 0x09,
+  VALUE_SYMBOL       = VALUE_OBJECT | 0x0a,
   /* Keyword */
-  VALUE_KEYWORD      = VALUE_OBJECT | 0x0A,
+  VALUE_KEYWORD      = VALUE_OBJECT | 0x0B,
   /* Instance of user-defined data type */
-  VALUE_DATA         = VALUE_OBJECT | 0x0B,
+  VALUE_DATA         = VALUE_OBJECT | 0x0C,
   /* Syntax wrapper with positional information */
-  VALUE_SYNTAX       = VALUE_OBJECT | 0x0C,
+  VALUE_SYNTAX       = VALUE_OBJECT | 0x0D,
   /* Function and closure */
-  VALUE_CLOSURE      = VALUE_OBJECT | 0x0D,
+  VALUE_CLOSURE      = VALUE_OBJECT | 0x0E,
   /* Pointer to non-NSE object */
-  VALUE_POINTER      = VALUE_OBJECT | 0x0E,
+  VALUE_POINTER      = VALUE_OBJECT | 0x0F,
   /* A type */
-  VALUE_TYPE         = VALUE_OBJECT | 0x0F,
+  VALUE_TYPE         = VALUE_OBJECT | 0x10,
 } ValueType;
 
 /* Value structure */
@@ -105,6 +108,9 @@ extern Value unit;
 
 /* Create function pointer value */
 #define FUNC(f) ((Value){ .type = VALUE_FUNC, .func = (f) })
+
+/* Get name of value type */
+const char *value_type_name(ValueType type);
 
 /* Object structure */
 struct Object {
@@ -179,6 +185,26 @@ struct VectorSlice {
 
 /* Allocate a vector slice */
 VectorSlice *create_vector_slice(Vector *parent, size_t offset, size_t length);
+
+
+
+/* Linked lists */
+
+/* Linked list node */
+struct List {
+  Object header;
+  Value head;
+  List *tail;
+};
+
+/* Convert List * to Value */
+#define LIST(v) ((Value){ .type = VALUE_LIST, .object = (Object *)(v) })
+
+/* Convert Value to List * */
+#define TO_LIST(val) ((List *)(val).object)
+
+/* Allocate a list node */
+List *create_list(Value head, List *tail);
 
 
 
@@ -380,6 +406,9 @@ struct Syntax {
 
 /* Create syntax object */
 Syntax *create_syntax(Value value);
+
+/* Recursively remove syntax annotations */
+Value syntax_to_datum(Value v);
 
 
 

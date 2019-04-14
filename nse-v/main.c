@@ -16,6 +16,7 @@
 #include "module.h"
 #include "read.h"
 #include "write.h"
+#include "eval.h"
 
 const char *short_options = "hvc:n";
 
@@ -250,8 +251,14 @@ int main(int argc, char *argv[]) {
     Value code = check_alloc(SYNTAX(nse_read(reader)));
     int error = 0;
     if (RESULT_OK(code)) {
-      nse_write(code, stdout_stream, user_module);
+      Value result = eval(copy_value(code), current_scope);
       delete_value(code);
+      if (RESULT_OK(result)) {
+        nse_write(result, stdout_stream, user_module);
+        delete_value(result);
+      } else {
+        error = 1;
+      }
     } else {
       error = 1;
     }
@@ -271,8 +278,27 @@ int main(int argc, char *argv[]) {
         size_t current_line, current_column;
         get_reader_position(reader, &file_name, &current_line, &current_column);
         print_error_line(line_history, file_name, current_line, current_column, current_line, current_column);
+      } else if (error_form != NULL) {
+        Value datum = syntax_to_datum(copy_value(error_form->quoted));
+        printf(": ");
+        nse_write(datum, stdout_stream, user_module);
+        delete_value(datum);
+        print_error_line(line_history, error_form->file, error_form->start_line, error_form->start_column, error_form->end_line, error_form->end_column);
+      }
+      List *trace = get_stack_trace();
+      if (trace) {
+        printf("\nStack trace:");
+        for (; trace; trace = trace->tail) {
+          Syntax *syntax = TO_SYNTAX(TO_VECTOR(trace->head)->cells[2]);
+          printf("\n  %s:%zd:%zd", TO_C_STRING(syntax->file), syntax->start_line, syntax->start_column);
+          Value datum = syntax_to_datum(copy_value(syntax->quoted));
+          printf(": ");
+          nse_write(datum, stdout_stream, user_module);
+          delete_value(datum);
+        }
       }
       clear_error();
+      clear_stack_trace();
     }
     close_reader(reader);
     free(input);

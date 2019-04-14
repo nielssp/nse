@@ -176,9 +176,10 @@ Value scope_get(Scope *scope, Symbol *symbol) {
   if (scope->symbol) {
     if (scope->symbol == symbol) {
       if (!RESULT_OK(scope->binding->value)) {
-        raise_error(name_error, "undefined name: %s", symbol->name->bytes);
+        raise_error(name_error, "undefined name: %s", TO_C_STRING(symbol->name));
       }
-      return scope->binding->value;
+      delete_value(SYMBOL(symbol));
+      return copy_value(scope->binding->value);
     }
     if (scope->next) {
       return scope_get(scope->next, symbol);
@@ -195,10 +196,12 @@ Value scope_get(Scope *scope, Symbol *symbol) {
         break;
     }
     if (value) {
-      return *value;
+      delete_value(SYMBOL(symbol));
+      return copy_value(*value);
     }
   }
-  raise_error(name_error, "undefined name: %s", symbol->name->bytes);
+  raise_error(name_error, "undefined name: %s", TO_C_STRING(symbol->name));
+  delete_value(SYMBOL(symbol));
   return undefined;
 }
 
@@ -206,10 +209,12 @@ Value scope_get_macro(Scope *scope, Symbol *symbol) {
   if (symbol->module) {
     Value *value = namespace_lookup(symbol->module->macro_defs, symbol);
     if (value) {
-      return *value;
+      delete_value(SYMBOL(symbol));
+      return copy_value(*value);
     }
   }
-  raise_error(name_error, "undefined macro");
+  raise_error(name_error, "undefined macro: %s", TO_C_STRING(symbol->name));
+  delete_value(SYMBOL(symbol));
   return undefined;
 }
 
@@ -217,10 +222,12 @@ Value get_read_macro(Symbol *symbol) {
   if (symbol->module) {
     Value *value = namespace_lookup(symbol->module->read_macro_defs, symbol);
     if (value) {
-      return *value;
+      delete_value(SYMBOL(symbol));
+      return copy_value(*value);
     }
   }
-  raise_error(name_error, "undefined read macro: %s", symbol->name->bytes);
+  raise_error(name_error, "undefined read macro: %s", TO_C_STRING(symbol->name));
+  delete_value(SYMBOL(symbol));
   return undefined;
 }
 

@@ -131,6 +131,13 @@ Value nse_write(const Value value, Stream *stream, Module *module) {
     case VALUE_ARRAY:
     case VALUE_ARRAY_SLICE:
       return undefined;
+    case VALUE_LIST:
+      stream_printf(stream, "(list ");
+      for (const List *l = TO_LIST(value); l; l = l->tail) {
+        nse_write(l->head, stream, module);
+      }
+      stream_printf(stream, ")");
+      break;
     case VALUE_STRING: {
       const String *string = TO_STRING(value);
       stream_printf(stream, "\"");

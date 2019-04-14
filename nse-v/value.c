@@ -14,6 +14,34 @@
 Value undefined = (Value){ .type = VALUE_UNDEFINED, .object = NULL };
 Value unit = (Value){ .type = VALUE_UNIT, .object = NULL };
 
+const char *value_type_name(ValueType type) {
+  switch (type) {
+    case VALUE_UNDEFINED: return "undefined";
+    case VALUE_UNIT: return "unit";
+    case VALUE_I64: return "i64";
+    case VALUE_F64: return "f64";
+    case VALUE_FUNC: return "func";
+
+    case VALUE_VECTOR: return "vector";
+    case VALUE_VECTOR_SLICE: return "vector-slice";
+    case VALUE_ARRAY: return "array";
+    case VALUE_ARRAY_SLICE: return "array-slice";
+    case VALUE_LIST: return "list";
+    case VALUE_STRING: return "string";
+    case VALUE_QUOTE: return "quote";
+    case VALUE_TYPE_QUOTE: return "type-quote";
+    case VALUE_WEAK_REF: return "weak-ref";
+    case VALUE_SYMBOL: return "symbol";
+    case VALUE_KEYWORD: return "keyword";
+    case VALUE_DATA: return "data";
+    case VALUE_SYNTAX: return "syntax";
+    case VALUE_CLOSURE: return "closure";
+    case VALUE_POINTER: return "pointer";
+    case VALUE_TYPE: return "type";
+    default: return "???";
+  }
+}
+
 /* Object allocation */
 
 void *allocate_object(size_t size) {
@@ -61,6 +89,12 @@ void delete_value(Value val) {
       }
       case VALUE_VECTOR_SLICE:
         delete_value(VECTOR(TO_VECTOR_SLICE(val)->vector));
+        break;
+      case VALUE_LIST:
+        delete_value(TO_LIST(val)->head);
+        if (TO_LIST(val)->tail) {
+          delete_value(LIST(TO_LIST(val)->tail));
+        }
         break;
       case VALUE_STRING:
         break;
@@ -162,6 +196,20 @@ VectorSlice *create_vector_slice(Vector *parent, size_t offset, size_t length) {
   vector_slice->vector = parent;
   vector_slice->cells = parent->cells + offset;;
   return vector_slice;
+}
+
+/* List allocation */
+
+List *create_list(Value head, List *tail) {
+  List *list = allocate_object(sizeof(List));
+  if (!list) {
+    delete_value(head);
+    delete_value(LIST(tail));
+    return NULL;
+  }
+  list->head = head;
+  list->tail = tail;
+  return list;
 }
 
 /* String allocation */
@@ -291,3 +339,32 @@ Syntax *create_syntax(Value quoted) {
   return syntax;
 }
 
+Value syntax_to_datum(Value v) {
+  Value result;
+  switch (v.type) {
+    case VALUE_SYNTAX:
+      result = syntax_to_datum(copy_value(TO_SYNTAX(v)->quoted));
+      delete_value(v);
+      return result;
+    case VALUE_VECTOR: {
+      Vector *vector = TO_VECTOR(v);
+      Vector *copy = create_vector(vector->length);
+      for (int i = 0; i < vector->length; i++) {
+        copy->cells[i] = syntax_to_datum(copy_value(vector->cells[i]));
+      }
+      delete_value(VECTOR(vector));
+      return VECTOR(copy);
+    }
+    case VALUE_QUOTE: {
+      Value quoted = syntax_to_datum(copy_value(TO_QUOTE(v)->quoted));
+      delete_value(v);
+      if (RESULT_OK(quoted)) {
+        return check_alloc(QUOTE(create_quote(quoted)));
+      }
+      delete_value(quoted);
+      return undefined;
+    }
+    default:
+      return v;
+  }
+}

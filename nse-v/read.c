@@ -327,7 +327,7 @@ Syntax *nse_read(Reader *input) {
     }
     return nse_read(input);
   }
-  if (c == '.' || c == ')') {
+  if (c == ')') {
     raise_error(syntax_error, "unexpected '%c'");
     pop(input);
     return NULL;
