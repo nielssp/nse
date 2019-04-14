@@ -370,24 +370,24 @@ static int split_symbol_name(const String *s, String **module_name, String **sym
 }
 
 Symbol *find_symbol(const String *s) {
+  Symbol *result = NULL;
   String *module_name, *symbol_name;
   if (split_symbol_name(s, &module_name, &symbol_name)) {
     Module *module = find_module(module_name);
-    delete_value(STRING(module_name));
     if (module) {
       Symbol *value = symmap_lookup(module->external, symbol_name);
       if (value) {
-        delete_value(STRING(symbol_name));
-        return copy_object(value);
+        result = copy_object(value);
       } else {
-        raise_error(name_error, "module %s has no external symbol with name: %s", module->name->bytes, symbol_name->bytes);
+        raise_error(name_error, "module %s has no external symbol with name: %s", TO_C_STRING(module_name), TO_C_STRING(symbol_name));
       }
     } else {
-      raise_error(name_error, "could not find module: %s", module_name);
+      raise_error(name_error, "could not find module: %s", TO_C_STRING(module_name));
     }
+    delete_value(STRING(module_name));
     delete_value(STRING(symbol_name));
   }
-  return NULL;
+  return result;
 }
 
 Symbol *module_extern_symbol(Module *module, String *s) {

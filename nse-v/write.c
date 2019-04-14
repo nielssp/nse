@@ -179,10 +179,12 @@ Value nse_write(const Value value, Stream *stream, Module *module) {
       Symbol *symbol = TO_SYMBOL(value);
       if (module) {
         Symbol *internal = module_find_internal(module, symbol->name);
-        delete_value(SYMBOL(internal));
-        if (internal == symbol) {
-          stream_printf(stream, "%s", TO_C_STRING(internal->name));
-          break;
+        if (internal) {
+          delete_value(SYMBOL(internal));
+          if (internal == symbol) {
+            stream_printf(stream, "%s", TO_C_STRING(internal->name));
+            break;
+          }
         }
       }
       if (symbol->module) { 

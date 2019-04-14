@@ -372,6 +372,7 @@ Syntax *nse_read(Reader *input) {
         Syntax *s = read_symbol(input, SYMBOL_UNINTERNED);
         if (s) {
           syntax->quoted = s->quoted;
+          s->quoted = undefined;
           delete_syntax(s);
           return end_pos(syntax, input);
         }
