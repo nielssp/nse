@@ -272,6 +272,96 @@ Value check_alloc(Value v) {
   return v;
 }
 
+/* Slices */
+
+Slice to_slice(Value sequence) {
+  Slice slice;
+  slice.sequence = sequence;
+  switch (sequence.type) {
+    case VALUE_VECTOR: {
+      Vector *v = TO_VECTOR(sequence);
+      slice.length = v->length;
+      slice.cells = v->cells;
+      break;
+    }
+    case VALUE_VECTOR_SLICE: {
+      VectorSlice *v = TO_VECTOR_SLICE(sequence);
+      slice.sequence = copy_value(VECTOR(v->vector));
+      slice.length = v->length;
+      slice.cells = v->cells;
+      delete_value(sequence);
+      break;
+    }
+    default:
+      slice.length = 1;
+      slice.cells = &slice.sequence;
+      break;
+  }
+  return slice;
+}
+
+Slice slice(Value sequence, size_t offset, size_t length) {
+  Slice slice;
+  slice.sequence = sequence;
+  slice.length = length;
+  switch (sequence.type) {
+    case VALUE_VECTOR: {
+      Vector *v = TO_VECTOR(sequence);
+      slice.cells = v->cells + offset;
+      break;
+    }
+    case VALUE_VECTOR_SLICE: {
+      VectorSlice *v = TO_VECTOR_SLICE(sequence);
+      slice.sequence = copy_value(VECTOR(v->vector));
+      slice.cells = v->cells + offset;
+      delete_value(sequence);
+      break;
+    }
+    default:
+      slice.length = 1;
+      slice.cells = &slice.sequence;
+      break;
+  }
+  return slice;
+}
+
+Slice slice_slice(Slice slice, size_t offset, size_t length) {
+  slice.cells += offset;
+  slice.length = length;
+  return slice;
+}
+
+Value slice_to_value(Slice slice) {
+  switch (slice.sequence.type) {
+    case VALUE_VECTOR: {
+      Vector *v = TO_VECTOR(slice.sequence);
+      if (slice.length == v->length && slice.cells == v->cells) {
+        return VECTOR(v);
+      }
+      return VECTOR_SLICE(create_vector_slice(v, slice.cells - v->cells, slice.length));
+    }
+    case VALUE_VECTOR_SLICE: {
+      VectorSlice *v = TO_VECTOR_SLICE(slice.sequence);
+      if (slice.length == v->length && slice.cells == v->cells) {
+        return VECTOR_SLICE(v);
+      }
+      return VECTOR_SLICE(slice_vector_slice(v, slice.cells - v->cells, slice.length));
+    }
+    default:
+      return slice.sequence;
+  }
+}
+
+Slice copy_slice(Slice slice) {
+  copy_value(slice.sequence);
+  return slice;
+}
+
+void delete_slice(Slice slice) {
+  delete_value(slice.sequence);
+}
+
+
 /* Vector allocation */
 
 Vector *create_vector(size_t length) {
@@ -410,14 +500,14 @@ Symbol *create_symbol(String *name, Module *module) {
 
 /* Data allocation */
 
-Data *create_data(Type *type, Symbol *tag, Value fields[], size_t size) {
+Data *create_data(Type *type, Symbol *tag, Value const fields[], size_t size) {
   Data *data = allocate_object(sizeof(Data) + size * sizeof(Value));
   if (!data) {
     delete_type(type);
     delete_value(SYMBOL(tag));
     return NULL;
   }
-  data->type =type;
+  data->type = type;
   data->tag = tag;
   data->size = size;
   if (size > 0) {
@@ -431,13 +521,39 @@ Data *create_data(Type *type, Symbol *tag, Value fields[], size_t size) {
 
 /* Closure allocation */
 
-Closure *create_closure(ClosureFunc f, Value env[], size_t env_size);
+Closure *create_closure(ClosureFunc f, Value const env[], size_t env_size) {
+  Closure *closure = allocate_object(sizeof(Closure) + env_size * sizeof(Value));
+  if (!closure) {
+    return NULL;
+  }
+  closure->f = f;
+  closure->env_size = env_size;
+  if (env_size > 0) {
+    memcpy(closure->env, env, env_size * sizeof(Value));
+    for (size_t i = 0; i < env_size; i++) {
+      copy_value(env[i]);
+    }
+  }
+  return closure;
+}
 
 /* Pointer allocation */
 
-Pointer *create_pointer(Type *type, void *pointer, Destructor destructor);
+Pointer *create_pointer(Type *type, void *pointer, Destructor destructor) {
+  Pointer *p = allocate(sizeof(Pointer));
+  if (!p) {
+    delete_type(type);
+    destructor(pointer);
+    return NULL;
+  }
+  p->type = type;
+  p->pointer = pointer;
+  p->destructor = destructor;
+  return p;
+}
 
-void void_destructor(void *p);
+void void_destructor(void *p) {
+}
 
 /* Syntax allocation */
 

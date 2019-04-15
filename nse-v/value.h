@@ -11,6 +11,7 @@
 
 typedef struct Value Value;
 typedef struct Object Object;
+typedef struct Slice Slice;
 
 typedef struct Module Module;
 typedef struct Type Type;
@@ -154,9 +155,23 @@ Value check_alloc(Value v);
 /* Evaluates next if previous is not NULL */
 #define THENP(previous, next) ((previous) ? (next) : NULL)
 
+/* Generic stack allocated slices */
+
+struct Slice {
+  Value sequence;
+  size_t length;
+  Value *cells;
+};
+
+Slice to_slice(Value sequence);
+Slice slice(Value sequence, size_t offset, size_t length);
+Slice slice_slice(Slice slice, size_t offset, size_t length);
+Value slice_to_value(Slice slice);
+Slice copy_slice(Slice slice);
+void delete_slice(Slice slice);
+
 
 /* Vectors */
-
 
 /* Vector object */
 struct Vector {
@@ -346,7 +361,7 @@ struct Data {
 #define TO_DATA(val) ((Data *)(val).object)
 
 /* Create data */
-Data *create_data(Type *type, Symbol *tag, Value fields[], size_t size);
+Data *create_data(Type *type, Symbol *tag, Value const fields[], size_t size);
 
 
 
@@ -369,7 +384,7 @@ struct Closure {
 #define TO_CLOSURE(val) ((Closure *)(val).object)
 
 /* Create a closure */
-Closure *create_closure(ClosureFunc f, Value env[], size_t env_size);
+Closure *create_closure(ClosureFunc f, Value const env[], size_t env_size);
 
 
 
@@ -394,7 +409,7 @@ struct Pointer {
 /* Create a pointer */
 Pointer *create_pointer(Type *type, void *pointer, Destructor destructor);
 
-/* Default destructor that simply frees the block pointed to by p */
+/* Empty destructor */
 void void_destructor(void *p);
 
 

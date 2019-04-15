@@ -208,7 +208,7 @@ Reference *create_reference(CType *type, void *pointer, void destructor(void *))
   return reference;
 }
 
-void void_destructor(void * p) {
+void void_destructor(void *p) {
 }
 
 Data *create_data(CType *type, Symbol *tag, NseVal record[], size_t record_size) {

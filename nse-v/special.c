@@ -7,6 +7,7 @@
 #include "error.h"
 #include "eval.h"
 #include "arg.h"
+#include "type.h"
 
 #include "special.h"
 
@@ -43,7 +44,8 @@ Value eval_let(VectorSlice *args, Scope *scope) {
         Vector *def = TO_VECTOR(syntax_get(defs->cells[i]));
         if (def->length == 2) {
           if (syntax_is(def->cells[0], VALUE_SYMBOL)) {
-            let_scope = scope_push(let_scope, TO_SYMBOL(copy_value(syntax_get(def->cells[0]))), undefined);
+            let_scope = scope_push(let_scope,
+                TO_SYMBOL(copy_value(syntax_get(def->cells[0]))), undefined);
           }
           continue;
         }
@@ -67,7 +69,8 @@ Value eval_let(VectorSlice *args, Scope *scope) {
           if (assignment.type == VALUE_CLOSURE) {
             // TODO: optimize
           }
-          scope_set(let_scope, TO_SYMBOL(copy_value(syntax_get(pattern))), assignment, 0);
+          scope_set(let_scope, TO_SYMBOL(copy_value(syntax_get(pattern))),
+              assignment, 0);
         } else if (!match_pattern(&let_scope, copy_value(pattern), assignment)) {
           ok = 0;
           break;
@@ -75,7 +78,9 @@ Value eval_let(VectorSlice *args, Scope *scope) {
       }
       if (ok) {
         // 3. Evaluate block
-        result = eval_block(slice_vector_slice(copy_object(args), 1, args->length - 1), let_scope);
+        result = eval_block(
+            slice_vector_slice(copy_object(args), 1, args->length - 1),
+            let_scope);
       }
     }
     scope_pop_until(let_scope, scope);
@@ -86,6 +91,7 @@ Value eval_let(VectorSlice *args, Scope *scope) {
   return result;
 }
 
+/* (match EXPR {(PATTERN {EXPR})}) */
 Value eval_match(VectorSlice *args, Scope *scope) {
   Value result = undefined;
   if (args->length >= 1) {
@@ -97,8 +103,11 @@ Value eval_match(VectorSlice *args, Scope *scope) {
           Vector *v = TO_VECTOR(syntax_get(args->cells[i]));
           if (v->length >= 1) {
             Scope *case_scope = scope;
-            if (match_pattern(&case_scope, copy_value(v->cells[0]), copy_value(value))) {
-              result = eval_block(create_vector_slice(copy_object(v), 1, v->length - 1), case_scope);
+            if (match_pattern(&case_scope, copy_value(v->cells[0]),
+                  copy_value(value))) {
+              result = eval_block(
+                  create_vector_slice(copy_object(v), 1, v->length - 1),
+                  case_scope);
               scope_pop_until(case_scope, scope);
               no_match = 0;
               break;
@@ -125,7 +134,23 @@ Value eval_match(VectorSlice *args, Scope *scope) {
   return result;
 }
 
-Value eval_fn(VectorSlice *args, Scope *scope);
+static Value eval_anon(Value args, Closure *closure) {
+  Value definition = closure->env[0];
+  Scope *scope = TO_POINTER(closure->env[1])->pointer;
+  // TODO
+  return undefined;
+}
+
+Value eval_fn(VectorSlice *args, Scope *scope) {
+  Scope *fn_scope = copy_scope(scope);
+  Value result = undefined;
+  Value scope_ptr = check_alloc(POINTER(create_pointer(copy_type(scope_type), fn_scope, (Destructor) delete_scope)));
+  if (RESULT_OK(scope_ptr)) {
+    Value env[] = {VECTOR_SLICE(args), scope_ptr};
+    // TODO
+  }
+  return undefined;
+}
 
 Value eval_try(VectorSlice *args, Scope *scope);
 

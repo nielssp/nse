@@ -7,6 +7,7 @@
 #include "eval.h"
 #include "lang.h"
 #include "validate.h"
+#include "type.h"
 
 #include "arg.h"
 
@@ -345,4 +346,52 @@ int assign_parameters(Scope **scope, VectorSlice *formal, VectorSlice *actual) {
   delete_value(VECTOR_SLICE(formal));
   delete_value(VECTOR_SLICE(actual));
   return ok;
+}
+
+Type *parameters_to_type(VectorSlice *formal) {
+  int ok = 1;
+  int min_arity = 0;
+  int optional = 0;
+  int key = 0;
+  int variadic = 0;
+  for (size_t i = 0; ok && i < formal->length; i++) {
+    Symbol *symbol;
+    if (validate(formal->cells[i], V_SYMBOL(&symbol))) {
+      if (symbol == key_keyword) {
+        key = 1;
+        break;
+      } else if (symbol == opt_keyword) {
+        for ( ; i < formal->length; i++) {
+          if (!syntax_is(formal->cells[i], VALUE_VECTOR)) {
+            if (validate(formal->cells[i], V_SYMBOL(&symbol))) {
+              if (symbol == key_keyword) {
+                key = 1;
+                break;
+              } else if (symbol == rest_keyword) {
+                variadic = 1;
+                break;
+              }
+            } else {
+              ok = 0;
+              break;
+            }
+          }
+          optional++;
+        }
+        break;
+      } else if (symbol == rest_keyword) {
+        variadic = 1;
+        break;
+      } else if (symbol == match_keyword) {
+        i++;
+      }
+    } else {
+      ok = 0;
+    }
+  }
+  delete_value(VECTOR_SLICE(formal));
+  if (!ok) {
+    return NULL;
+  }
+  return get_func_type(min_arity, variadic || key || optional);
 }
