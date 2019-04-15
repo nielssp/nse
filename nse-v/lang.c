@@ -38,6 +38,8 @@ Symbol *read_bind_symbol = NULL;
 Symbol *read_return_symbol = NULL;
 Symbol *read_ignore_symbol = NULL;
 
+Symbol *ellipsis_symbol = NULL;
+
 Symbol *key_keyword = NULL;
 Symbol *opt_keyword = NULL;
 Symbol *rest_keyword = NULL;
@@ -82,6 +84,8 @@ void init_lang_module() {
   read_bind_symbol = module_extern_symbol_c(lang_module, "read-bind");
   read_return_symbol = module_extern_symbol_c(lang_module, "read-return");
   read_ignore_symbol = module_extern_symbol_c(lang_module, "read-ignore");
+
+  ellipsis_symbol = module_extern_symbol_c(lang_module, "...");
 
   key_keyword = module_extern_symbol_c(lang_module, "&key");
   opt_keyword = module_extern_symbol_c(lang_module, "&opt");

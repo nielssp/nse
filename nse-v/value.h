@@ -121,7 +121,7 @@ typedef enum {
 #define B_TO_EQ(b) ((b) ? EQ_EQUAL : EQ_NOT_EQUAL)
 
 /* Compare values a and b */
-Equality equals(Value a, Value b);
+Equality equals(const Value a, const Value b);
 
 /* Object structure */
 struct Object {
@@ -424,13 +424,13 @@ Syntax *create_syntax(Value value);
 Value syntax_to_datum(Value v);
 
 /* Check type of quoted value */
-int syntax_is(Value syntax, ValueType type);
+int syntax_is(const Value syntax, ValueType type);
 
 /* Check quoted value for equality */
-Equality syntax_equals(Value syntax, Value other);
+Equality syntax_equals(const Value syntax, const Value other);
 
 /* Get quoted value */
-Value syntax_get(Value syntax);
+Value syntax_get(const Value syntax);
 
 
 /* Type */

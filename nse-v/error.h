@@ -22,8 +22,10 @@ extern Symbol *io_error;
 extern Symbol *syntax_error;
 
 extern Syntax *error_form;
+extern size_t error_arg_index;
 
 void init_error_module();
+/* copies error_type */
 void raise_error(Symbol *error_type, const char *format, ...);
 const char *current_error();
 Symbol *current_error_type();
@@ -31,7 +33,8 @@ void clear_error();
 void *allocate(size_t bytes);
 
 void set_debug_form(Value form);
-Syntax *push_debug_form(Syntax *syntax);
+void set_debug_arg_index(size_t index);
+Syntax *push_debug_form(Value syntax);
 Value pop_debug_form(Value result, Syntax *previous);
 
 int stack_trace_push(Value func, Value args);

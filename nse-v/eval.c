@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: MIT
  * Copyright (c) 2019 Niels Sonnich Poulsen (http://nielssp.dk)
  */
-
 #include "value.h"
 #include "module.h"
 #include "error.h"
@@ -107,9 +106,9 @@ Value eval_vector(Vector *vector, Scope *scope) {
       result = eval_let(args, scope);
     } else if (s == do_symbol) {
       result = eval_block(args, scope);
-    /*} else if (s == match_symbol) {
+    } else if (s == match_symbol) {
       result = eval_match(args, scope);
-    } else if (s == fn_symbol) {
+    /*} else if (s == fn_symbol) {
       result = eval_fn(args, scope);
     } else if (s == try_symbol) {
       result = eval_try(args, scope);
@@ -153,15 +152,21 @@ Value eval_vector(Vector *vector, Scope *scope) {
   Value result = undefined;
   Value function = eval(operator, scope);
   if (RESULT_OK(function)) {
-    Value arg_values = eval_args(args, scope);
+    Value arg_values = eval_args(copy_object(args), scope);
     if (RESULT_OK(arg_values)) {
       result = apply(function, arg_values);
+      if (!RESULT_OK(result) && error_arg_index >= 0) {
+        if (error_arg_index < args->length) {
+          set_debug_form(args->cells[error_arg_index]);
+        } else {
+          set_debug_arg_index(-1);
+        }
+      }
     } else {
       delete_value(function);
     }
-  } else {
-    delete_value(VECTOR_SLICE(args));
   }
+  delete_value(VECTOR_SLICE(args));
   return result;
 }
 
@@ -190,7 +195,7 @@ Value eval(Value code, Scope *scope) {
     case VALUE_SYMBOL:
       return scope_get(scope, TO_SYMBOL(code));
     case VALUE_SYNTAX: {
-      Syntax *previous = push_debug_form(TO_SYNTAX(copy_value(code)));
+      Syntax *previous = push_debug_form(copy_value(code));
       Value result = eval(copy_value(TO_SYNTAX(code)->quoted), scope);
       delete_value(code);
       return pop_debug_form(result, previous);

@@ -277,7 +277,11 @@ int main(int argc, char *argv[]) {
       line_history = string_printf("%s", input);
     }
     if (error) {
-      printf(SGR_RED "error(%s):" SGR_RESET " %s", TO_C_STRING(current_error_type()->name), current_error());
+      if (current_error()) {
+        printf(SGR_RED "error(%s):" SGR_RESET " %s", TO_C_STRING(current_error_type()->name), current_error());
+      } else {
+        printf(SGR_RED "error:" SGR_RESET " unspecified error");
+      }
       if (!RESULT_OK(code)) {
         String *file_name;
         size_t current_line, current_column;

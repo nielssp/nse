@@ -23,6 +23,7 @@ static char *alloc_error = "out of memory: could not allocate enough space for e
 static char *error_string = NULL;
 static Symbol *error_symbol = NULL;
 Syntax *error_form = NULL;
+size_t error_arg_index = -1;
 List *stack_trace = NULL;
 
 void init_error_module() {
@@ -112,11 +113,19 @@ void set_debug_form(Value form) {
   } else {
     delete_value(form);
   }
+  error_arg_index = -1;
 }
 
-Syntax *push_debug_form(Syntax *syntax) {
+void set_debug_arg_index(size_t index) {
+  error_arg_index = index;
+}
+
+Syntax *push_debug_form(Value syntax) {
   Syntax *previous = error_form;
-  error_form = syntax;
+  if (syntax.type == VALUE_SYNTAX) {
+    error_form = TO_SYNTAX(syntax);
+  }
+  error_arg_index = -1;
   return previous;
 }
 

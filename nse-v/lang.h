@@ -44,6 +44,8 @@ extern Symbol *read_bind_symbol;
 extern Symbol *read_return_symbol;
 extern Symbol *read_ignore_symbol;
 
+extern Symbol *ellipsis_symbol;
+
 extern Symbol *key_keyword;
 extern Symbol *opt_keyword;
 extern Symbol *rest_keyword;

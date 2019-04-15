@@ -42,7 +42,7 @@ const char *value_type_name(ValueType type) {
   }
 }
 
-static Equality cells_equal(Value *a, size_t a_length, Value *b, size_t b_length) {
+static Equality cells_equal(const Value *a, size_t a_length, const Value *b, size_t b_length) {
   if (a_length != b_length) {
     return EQ_NOT_EQUAL;
   }
@@ -55,7 +55,7 @@ static Equality cells_equal(Value *a, size_t a_length, Value *b, size_t b_length
   return EQ_EQUAL;
 }
 
-Equality equals(Value a, Value b) {
+Equality equals(const Value a, const Value b) {
   if (a.type == VALUE_UNDEFINED || b.type == VALUE_UNDEFINED) {
     return EQ_ERROR;
   }
@@ -302,6 +302,9 @@ VectorSlice *create_vector_slice(Vector *parent, size_t offset, size_t length) {
 }
 
 VectorSlice *slice_vector_slice(VectorSlice *parent, size_t offset, size_t length) {
+  if (offset == 0 && length == parent->length) {
+    return parent;
+  }
   VectorSlice *vector_slice = allocate_object(sizeof(VectorSlice));
   if (vector_slice) {
     vector_slice->length = length;
@@ -483,18 +486,18 @@ Value syntax_to_datum(Value v) {
   }
 }
 
-int syntax_is(Value syntax, ValueType type) {
+int syntax_is(const Value syntax, ValueType type) {
   return syntax.type == type || (syntax.type == VALUE_SYNTAX && TO_SYNTAX(syntax)->quoted.type == type);
 }
 
-Equality syntax_equals(Value syntax, Value other) {
+Equality syntax_equals(const Value syntax, const Value other) {
   if (syntax.type == VALUE_SYNTAX) {
     return equals(TO_SYNTAX(syntax)->quoted, other);
   }
   return equals(syntax, other);
 }
 
-Value syntax_get(Value syntax) {
+Value syntax_get(const Value syntax) {
   if (syntax.type == VALUE_SYNTAX) {
     return TO_SYNTAX(syntax)->quoted;
   }
