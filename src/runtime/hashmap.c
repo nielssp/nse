@@ -36,8 +36,8 @@ HashMap *create_hash_map(HashFunc hash_code_func, EqualityFunc equals_func) {
   map->size = 0;
   map->capacity = 8;
   map->mask = map->capacity - 1;
-  map->upper_cap = map->capacity * 3 / 4;
-  map->lower_cap = map->capacity / 4;
+  map->upper_cap = map->capacity / 2;
+  map->lower_cap = map->capacity / 8;
   map->buckets = calloc(map->capacity, sizeof(Bucket));
   if (!map->buckets) {
     free(map);
@@ -95,8 +95,8 @@ static int hash_map_resize(HashMap *map, size_t new_capacity) {
     return 0;
   }
   map->mask = new_capacity - 1;
-  map->upper_cap = map->capacity * 3 / 4;
-  map->lower_cap = map->capacity / 4;
+  map->upper_cap = map->capacity / 2;
+  map->lower_cap = map->capacity / 8;
   for (int i = 0; i < old_capacity; i++) {
     if (old_buckets[i].defined && !old_buckets[i].deleted) {
       Hash hash_code = old_buckets[i].hash;

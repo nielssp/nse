@@ -93,3 +93,7 @@ void init_lang_module() {
   false_value = DATA(create_data(copy_type(bool_type), copy_object(false_symbol), NULL, 0));
   module_define(copy_object(false_symbol), false_value);
 }
+
+int is_true(const Value value) {
+  return value.object == true_value.object;
+}

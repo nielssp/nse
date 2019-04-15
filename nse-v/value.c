@@ -42,6 +42,108 @@ const char *value_type_name(ValueType type) {
   }
 }
 
+static Equality cells_equal(Value *a, size_t a_length, Value *b, size_t b_length) {
+  if (a_length != b_length) {
+    return EQ_NOT_EQUAL;
+  }
+  for (size_t i = 0; i < a_length; i++) {
+    Equality e = equals(a[i], b[i]);
+    if (e != EQ_EQUAL) {
+      return e;
+    }
+  }
+  return EQ_EQUAL;
+}
+
+Equality equals(Value a, Value b) {
+  if (a.type == VALUE_UNDEFINED || b.type == VALUE_UNDEFINED) {
+    return EQ_ERROR;
+  }
+  if (a.type != b.type) {
+    return EQ_NOT_EQUAL;
+  }
+  if (a.type & VALUE_OBJECT && a.object == b.object) {
+    return EQ_EQUAL;
+  }
+  switch (a.type) {
+    case VALUE_UNDEFINED:
+      return EQ_ERROR;
+    case VALUE_UNIT:
+      return EQ_EQUAL;
+    case VALUE_I64:
+      return B_TO_EQ(a.i64 == b.i64);
+    case VALUE_F64:
+      return B_TO_EQ(a.f64 == b.f64);
+    case VALUE_FUNC:
+      return EQ_NOT_EQUAL;
+
+
+    case VALUE_VECTOR: {
+      Vector *va = TO_VECTOR(a);
+      Vector *vb = TO_VECTOR(b);
+      return cells_equal(va->cells, va->length, vb->cells, vb->length);
+    }
+    case VALUE_VECTOR_SLICE: {
+      VectorSlice *va = TO_VECTOR_SLICE(a);
+      VectorSlice *vb = TO_VECTOR_SLICE(b);
+      return cells_equal(va->cells, va->length, vb->cells, vb->length);
+    }
+    case VALUE_ARRAY:
+      return EQ_ERROR;
+    case VALUE_ARRAY_SLICE:
+      return EQ_ERROR;
+    case VALUE_LIST: {
+      List *la = TO_LIST(a);
+      List *lb = TO_LIST(b);
+      while (la || lb) {
+        if (!la || !lb) {
+          return EQ_NOT_EQUAL;
+        }
+        Equality r = equals(la->head, lb->head);
+        if (r != EQ_EQUAL) {
+          return r;
+        }
+      }
+      return EQ_EQUAL;
+    }
+    case VALUE_STRING: {
+      String *sa = TO_STRING(a);
+      String *sb = TO_STRING(b);
+      if (sa->length != sb->length) {
+        return EQ_NOT_EQUAL;
+      }
+      return B_TO_EQ(memcmp(sa->bytes, sb->bytes, sa->length) == 0);
+    }
+    case VALUE_QUOTE:
+    case VALUE_TYPE_QUOTE:
+      return equals(TO_QUOTE(a)->quoted, TO_QUOTE(b)->quoted);
+    case VALUE_WEAK_REF:
+      return equals(TO_WEAK_REF(a)->value, TO_WEAK_REF(b)->value);
+    case VALUE_DATA: {
+      Data *da = TO_DATA(a);
+      Data *db = TO_DATA(b);
+      if (da == db) {
+        return EQ_EQUAL;
+      }
+      if (da->type != db->type) {
+        return EQ_NOT_EQUAL;
+      }
+      if (da->tag != db->tag) {
+        return EQ_NOT_EQUAL;
+      }
+      return cells_equal(da->fields, da->size, db->fields, db->size);
+    }
+    case VALUE_SYNTAX: {
+      // TODO
+      return EQ_NOT_EQUAL;
+    }
+    case VALUE_CLOSURE:
+      return EQ_NOT_EQUAL;
+    default:
+      return EQ_NOT_EQUAL;
+  }
+}
+
 /* Object allocation */
 
 void *allocate_object(size_t size) {
@@ -190,11 +292,23 @@ Vector *create_vector(size_t length) {
 VectorSlice *create_vector_slice(Vector *parent, size_t offset, size_t length) {
   VectorSlice *vector_slice = allocate_object(sizeof(VectorSlice));
   if (!vector_slice) {
+    delete_value(VECTOR(parent));
     return NULL;
   }
   vector_slice->length = length;
   vector_slice->vector = parent;
   vector_slice->cells = parent->cells + offset;;
+  return vector_slice;
+}
+
+VectorSlice *slice_vector_slice(VectorSlice *parent, size_t offset, size_t length) {
+  VectorSlice *vector_slice = allocate_object(sizeof(VectorSlice));
+  if (vector_slice) {
+    vector_slice->length = length;
+    vector_slice->vector = copy_object(parent->vector);
+    vector_slice->cells = parent->cells + offset;;
+  }
+  delete_value(VECTOR_SLICE(parent));
   return vector_slice;
 }
 
@@ -367,4 +481,22 @@ Value syntax_to_datum(Value v) {
     default:
       return v;
   }
+}
+
+int syntax_is(Value syntax, ValueType type) {
+  return syntax.type == type || (syntax.type == VALUE_SYNTAX && TO_SYNTAX(syntax)->quoted.type == type);
+}
+
+Equality syntax_equals(Value syntax, Value other) {
+  if (syntax.type == VALUE_SYNTAX) {
+    return equals(TO_SYNTAX(syntax)->quoted, other);
+  }
+  return equals(syntax, other);
+}
+
+Value syntax_get(Value syntax) {
+  if (syntax.type == VALUE_SYNTAX) {
+    return TO_SYNTAX(syntax)->quoted;
+  }
+  return syntax;
 }

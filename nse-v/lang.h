@@ -54,4 +54,6 @@ extern Value false_value;
 
 void init_lang_module();
 
+int is_true(const Value value);
+
 #endif

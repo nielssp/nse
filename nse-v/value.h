@@ -112,6 +112,17 @@ extern Value unit;
 /* Get name of value type */
 const char *value_type_name(ValueType type);
 
+typedef enum {
+  EQ_EQUAL,
+  EQ_NOT_EQUAL,
+  EQ_ERROR
+} Equality;
+
+#define B_TO_EQ(b) ((b) ? EQ_EQUAL : EQ_NOT_EQUAL)
+
+/* Compare values a and b */
+Equality equals(Value a, Value b);
+
 /* Object structure */
 struct Object {
   size_t refs;
@@ -186,6 +197,8 @@ struct VectorSlice {
 /* Allocate a vector slice */
 VectorSlice *create_vector_slice(Vector *parent, size_t offset, size_t length);
 
+/* Create a vector slice from another slice */
+VectorSlice *slice_vector_slice(VectorSlice *parent, size_t offset, size_t length);
 
 
 /* Linked lists */
@@ -410,6 +423,14 @@ Syntax *create_syntax(Value value);
 /* Recursively remove syntax annotations */
 Value syntax_to_datum(Value v);
 
+/* Check type of quoted value */
+int syntax_is(Value syntax, ValueType type);
+
+/* Check quoted value for equality */
+Equality syntax_equals(Value syntax, Value other);
+
+/* Get quoted value */
+Value syntax_get(Value syntax);
 
 
 /* Type */

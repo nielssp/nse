@@ -18,6 +18,11 @@
 #include "write.h"
 #include "eval.h"
 
+#define SGR_RESET "\001\033[0m\002"
+
+#define SGR_BOLD_GREEN "\001\033[1;32m\002"
+#define SGR_RED "\001\033[31m\002"
+
 const char *short_options = "hvc:n";
 
 const struct option long_options[] = {
@@ -232,7 +237,7 @@ int main(int argc, char *argv[]) {
   char *line_history = NULL;
 
   while (1) {
-    char *prompt = string_printf("\001\033[1;32m\002%s>\001\033[0m\002 ", TO_C_STRING(get_module_name(current_scope->module)));
+    char *prompt = string_printf(SGR_BOLD_GREEN "%s>" SGR_RESET " ", TO_C_STRING(get_module_name(current_scope->module)));
     char *input = readline(prompt);
     free(prompt);
     if (input == NULL) {
@@ -272,7 +277,7 @@ int main(int argc, char *argv[]) {
       line_history = string_printf("%s", input);
     }
     if (error) {
-      printf("error(%s): %s", TO_C_STRING(current_error_type()->name), current_error());
+      printf(SGR_RED "error(%s):" SGR_RESET " %s", TO_C_STRING(current_error_type()->name), current_error());
       if (!RESULT_OK(code)) {
         String *file_name;
         size_t current_line, current_column;

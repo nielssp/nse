@@ -64,9 +64,9 @@ void unload_modules() {
 Binding *create_binding(Value value) {
   Binding *binding = malloc(sizeof(Binding));
   binding->refs = 1;
-  binding->value = copy_value(value);
+  binding->value = value;
   binding->weak = 0;
-  return  binding;
+  return binding;
 }
 
 Binding *copy_binding(Binding *binding) {
@@ -76,9 +76,6 @@ Binding *copy_binding(Binding *binding) {
 
 void set_binding(Binding *binding, Value value, int weak) {
   Value old = binding->value;
-  if (!weak) {
-    copy_value(value);
-  }
   binding->weak = weak;
   binding->value = value;
   delete_value(old);
@@ -97,9 +94,6 @@ void delete_binding(Binding *binding) {
 
 Scope *scope_push(Scope *next, Symbol *symbol, Value value) {
   Scope *scope = malloc(sizeof(Scope));
-  if (symbol) {
-    copy_value(SYMBOL(symbol));
-  }
   scope->symbol = symbol;
   scope->binding = create_binding(value);
   scope->next = next;
@@ -162,6 +156,7 @@ void delete_scope(Scope *scope) {
 int scope_set(Scope *scope, Symbol *symbol, Value value, int weak) {
   if (scope->symbol) {
     if (scope->symbol == symbol) {
+      delete_value(SYMBOL(symbol));
       set_binding(scope->binding, value, weak);
       return 1;
     }
@@ -169,6 +164,8 @@ int scope_set(Scope *scope, Symbol *symbol, Value value, int weak) {
       return scope_set(scope->next, symbol, value, weak);
     }
   }
+  delete_value(SYMBOL(symbol));
+  delete_value(value);
   return 0;
 }
 
