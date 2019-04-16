@@ -15,22 +15,23 @@ Value apply(Value function, Slice args) {
   switch (function.type) {
     case VALUE_FUNC:
       if (!stack_trace_push(copy_value(function), copy_slice(args))) {
-        return undefined;
+        delete_slice(args);
+      } else {
+        result = function.func(args);
       }
-      result = function.func(args);
-      delete_value(function);
       break;
     case VALUE_CLOSURE:
       if (!stack_trace_push(copy_value(function), copy_slice(args))) {
-        return undefined;
+        delete_slice(args);
+      } else {
+        result = TO_CLOSURE(function)->f(args, TO_CLOSURE(function));
       }
-      result = TO_CLOSURE(function)->f(args, TO_CLOSURE(function));
       break;
     default:
-      delete_value(function);
       delete_slice(args);
       raise_error(domain_error, "not a function");
   }
+  delete_value(function);
   if (RESULT_OK(result)) {
     if (old_error_form) {
       stack_trace_pop();
@@ -104,9 +105,9 @@ Value eval_vector(Vector *vector, Scope *scope) {
       result = eval_block(args, scope);
     } else if (s == match_symbol) {
       result = eval_match(args, scope);
-    /*} else if (s == fn_symbol) {
+    } else if (s == fn_symbol) {
       result = eval_fn(args, scope);
-    } else if (s == try_symbol) {
+    /*} else if (s == try_symbol) {
       result = eval_try(args, scope);
     } else if (s == continue_symbol) {
       result = eval_continue(args, scope);
@@ -150,7 +151,7 @@ Value eval_vector(Vector *vector, Scope *scope) {
       result = apply(function, arg_values);
       if (!RESULT_OK(result) && error_arg_index >= 0) {
         if (error_arg_index < args.length) {
-          set_debug_form(args.cells[error_arg_index]);
+          set_debug_form(copy_value(args.cells[error_arg_index]));
         } else {
           set_debug_arg_index(-1);
         }

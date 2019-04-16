@@ -182,17 +182,23 @@ static int assign_opt_parameters(Scope **scope, Slice formal, Slice actual) {
     }
     if (symbol == key_keyword) {
       ok = assign_named_parameters(scope,
-          slice_slice(copy_slice(formal), 1, formal.length - 1),
+          slice_slice(copy_slice(formal), i + 1, formal.length - i - 1),
           slice_slice(copy_slice(actual), j, actual.length - j));
       if (error_arg_index >= 0) error_arg_index += j;
       j = actual.length;
       break;
     } else if (symbol == rest_keyword) {
-      ok = assign_rest_parameters(scope,
-          slice_slice(copy_slice(formal), 1, formal.length - 1),
-          slice_slice(copy_slice(actual), j, actual.length - j));
-      if (error_arg_index >= 0) error_arg_index += j;
-      j = actual.length;
+      if (i + 1 < formal.length) {
+        ok = assign_rest_parameters(scope,
+            slice_slice(copy_slice(formal), i + 1, formal.length - i - 1),
+            slice_slice(copy_slice(actual), j, actual.length - j));
+        if (error_arg_index >= 0) error_arg_index += j;
+        j = actual.length;
+      } else {
+        set_debug_form(copy_value(formal.cells[i]));
+        raise_error(syntax_error, "&rest must be followed by exactly one symbol");
+        ok = 0;
+      }
       break;
     }
     if (j < actual.length) {
@@ -313,23 +319,31 @@ int assign_parameters(Scope **scope, Slice formal, Slice actual) {
     }
     if (symbol == key_keyword) {
       ok = assign_named_parameters(scope,
-          slice_slice(copy_slice(formal), i, formal.length - i),
+          slice_slice(copy_slice(formal), i + 1, formal.length - i - 1),
           slice_slice(copy_slice(actual), j, actual.length - j));
       if (error_arg_index >= 0) error_arg_index += j;
       j = actual.length;
+      break;
     } else if (symbol == opt_keyword) {
       ok = assign_opt_parameters(scope,
-          slice_slice(copy_slice(formal), i, formal.length - i),
+          slice_slice(copy_slice(formal), i + 1, formal.length - i - 1),
           slice_slice(copy_slice(actual), j, actual.length - j));
       if (error_arg_index >= 0) error_arg_index += j;
       j = actual.length;
       break;
     } else if (symbol == rest_keyword) {
-      ok = assign_rest_parameters(scope,
-          slice_slice(copy_slice(formal), i, formal.length - i),
-          slice_slice(copy_slice(actual), j, actual.length - j));
-      if (error_arg_index >= 0) error_arg_index += j;
-      j = actual.length;
+      if (i + 1 < formal.length) {
+        ok = assign_rest_parameters(scope,
+            slice_slice(copy_slice(formal), i + 1, formal.length - i - 1),
+            slice_slice(copy_slice(actual), j, actual.length - j));
+        if (error_arg_index >= 0) error_arg_index += j;
+        j = actual.length;
+      } else {
+        set_debug_form(copy_value(formal.cells[i]));
+        raise_error(syntax_error, "&rest must be followed by exactly one symbol");
+        ok = 0;
+      }
+      break;
     } else if (j >= actual.length) {
       raise_error(domain_error, "too few parameters");
       ok = 0;

@@ -133,22 +133,47 @@ Value eval_match(Slice args, Scope *scope) {
   return result;
 }
 
-static Value eval_anon(Slice args, Closure *closure) {
-  Value definition = closure->env[0];
-  Scope *scope = TO_POINTER(closure->env[1])->pointer;
-  // TODO
-  return undefined;
+static Value eval_anon(Slice args, const Closure *closure) {
+  Value result = undefined;
+  Slice definition = to_slice(copy_value(closure->env[0]));
+  if (definition.length >= 1) {
+    Scope *scope = TO_POINTER(closure->env[1])->pointer;
+    Scope *current_scope = scope;
+    Slice formal = to_slice(copy_value(syntax_get(definition.cells[0])));
+    if (assign_parameters(&current_scope, formal, copy_slice(args))) {
+      result = eval_block(
+          slice_slice(copy_slice(definition), 1, definition.length - 1),
+          current_scope);
+    }
+    scope_pop_until(current_scope, scope);
+  } else {
+    raise_error(domain_error, "invalid function definition");
+  }
+  delete_slice(definition);
+  delete_slice(args);
+  return result;
 }
 
 Value eval_fn(Slice args, Scope *scope) {
+  if (args.length < 1 || !syntax_is(args.cells[0], VALUE_VECTOR)) {
+    delete_slice(args);
+    raise_error(syntax_error, "expected (fn (PARAMS) {EXPR})");
+    return undefined;
+  }
   Scope *fn_scope = copy_scope(scope);
   Value result = undefined;
-  Value scope_ptr = check_alloc(POINTER(create_pointer(copy_type(scope_type), fn_scope, (Destructor) delete_scope)));
+  Value scope_ptr = check_alloc(POINTER(create_pointer(copy_type(scope_type),
+          fn_scope, (Destructor) delete_scope)));
   if (RESULT_OK(scope_ptr)) {
     Value env[] = {slice_to_value(args), scope_ptr};
-    // TODO
+    result = check_alloc(CLOSURE(create_closure(eval_anon, env, 2)));
+    delete_value(env[0]);
+    delete_value(env[1]);
+  } else {
+    delete_scope(fn_scope);
+    delete_slice(args);
   }
-  return undefined;
+  return result;
 }
 
 Value eval_try(Slice args, Scope *scope);

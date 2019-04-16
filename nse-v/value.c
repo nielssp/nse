@@ -540,7 +540,7 @@ Closure *create_closure(ClosureFunc f, Value const env[], size_t env_size) {
 /* Pointer allocation */
 
 Pointer *create_pointer(Type *type, void *pointer, Destructor destructor) {
-  Pointer *p = allocate(sizeof(Pointer));
+  Pointer *p = allocate_object(sizeof(Pointer));
   if (!p) {
     delete_type(type);
     destructor(pointer);

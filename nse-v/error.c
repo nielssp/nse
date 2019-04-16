@@ -157,7 +157,7 @@ int stack_trace_push(Value func, Slice args) {
   }
   v->cells[0] = func;
   v->cells[1] = slice_to_value(args);
-  v->cells[2] = check_alloc(SYNTAX(error_form));
+  v->cells[2] = copy_value(SYNTAX(error_form));
   if (stack_trace) {
     List *new_trace = create_list(VECTOR(v), copy_object(stack_trace));
     if (!new_trace) {
