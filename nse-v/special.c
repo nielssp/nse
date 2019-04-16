@@ -189,6 +189,7 @@ static Type *get_result_type() {
   return get_instance(copy_generic(result_type), params);
 }
 
+/* (try EXPR) */
 Value eval_try(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length == 1) {
@@ -220,9 +221,98 @@ Value eval_continue(Slice args, Scope *scope);
 
 Value eval_recur(Slice args, Scope *scope);
 
-Value eval_def(Slice args, Scope *scope);
+/* (def (SYMBOL PARAMS) {EXPR}) */
+static Value eval_def_func(Vector *sig, Slice args, Scope *scope) {
+  Value result = undefined;
+  if (sig->length >= 1 && syntax_is(sig->cells[0], VALUE_SYMBOL)) {
+    Symbol *symbol = TO_SYMBOL(syntax_get(sig->cells[0]));
+    Scope *fn_scope = copy_scope(scope);
+    Value scope_ptr = check_alloc(POINTER(create_pointer(copy_type(scope_type),
+            fn_scope, (Destructor) delete_scope)));
+    if (RESULT_OK(scope_ptr)) {
+      Vector *def = create_vector(1 + args.length);
+      if (def) {
+        def->cells[0] = slice_to_value(slice(copy_value(VECTOR(sig)), 1, sig->length - 1));
+        for (size_t i = 0; i < args.length; i++) {
+          def->cells[i + 1] = copy_value(args.cells[i]);
+        }
+        Value env[] = {
+          VECTOR(def),
+          scope_ptr
+        };
+        result = check_alloc(CLOSURE(create_closure(eval_anon, env, 2)));
+        delete_value(env[0]);
+        delete_value(env[1]);
+        if (RESULT_OK(result)) {
+          // TODO: optimize
+          module_define(copy_object(symbol), copy_value(result));
+        }
+      } else {
+        delete_value(scope_ptr);
+      }
+    } else {
+      delete_scope(fn_scope);
+    }
+  } else {
+    raise_error(syntax_error, "expected (SYMBOL ... PARAMS)");
+  }
+  delete_value(VECTOR(sig));
+  delete_slice(args);
+  return result;
+}
 
-Value eval_def_read_macro(Slice args, Scope *scope);
+/* (def SYMBOL EXPR) */
+static Value eval_def_var(Value name, Slice args, Scope *scope) {
+  Value result = undefined;
+  if (syntax_is(name, VALUE_SYMBOL) && args.length == 1) {
+    Symbol *symbol = TO_SYMBOL(syntax_get(name));
+    result = eval(copy_value(args.cells[0]), scope);
+    if (RESULT_OK(result)) {
+      module_define(copy_object(symbol), copy_value(result));
+    }
+  } else {
+    raise_error(syntax_error, "expected (def SYMBOL EXPR)");
+  }
+  delete_value(name);
+  delete_slice(args);
+  return result;
+}
+
+Value eval_def(Slice args, Scope *scope) {
+  Value result = undefined;
+  if (args.length >= 1) {
+    Value head = args.cells[0];
+    if (syntax_is(head, VALUE_VECTOR)) {
+      Syntax *previous = push_debug_form(copy_value(head));
+      result = eval_def_func(TO_VECTOR(copy_value(syntax_get(head))),
+          slice_slice(copy_slice(args), 1, args.length - 1), scope);
+      pop_debug_form(result, previous);
+    } else {
+      result = eval_def_var(copy_value(head),
+          slice_slice(copy_slice(args), 1, args.length - 1), scope);
+    }
+  } else {
+    raise_error(syntax_error, "expected (def SYMBOL EXPR)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+/* (def-read-macro SYMBOL EXPR) */
+Value eval_def_read_macro(Slice args, Scope *scope) {
+  Value result = undefined;
+  if (args.length == 2 && syntax_is(args.cells[0], VALUE_SYMBOL)) {
+    Symbol *symbol = TO_SYMBOL(syntax_get(args.cells[0]));
+    result = eval(copy_value(args.cells[1]), scope);
+    if (RESULT_OK(result)) {
+      module_define_read_macro(copy_object(symbol), copy_value(result));
+    }
+  } else {
+    raise_error(syntax_error, "expected (def-read-macro SYMBOL EXPR)");
+  }
+  delete_slice(args);
+  return result;
+}
 
 Value eval_def_type(Slice args, Scope *scope);
 

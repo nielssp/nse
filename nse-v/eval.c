@@ -112,12 +112,12 @@ Value eval_vector(Vector *vector, Scope *scope) {
     /*} else if (s == continue_symbol) {
       result = eval_continue(args, scope);
     } else if (s == recur_symbol) {
-      result = eval_recur(args, scope);
+      result = eval_recur(args, scope);*/
     } else if (s == def_symbol) {
       result = eval_def(args, scope);
     } else if (s == def_read_macro_symbol) {
       result = eval_def_read_macro(args, scope);
-    } else if (s == def_type_symbol) {
+    /*} else if (s == def_type_symbol) {
       result = eval_def_type(args, scope);
     } else if (s == def_data_symbol) {
       result = eval_def_data(args, scope);
