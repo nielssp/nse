@@ -166,12 +166,24 @@ struct Slice {
 #define SLICE_OK(slice) (RESULT_OK((slice).sequence))
 #define SLICE_ERROR ((Slice){ .sequence = undefined, .length = 0, .cells = NULL })
 
+/* Convert a sequence to a slice (allocation-free) */
 Slice to_slice(Value sequence);
+
+/* Slice a sequence (allocation-free) */
 Slice slice(Value sequence, size_t offset, size_t length);
+
+/* Slice a slice (allocation-free) */
 Slice slice_slice(Slice slice, size_t offset, size_t length);
+
+/* Convert a slice to a sequence (may allocate) */
 Value slice_to_value(Slice slice);
+
+/* Copy slice (increment reference counter of sequence) */
 Slice copy_slice(Slice slice);
+
+/* Delete slice (decrement reference counter of sequence) */
 void delete_slice(Slice slice);
+
 
 
 /* Vectors */

@@ -7,10 +7,10 @@
 typedef struct Type Type;
 typedef struct Scope Scope;
 typedef struct Value Value;
-typedef struct VectorSlice VectorSlice;
+typedef struct Slice Slice;
 
-int assign_parameters(Scope **scope, VectorSlice *formal, VectorSlice *actual);
+int assign_parameters(Scope **scope, Slice formal, Slice actual);
 int match_pattern(Scope **scope, Value pattern, Value actual);
-Type *parameters_to_type(VectorSlice *formal);
+Type *parameters_to_type(Slice formal);
 
 #endif
