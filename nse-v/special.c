@@ -140,7 +140,7 @@ Value eval_match(Slice args, Scope *scope) {
   return result;
 }
 
-static Value eval_anon(Slice args, const Closure *closure) {
+static Value eval_anon(Slice args, const Closure *closure, Scope *dynamic_scope) {
   Value result = undefined;
   Slice definition = to_slice(copy_value(closure->env[0]));
   if (definition.length >= 1) {

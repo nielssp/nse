@@ -6,7 +6,7 @@ typedef struct Value Value;
 typedef struct Scope Scope;
 typedef struct Slice Slice;
 
-Value apply(Value function, Slice args);
+Value apply(Value function, Slice args, Scope *dynamic_scope);
 
 Value eval_block(Slice block, Scope *scope);
 

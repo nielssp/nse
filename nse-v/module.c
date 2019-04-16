@@ -587,25 +587,22 @@ void module_define_method(Module *module, Symbol *symbol, TypeArray *parameters,
   method_map_add(module->methods, key, copy);
 }
 
-Symbol *module_ext_define(Module *module, const char *name, Value value) {
+void module_ext_define(Module *module, const char *name, Value value) {
   Symbol *symbol = module_extern_symbol(module, c_string_to_string(name));
   module_define(symbol, value);
-  return symbol;
 }
 
-Symbol *module_ext_define_macro(Module *module, const char *name, Value value) {
+void module_ext_define_macro(Module *module, const char *name, Value value) {
   Symbol *symbol = module_extern_symbol(module, c_string_to_string(name));
   module_define_macro(symbol, value);
-  return symbol;
 }
 
-Symbol *module_ext_define_type(Module *module, const char *name, Value value) {
+void module_ext_define_type(Module *module, const char *name, Value value) {
   Symbol *symbol = module_extern_symbol(module, c_string_to_string(name));
   if (value.type == VALUE_TYPE && TO_TYPE(value)->name == NULL) {
     TO_TYPE(value)->name = copy_object(symbol);
   }
   module_define_type(symbol, value);
-  return symbol;
 }
 
 static Hash method_hash(const Method *m) {

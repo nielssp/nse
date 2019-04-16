@@ -52,9 +52,10 @@ void module_define_macro(Symbol *s, Value value);
 void module_define_type(Symbol *s, Value value);
 void module_define_read_macro(Symbol *s, Value value);
 void module_define_method(Module *module, Symbol *symbol, TypeArray *parameters, Value value);
-Symbol *module_ext_define(Module *module, const char *name, Value value);
-Symbol *module_ext_define_macro(Module *module, const char *name, Value value);
-Symbol *module_ext_define_type(Module *module, const char *name, Value value);
+
+void module_ext_define(Module *module, const char *name, Value value);
+void module_ext_define_macro(Module *module, const char *name, Value value);
+void module_ext_define_type(Module *module, const char *name, Value value);
 
 Value module_find_method(Module *module, Symbol *symbol, const TypeArray *parameters);
 

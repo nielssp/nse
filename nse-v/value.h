@@ -14,6 +14,7 @@ typedef struct Object Object;
 typedef struct Slice Slice;
 
 typedef struct Module Module;
+typedef struct Scope Scope;
 typedef struct Type Type;
 
 typedef struct Vector Vector;
@@ -90,7 +91,7 @@ struct Value {
   union {
     int64_t i64;
     double f64;
-    Value (*func)(Slice);
+    Value (*func)(Slice, Scope *);
     Object *object;
   };
 };
@@ -383,7 +384,7 @@ Data *create_data(Type *type, Symbol *tag, Value const fields[], size_t size);
 /* Closures */
 
 /* Closure function type */
-typedef Value (* ClosureFunc)(Slice, const Closure *);
+typedef Value (* ClosureFunc)(Slice, const Closure *, Scope *scope);
 
 struct Closure {
   Object header;

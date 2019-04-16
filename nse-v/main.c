@@ -17,6 +17,7 @@
 #include "read.h"
 #include "write.h"
 #include "eval.h"
+#include "system.h"
 
 #define SGR_RESET "\001\033[0m\002"
 
@@ -222,6 +223,8 @@ int main(int argc, char *argv[]) {
   Module *user_module = create_module("user");
   if (std) {
     import_module(user_module, lang_module);
+    system_module = get_system_module();
+    import_module(user_module, system_module);
   }
 
 

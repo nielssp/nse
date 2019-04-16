@@ -9,7 +9,7 @@
 
 #include "eval.h"
 
-Value apply(Value function, Slice args) {
+Value apply(Value function, Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   Syntax *old_error_form = error_form;
   switch (function.type) {
@@ -17,14 +17,15 @@ Value apply(Value function, Slice args) {
       if (!stack_trace_push(copy_value(function), copy_slice(args))) {
         delete_slice(args);
       } else {
-        result = function.func(args);
+        result = function.func(args, dynamic_scope);
       }
       break;
     case VALUE_CLOSURE:
       if (!stack_trace_push(copy_value(function), copy_slice(args))) {
         delete_slice(args);
       } else {
-        result = TO_CLOSURE(function)->f(args, TO_CLOSURE(function));
+        result = TO_CLOSURE(function)->f(args, TO_CLOSURE(function),
+            dynamic_scope);
       }
       break;
     default:
@@ -139,7 +140,7 @@ Value eval_vector(Vector *vector, Scope *scope) {
     Value macro = scope_get_macro(scope, copy_object(s));
     if (RESULT_OK(macro)) {
       delete_value(operator);
-      Value expanded = apply(macro, args);
+      Value expanded = apply(macro, args, scope);
       return THEN(expanded, eval(expanded, scope));
     }
   }
@@ -148,7 +149,7 @@ Value eval_vector(Vector *vector, Scope *scope) {
   if (RESULT_OK(function)) {
     Slice arg_values = eval_args(args, scope);
     if (SLICE_OK(arg_values)) {
-      result = apply(function, arg_values);
+      result = apply(function, arg_values, scope);
       if (!RESULT_OK(result) && error_arg_index >= 0) {
         if (error_arg_index < args.length) {
           set_debug_form(copy_value(args.cells[error_arg_index]));
