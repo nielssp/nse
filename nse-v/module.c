@@ -77,6 +77,9 @@ Binding *copy_binding(Binding *binding) {
 void set_binding(Binding *binding, Value value, int weak) {
   Value old = binding->value;
   binding->weak = weak;
+  if (weak) {
+    delete_value(value);
+  }
   binding->value = value;
   delete_value(old);
 }

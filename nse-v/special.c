@@ -69,8 +69,15 @@ Value eval_let(Slice args, Scope *scope) {
           if (assignment.type == VALUE_CLOSURE) {
             // TODO: optimize
           }
+          // To fix circular references in closures we first assign the value to
+          // the initial binding created in step 1. This weak binding is
+          // available to all closures assigned in this let-expression.
           scope_set(let_scope, TO_SYMBOL(copy_value(syntax_get(pattern))),
-              assignment, 0);
+              copy_value(assignment), 1 /* weak */);
+          // We then push a new strong binding that's used when evaluating the
+          // block in step 3.
+          let_scope = scope_push(let_scope,
+              TO_SYMBOL(copy_value(syntax_get(pattern))), assignment);
         } else if (!match_pattern(&let_scope, copy_value(pattern), assignment)) {
           ok = 0;
           break;
