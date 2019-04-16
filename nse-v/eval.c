@@ -9,26 +9,26 @@
 
 #include "eval.h"
 
-Value apply(Value function, Value args) {
+Value apply(Value function, Slice args) {
   Value result = undefined;
   Syntax *old_error_form = error_form;
   switch (function.type) {
     case VALUE_FUNC:
-      if (!stack_trace_push(copy_value(function), copy_value(args))) {
+      if (!stack_trace_push(copy_value(function), copy_slice(args))) {
         return undefined;
       }
       result = function.func(args);
       delete_value(function);
       break;
     case VALUE_CLOSURE:
-      if (!stack_trace_push(copy_value(function), copy_value(args))) {
+      if (!stack_trace_push(copy_value(function), copy_slice(args))) {
         return undefined;
       }
       result = TO_CLOSURE(function)->f(args, TO_CLOSURE(function));
       break;
     default:
       delete_value(function);
-      delete_value(args);
+      delete_slice(args);
       raise_error(domain_error, "not a function");
   }
   if (RESULT_OK(result)) {
@@ -39,30 +39,30 @@ Value apply(Value function, Value args) {
   return result;
 }
 
-Value eval_args(VectorSlice *args, Scope *scope) {
-  Vector *values = create_vector(args->length);
+Slice eval_args(Slice args, Scope *scope) {
+  Vector *values = create_vector(args.length);
   if (!values) {
-    delete_value(VECTOR_SLICE(args));
-    return undefined;
+    delete_slice(args);
+    return SLICE_ERROR;
   }
-  for (size_t i = 0; i < args->length; i++) {
-    values->cells[i] = eval(copy_value(args->cells[i]), scope);
+  for (size_t i = 0; i < args.length; i++) {
+    values->cells[i] = eval(copy_value(args.cells[i]), scope);
     if (!RESULT_OK(values->cells[i])) {
-      delete_value(VECTOR_SLICE(args));
+      delete_slice(args);
       delete_value(VECTOR(values));
-      return undefined;
+      return SLICE_ERROR;
     }
   }
-  delete_value(VECTOR_SLICE(args));
-  return VECTOR(values);
+  delete_slice(args);
+  return to_slice(VECTOR(values));
 }
 
-Value eval_block(VectorSlice *block, Scope *scope) {
+Value eval_block(Slice block, Scope *scope) {
   Value result = unit;
   Scope *current_scope = scope;
-  for (size_t i = 0; i < block->length; i++) {
+  for (size_t i = 0; i < block.length; i++) {
     delete_value(result);
-    Value statement = block->cells[i];
+    Value statement = block.cells[i];
     if (syntax_is(statement, VALUE_VECTOR)) {
       Vector *v = TO_VECTOR(syntax_get(statement));
       if (v->length == 3 && syntax_equals(v->cells[0], SYMBOL(let_symbol)) == EQ_EQUAL && syntax_is(v->cells[1], VALUE_SYMBOL)) {
@@ -81,7 +81,7 @@ Value eval_block(VectorSlice *block, Scope *scope) {
     }
   }
   scope_pop_until(current_scope, scope);
-  delete_value(VECTOR_SLICE(block));
+  delete_slice(block);
   return result;
 }
 
@@ -91,11 +91,7 @@ Value eval_vector(Vector *vector, Scope *scope) {
     return unit;
   }
   Value operator = copy_value(vector->cells[0]);
-  VectorSlice *args = create_vector_slice(vector, 1, vector->length - 1);
-  if (!args) {
-    delete_value(operator);
-    return undefined;
-  }
+  Slice args = slice(VECTOR(vector), 1, vector->length - 1);
   if (syntax_is(operator, VALUE_SYMBOL)) {
     Symbol *s = TO_SYMBOL(syntax_get(operator));
     Value result = undefined;
@@ -141,23 +137,20 @@ Value eval_vector(Vector *vector, Scope *scope) {
     }
     Value macro = scope_get_macro(scope, copy_object(s));
     if (RESULT_OK(macro)) {
-      Value expanded = apply(macro, copy_value(VECTOR_SLICE(args)));
-      if (RESULT_OK(expanded)) {
-        delete_value(operator);
-        delete_value(VECTOR_SLICE(args));
-        return eval(expanded, scope);
-      }
+      delete_value(operator);
+      Value expanded = apply(macro, args);
+      return THEN(expanded, eval(expanded, scope));
     }
   }
   Value result = undefined;
   Value function = eval(operator, scope);
   if (RESULT_OK(function)) {
-    Value arg_values = eval_args(copy_object(args), scope);
-    if (RESULT_OK(arg_values)) {
+    Slice arg_values = eval_args(args, scope);
+    if (SLICE_OK(arg_values)) {
       result = apply(function, arg_values);
       if (!RESULT_OK(result) && error_arg_index >= 0) {
-        if (error_arg_index < args->length) {
-          set_debug_form(args->cells[error_arg_index]);
+        if (error_arg_index < args.length) {
+          set_debug_form(args.cells[error_arg_index]);
         } else {
           set_debug_arg_index(-1);
         }
@@ -165,8 +158,9 @@ Value eval_vector(Vector *vector, Scope *scope) {
     } else {
       delete_value(function);
     }
+  } else {
+    delete_slice(args);
   }
-  delete_value(VECTOR_SLICE(args));
   return result;
 }
 

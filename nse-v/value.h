@@ -90,7 +90,7 @@ struct Value {
   union {
     int64_t i64;
     double f64;
-    Value (*func)(Value);
+    Value (*func)(Slice);
     Object *object;
   };
 };
@@ -162,6 +162,9 @@ struct Slice {
   size_t length;
   Value *cells;
 };
+
+#define SLICE_OK(slice) (RESULT_OK((slice).sequence))
+#define SLICE_ERROR ((Slice){ .sequence = undefined, .length = 0, .cells = NULL })
 
 Slice to_slice(Value sequence);
 Slice slice(Value sequence, size_t offset, size_t length);
@@ -368,7 +371,7 @@ Data *create_data(Type *type, Symbol *tag, Value const fields[], size_t size);
 /* Closures */
 
 /* Closure function type */
-typedef Value (* ClosureFunc)(Value, const Closure *);
+typedef Value (* ClosureFunc)(Slice, const Closure *);
 
 struct Closure {
   Object header;

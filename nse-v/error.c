@@ -143,21 +143,21 @@ Value pop_debug_form(Value result, Syntax *previous) {
   return result;
 }
 
-int stack_trace_push(Value func, Value args) {
+int stack_trace_push(Value func, Slice args) {
   if (!error_form) {
     delete_value(func);
-    delete_value(args);
+    delete_slice(args);
     return 1;
   }
   Vector *v = create_vector(3);
   if (!v) {
     delete_value(func);
-    delete_value(args);
+    delete_slice(args);
     return 0;
   }
   v->cells[0] = func;
-  v->cells[1] = args;
-  v->cells[2] = SYNTAX(error_form);
+  v->cells[1] = slice_to_value(args);
+  v->cells[2] = check_alloc(SYNTAX(error_form));
   if (stack_trace) {
     List *new_trace = create_list(VECTOR(v), copy_object(stack_trace));
     if (!new_trace) {

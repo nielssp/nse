@@ -11,6 +11,7 @@ typedef struct Module Module;
 typedef struct Value Value;
 typedef struct Syntax Syntax;
 typedef struct List List;
+typedef struct Slice Slice;
 
 extern Module *error_module;
 
@@ -37,7 +38,7 @@ void set_debug_arg_index(size_t index);
 Syntax *push_debug_form(Value syntax);
 Value pop_debug_form(Value result, Syntax *previous);
 
-int stack_trace_push(Value func, Value args);
+int stack_trace_push(Value func, Slice args);
 void stack_trace_pop();
 List *get_stack_trace();
 void clear_stack_trace();
