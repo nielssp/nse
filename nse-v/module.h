@@ -68,7 +68,6 @@ char **get_symbols(Module *module);
 Symbol *module_extern_symbol(Module *module, String *s);
 Symbol *module_extern_symbol_c(Module *module, const char *s);
 Symbol *intern_keyword(String *s);
-Symbol *intern_special(String *s);
 void import_module(Module *dest, Module *src);
 void import_module_symbol(Module *dest, Symbol *symbol);
 

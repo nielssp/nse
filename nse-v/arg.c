@@ -263,7 +263,7 @@ int match_pattern(Scope **scope, Value pattern, Value actual) {
         Data *d = TO_DATA(actual);
         if (p->length == d->size + 1 && syntax_equals(p->cells[0], SYMBOL(d->tag))) {
           for (size_t i = 0; i < d->size; i++) {
-            if (!match_pattern(scope, p->cells[i + 1], d->fields[i])) {
+            if (!match_pattern(scope, copy_value(p->cells[i + 1]), copy_value(d->fields[i]))) {
               result = 0;
               break;
             }

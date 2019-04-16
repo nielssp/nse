@@ -107,9 +107,9 @@ Value eval_vector(Vector *vector, Scope *scope) {
       result = eval_match(args, scope);
     } else if (s == fn_symbol) {
       result = eval_fn(args, scope);
-    /*} else if (s == try_symbol) {
+    } else if (s == try_symbol) {
       result = eval_try(args, scope);
-    } else if (s == continue_symbol) {
+    /*} else if (s == continue_symbol) {
       result = eval_continue(args, scope);
     } else if (s == recur_symbol) {
       result = eval_recur(args, scope);

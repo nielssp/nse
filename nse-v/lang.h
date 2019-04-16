@@ -51,6 +51,9 @@ extern Symbol *opt_keyword;
 extern Symbol *rest_keyword;
 extern Symbol *match_keyword;
 
+extern Symbol *ok_symbol;
+extern Symbol *error_symbol;
+
 extern Value true_value;
 extern Value false_value;
 

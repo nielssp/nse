@@ -426,13 +426,16 @@ String *create_string(const uint8_t *bytes, size_t length) {
   if (!string) {
     return NULL;
   }
-  string->length = 1;
+  string->length = length;
   memcpy(string->bytes, bytes, length);
   string->bytes[length] = 0;
   return string;
 }
 
 String *c_string_to_string(const char *str) {
+  if (!str) {
+    return NULL;
+  }
   return create_string((const uint8_t *)str, strlen(str));
 }
 

@@ -142,6 +142,8 @@ extern Type *stream_type;
 /* generic-type < any */
 extern Type *generic_type_type;
 
+/* Generic result type. */
+extern GType *result_type;
 /* Generic list type. */
 extern GType *list_type;
 

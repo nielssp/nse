@@ -161,6 +161,7 @@ static Value eval_anon(Slice args, const Closure *closure) {
   return result;
 }
 
+/* (fn (PARAMS) {EXPR}) */
 Value eval_fn(Slice args, Scope *scope) {
   if (args.length < 1 || !syntax_is(args.cells[0], VALUE_VECTOR)) {
     delete_slice(args);
@@ -183,7 +184,37 @@ Value eval_fn(Slice args, Scope *scope) {
   return result;
 }
 
-Value eval_try(Slice args, Scope *scope);
+static Type *get_result_type() {
+  TypeArray *params = create_type_array(2, (Type * const []){ copy_type(any_type), copy_type(any_type) });
+  return get_instance(copy_generic(result_type), params);
+}
+
+Value eval_try(Slice args, Scope *scope) {
+  Value result = undefined;
+  if (args.length == 1) {
+    Value ok_result = eval(copy_value(args.cells[0]), scope);
+    if (RESULT_OK(ok_result)) {
+      result = check_alloc(DATA(create_data(get_result_type(),
+              copy_object(ok_symbol), (Value[]){ ok_result }, 1)));
+      delete_value(ok_result);
+    } else {
+      Vector *error_vector = create_vector(4);
+      if (error_vector) {
+        error_vector->cells[0] = copy_value(SYMBOL(current_error_type()));
+        error_vector->cells[1] = check_alloc(STRING(c_string_to_string(current_error())));
+        error_vector->cells[2] = copy_value(check_alloc(SYNTAX(error_form)));
+        error_vector->cells[3] = copy_value(check_alloc(LIST(get_stack_trace())));
+        result = check_alloc(DATA(create_data(get_result_type(),
+                copy_object(error_symbol), (Value[]){ VECTOR(error_vector) }, 1)));
+        delete_value(VECTOR(error_vector));
+      }
+    }
+  } else {
+    raise_error(syntax_error, "expected (try EXPR)");
+  }
+  delete_slice(args);
+  return result;
+}
 
 Value eval_continue(Slice args, Scope *scope);
 

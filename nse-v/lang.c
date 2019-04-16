@@ -45,12 +45,16 @@ Symbol *opt_keyword = NULL;
 Symbol *rest_keyword = NULL;
 Symbol *match_keyword = NULL;
 
+Symbol *ok_symbol = NULL;
+Symbol *error_symbol = NULL;
+
 Value true_value;
 Value false_value;
 
 Module *lang_module = NULL;
 
 void init_lang_module() {
+  init_types();
   init_error_module();
 
   lang_module = create_module("lang");
@@ -91,6 +95,9 @@ void init_lang_module() {
   opt_keyword = module_extern_symbol_c(lang_module, "&opt");
   rest_keyword = module_extern_symbol_c(lang_module, "&rest");
   match_keyword = module_extern_symbol_c(lang_module, "&match");
+
+  ok_symbol = module_extern_symbol_c(lang_module, "ok");
+  error_symbol = module_extern_symbol_c(lang_module, "error");
 
   true_value = DATA(create_data(copy_type(bool_type), copy_object(true_symbol), NULL, 0));
   module_define(copy_object(true_symbol), true_value);

@@ -422,13 +422,6 @@ Symbol *intern_keyword(String *s) {
   return module_extern_symbol(keyword_module, s);
 }
 
-Symbol *intern_special(String *s) {
-  if (!HASH_MAP_INITIALIZED(loaded_modules)) {
-    init_modules();
-  }
-  return module_extern_symbol(lang_module, s);
-}
-
 Symbol *module_find_internal(Module *module, const String *s) {
   Symbol *value = symmap_lookup(module->internal, s);
   if (value) {

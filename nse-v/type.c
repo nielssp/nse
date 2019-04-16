@@ -44,10 +44,6 @@ FuncTypeMap func_types;
 
 Type *any_type;
 Type *bool_type;
-Type *proper_list_type;
-Type *improper_list_type;
-Type *nil_type;
-Type *list_builder_type;
 Type *num_type;
 Type *int_type;
 Type *float_type;
@@ -66,34 +62,33 @@ Type *scope_type;
 Type *stream_type;
 Type *generic_type_type;
 
+GType *result_type;
 GType *list_type;
 
 void init_types() {
   func_types = create_func_type_map();
   any_type = create_simple_type(NULL);
-  bool_type = create_simple_type(any_type);
-  improper_list_type = create_simple_type(any_type);
-  proper_list_type = create_simple_type(improper_list_type);
-  list_type = create_generic(1, proper_list_type);
-  nil_type = create_simple_type(get_poly_instance(copy_generic(list_type)));
-  list_builder_type = create_simple_type(any_type);
-  num_type = create_simple_type(any_type);
-  int_type = create_simple_type(num_type);
-  float_type = create_simple_type(num_type);
-  i64_type = create_simple_type(int_type);
-  f64_type = create_simple_type(float_type);
-  string_type = create_simple_type(any_type);
-  symbol_type = create_simple_type(any_type);
-  keyword_type = create_simple_type(any_type);
-  quote_type = create_simple_type(any_type);
-  continue_type = create_simple_type(any_type);
-  type_quote_type = create_simple_type(any_type);
-  syntax_type = create_simple_type(any_type);
-  type_type = create_simple_type(any_type);
-  func_type = create_simple_type(any_type);
-  scope_type = create_simple_type(any_type);
-  stream_type = create_simple_type(any_type);
-  generic_type_type = create_simple_type(any_type);
+  bool_type = create_simple_type(copy_type(any_type));
+  num_type = create_simple_type(copy_type(any_type));
+  int_type = create_simple_type(copy_type(num_type));
+  float_type = create_simple_type(copy_type(num_type));
+  i64_type = create_simple_type(copy_type(int_type));
+  f64_type = create_simple_type(copy_type(float_type));
+  string_type = create_simple_type(copy_type(any_type));
+  symbol_type = create_simple_type(copy_type(any_type));
+  keyword_type = create_simple_type(copy_type(any_type));
+  quote_type = create_simple_type(copy_type(any_type));
+  continue_type = create_simple_type(copy_type(any_type));
+  type_quote_type = create_simple_type(copy_type(any_type));
+  syntax_type = create_simple_type(copy_type(any_type));
+  type_type = create_simple_type(copy_type(any_type));
+  func_type = create_simple_type(copy_type(any_type));
+  scope_type = create_simple_type(copy_type(any_type));
+  stream_type = create_simple_type(copy_type(any_type));
+  generic_type_type = create_simple_type(copy_type(any_type));
+
+  result_type = create_generic(2, copy_type(any_type));
+  list_type = create_generic(1, copy_type(any_type));
 }
 
 Type *create_simple_type(Type *super) {
