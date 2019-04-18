@@ -314,8 +314,14 @@ Value eval_def_read_macro(Slice args, Scope *scope) {
   return result;
 }
 
-Value eval_def_type(Slice args, Scope *scope);
+Value eval_def_type(Slice args, Scope *scope) {
+  raise_error(syntax_error, "not implemented");
+  delete_slice(args);
+  return undefined;
+}
 
+/* (def-data SYMBOL {CONSTRUCTOR})
+ * (def-data (SYMBOL {SYMBOL}) {CONSTRUCTOR}) */
 Value eval_def_data(Slice args, Scope *scope);
 
 Value eval_def_macro(Slice args, Scope *scope);

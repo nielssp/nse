@@ -171,6 +171,9 @@ void *copy_object(void *object) {
 void delete_value(Value val) {
   if (!(val.type & VALUE_OBJECT)) {
     return;
+  } else if (val.type == VALUE_TYPE) {
+    delete_type(TO_TYPE(val));
+    return;
   }
   if (val.object->refs > 0) {
     val.object->refs--;
@@ -255,9 +258,6 @@ void delete_value(Value val) {
         delete_value(s->quoted);
         break;
       }
-      case VALUE_TYPE:
-        delete_type(TO_TYPE(val));
-        break;
       default:
         break;
     }
@@ -474,6 +474,7 @@ WeakRef *create_weak_ref(Value object) {
     return NULL;
   }
   ref->value = object;
+  ref->type = NULL;
   ref->previous = NULL;
   if (object.type & VALUE_OBJECT) {
     ref->next = object.object->weak_refs;

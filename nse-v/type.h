@@ -37,8 +37,8 @@
  */
 
 #include <stdlib.h>
+#include "value.h"
 
-typedef struct Symbol Symbol;
 typedef struct PolyParam PolyParam;
 typedef struct Type Type;
 typedef struct GType GType;
@@ -55,8 +55,7 @@ typedef enum {
 
 /* Concrete type structure. */
 struct Type {
-  /* Number of references. */
-  size_t refs;
+  Object header;
   /* Type of type. */
   TypeType type;
   /* Optional supertype. */
@@ -259,6 +258,9 @@ int is_subtype_of(const Type *a, const Type *b);
 /* Returns a common supertype for types `a` and `b`.
  * `any_type` is returned if no such common supertype can be found. */
 const Type *unify_types(const Type *a, const Type *b);
+
+/* Get type of value */
+Type *get_type(const Value value);
 
 #endif
 

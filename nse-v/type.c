@@ -43,6 +43,7 @@ struct FuncType {
 FuncTypeMap func_types;
 
 Type *any_type;
+Type *unit_type;
 Type *bool_type;
 Type *num_type;
 Type *int_type;
@@ -63,11 +64,15 @@ Type *stream_type;
 Type *generic_type_type;
 
 GType *result_type;
+GType *vector_type;
+GType *vector_slice_type;
 GType *list_type;
+GType *weak_ref_type;
 
 void init_types() {
   func_types = create_func_type_map();
   any_type = create_simple_type(NULL);
+  unit_type = create_simple_type(copy_type(any_type));
   bool_type = create_simple_type(copy_type(any_type));
   num_type = create_simple_type(copy_type(any_type));
   int_type = create_simple_type(copy_type(num_type));
@@ -88,16 +93,18 @@ void init_types() {
   generic_type_type = create_simple_type(copy_type(any_type));
 
   result_type = create_generic(2, copy_type(any_type));
+  vector_type = create_generic(1, copy_type(any_type));
+  vector_slice_type = create_generic(1, copy_type(any_type));
   list_type = create_generic(1, copy_type(any_type));
+  weak_ref_type = create_generic(1, copy_type(any_type));
 }
 
 Type *create_simple_type(Type *super) {
-  Type *t = allocate(sizeof(Type));
+  Type *t = allocate_object(sizeof(Type));
   if (!t) {
     delete_type(super);
     return NULL;
   }
-  t->refs = 1;
   t->type = TYPE_SIMPLE;
   t->super = super;
   t->name = NULL;
@@ -126,12 +133,11 @@ GType *create_generic(int arity, Type *super) {
 }
 
 Type *create_poly_var(GType *g, int index) {
-  Type *t = allocate(sizeof(Type));
+  Type *t = allocate_object(sizeof(Type));
   if (!t) {
     delete_generic(g);
     return NULL;
   }
-  t->refs = 1;
   t->type = TYPE_POLY_VAR;
   t->super = NULL;
   t->name = NULL;
@@ -167,7 +173,7 @@ void delete_generic(GType *g) {
 
 Type *copy_type(Type *t) {
   if (t) {
-    t->refs++;
+    t->header.refs++;
   }
   return t;
 }
@@ -176,8 +182,8 @@ void delete_type(Type *t) {
   if (!t) {
     return;
   }
-  t->refs--;
-  if (t->refs > 0) {
+  t->header.refs--;
+  if (t->header.refs > 0) {
     return;
   }
   FuncType key;
@@ -286,13 +292,12 @@ Type *get_instance(GType *g, TypeArray *parameters) {
       delete_type_array(parameters);
       return NULL;
     }
-    instance = allocate(sizeof(Type));
+    instance = allocate_object(sizeof(Type));
     if (!instance) {
       delete_generic(g);
       delete_type_array(parameters);
       return NULL;
     }
-    instance->refs = 1;
     instance->super = copy_type(g->super);
     instance->type = TYPE_INSTANCE;
     instance->name = NULL;
@@ -310,12 +315,11 @@ Type *get_unary_instance(GType *g, Type *parameter) {
 
 Type *get_poly_instance(GType *g) {
   if (!g->poly) {
-    g->poly = allocate(sizeof(Type));
+    g->poly = allocate_object(sizeof(Type));
     if (!g->poly) {
       delete_generic(g);
       return NULL;
     }
-    g->poly->refs = 1;
     g->poly->type = TYPE_POLY_INSTANCE;
     g->poly->super = copy_type(g->super);
     g->poly->poly_instance = g;
@@ -334,11 +338,10 @@ static Type *get_func_subtype(int min_arity, int variadic, FuncTypeMap map, Type
   if (t) {
     return copy_type(t);
   } else {
-    t = allocate(sizeof(Type));
+    t = allocate_object(sizeof(Type));
     if (!t) {
       return NULL;
     }
-    t->refs = 1;
     t->name = NULL;
     if (type == TYPE_FUNC) {
       t->super = copy_type(func_type);
@@ -439,6 +442,61 @@ const Type *unify_types(const Type *a, const Type *b) {
     b = b->super;
   }
   return any_type;
+}
+
+Type *get_type(const Value value) {
+  switch (value.type) {
+    case VALUE_UNDEFINED:
+      return NULL;
+    case VALUE_UNIT:
+      return copy_type(unit_type);
+    case VALUE_I64:
+      return copy_type(i64_type);
+    case VALUE_F64:
+      return copy_type(f64_type);
+    case VALUE_FUNC:
+      return copy_type(func_type);
+
+    case VALUE_VECTOR:
+      if (!TO_VECTOR(value)->type) {
+        TO_VECTOR(value)->type = get_unary_instance(copy_generic(vector_type),
+            copy_type(any_type));
+      }
+      return copy_type(TO_VECTOR(value)->type);
+    case VALUE_VECTOR_SLICE:
+      return get_type(VECTOR(TO_VECTOR_SLICE(value)->vector));
+    case VALUE_ARRAY:
+    case VALUE_ARRAY_SLICE:
+      return NULL;
+    case VALUE_LIST:
+      return get_unary_instance(copy_generic(list_type), copy_type(any_type));
+    case VALUE_STRING:
+      return copy_type(string_type);
+    case VALUE_QUOTE:
+      return copy_type(quote_type);
+    case VALUE_TYPE_QUOTE:
+      return copy_type(type_quote_type);
+    case VALUE_WEAK_REF:
+      if (!TO_WEAK_REF(value)->type) {
+        TO_WEAK_REF(value)->type = get_unary_instance(copy_generic(weak_ref_type),
+            copy_type(any_type));
+      }
+      return copy_type(TO_WEAK_REF(value)->type);
+    case VALUE_SYMBOL:
+      return copy_type(symbol_type);
+    case VALUE_KEYWORD:
+      return copy_type(keyword_type);
+    case VALUE_DATA:
+      return copy_type(TO_DATA(value)->type);
+    case VALUE_SYNTAX:
+      return copy_type(syntax_type);
+    case VALUE_CLOSURE:
+      return copy_type(func_type);
+    case VALUE_POINTER:
+      return copy_type(TO_POINTER(value)->type);
+    case VALUE_TYPE:
+      return copy_type(type_type);
+  }
 }
 
 /* Hash function for type arrays. */

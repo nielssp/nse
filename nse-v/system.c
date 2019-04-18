@@ -6,6 +6,7 @@
 #include "error.h"
 #include "module.h"
 #include "../src/util/stream.h"
+#include "eval.h"
 
 #include "system.h"
 
@@ -34,10 +35,133 @@ static Value sum(Slice args, Scope *dynamic_scope) {
   return I64(acc);
 }
 
+static Value subtract(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 0) {
+    raise_error(domain_error, "too few parameters");
+  } else if (args.length == 1) {
+    if (args.cells[0].type == VALUE_I64) {
+      result = I64(-args.cells[0].i64);
+    } else if (args.cells[0].type == VALUE_F64) {
+      result = F64(-args.cells[0].f64);
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "expected a number");
+    }
+  } else {
+    int64_t acc = 0;
+    double facc = 0.0;
+    int fp = 0;
+    for (size_t i = 0; i < args.length; i++) {
+      if (args.cells[i].type == VALUE_I64) {
+        if (fp) {
+          facc -= args.cells[i].i64;
+        } else {
+          acc -= args.cells[i].i64;
+        }
+      } else if (args.cells[i].type == VALUE_F64) {
+        if (!fp) {
+          facc = acc;
+          fp = 1;
+        }
+        facc -= args.cells[i].f64;
+      } else {
+        fp = -1;
+        set_debug_arg_index(i);
+        raise_error(domain_error, "expected a number");
+        break;
+      }
+      if (i == 0) {
+        acc = -acc;
+        facc = -facc;
+      }
+    }
+    if (fp == 1) {
+      result = F64(facc);
+    } else if (fp == 0) {
+      result = I64(acc);
+    }
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value append(Slice args, Scope *dynamic_scope) {
+  size_t length = 0;
+  for (size_t i = 0; i < args.length; i++) {
+    if (args.cells[i].type != VALUE_VECTOR) {
+      delete_slice(args);
+      set_debug_arg_index(i);
+      raise_error(domain_error, "expected vector");
+      return undefined;
+    }
+    length += TO_VECTOR(args.cells[i])->length;
+  }
+  Vector *result = create_vector(length);
+  size_t result_i = 0;
+  for (size_t i = 0; i < args.length; i++) {
+    Vector *v = TO_VECTOR(args.cells[i]);
+    for (size_t j = 0; j < v->length; j++) {
+      result->cells[result_i++] = copy_value(v->cells[j]);
+    }
+  }
+  delete_slice(args);
+  return VECTOR(result);
+}
+
+static Value tabulate(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_I64) {
+    Value function = args.cells[1];
+    int64_t length = args.cells[0].i64;
+    Vector *vector = create_vector(length);
+    if (vector) {
+      int ok = 1;
+      for (size_t i = 0; i < length; i++) {
+        Value element = apply(copy_value(function), to_slice(I64(i)), dynamic_scope);
+        if (RESULT_OK(element)) {
+          vector->cells[i] = element;
+        } else {
+          set_debug_arg_index(1);
+          ok = 0;
+          break;
+        }
+      }
+      if (ok) {
+        result = VECTOR(vector);
+      } else {
+        delete_value(VECTOR(vector));
+      }
+    }
+  } else {
+    raise_error(domain_error, "expected (tabulate INT FUNCTION)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value type_of(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1) {
+    result = check_alloc(TYPE(get_type(args.cells[0])));
+  } else {
+    raise_error(domain_error, "expected (type-of ANY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 
 Module *get_system_module() {
   Module *system = create_module("system");
   module_ext_define(system, "+", FUNC(sum));
+  module_ext_define(system, "-", FUNC(subtract));
+
+  module_ext_define(system, "++", FUNC(append));
+  module_ext_define(system, "tabulate", FUNC(tabulate));
+
+  module_ext_define(system, "type-of", FUNC(type_of));
+
 
   Value stdin_val = POINTER(create_pointer(copy_type(stream_type),
         stdin_stream, void_destructor));

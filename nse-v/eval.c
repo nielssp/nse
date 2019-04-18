@@ -28,6 +28,20 @@ Value apply(Value function, Slice args, Scope *dynamic_scope) {
             dynamic_scope);
       }
       break;
+    case VALUE_VECTOR:
+      if (args.length == 1 && args.cells[0].type == VALUE_I64) {
+        Vector *v = TO_VECTOR(function);
+        int64_t index = args.cells[0].i64;
+        if (index >= 0 && index < v->length) {
+          result = copy_value(v->cells[index]);
+        } else {
+          raise_error(domain_error, "index out of bounds");
+        }
+      } else {
+        raise_error(domain_error, "expected (VECTOR INDEX)");
+      }
+      delete_slice(args);
+      break;
     default:
       delete_slice(args);
       raise_error(domain_error, "not a function");

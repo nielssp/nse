@@ -322,6 +322,7 @@ Quote *create_quote(Value quoted);
  */
 struct WeakRef {
   Object header;
+  Type *type;
   /* Next weak reference in doubly linked list */
   WeakRef *next;
   /* Previous weak reference in doubly linked list */
