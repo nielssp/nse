@@ -424,6 +424,21 @@ int is_subtype_of(const Type *a, const Type *b) {
   return 0;
 }
 
+int are_subtypes_of(const TypeArray *a, const TypeArray *b) {
+  if (a == b) {
+    return 1;
+  }
+  if (a->size != b->size) {
+    return 0;
+  }
+  for (size_t i = 0; i < a->size; i++) {
+    if (!is_subtype_of(a->elements[i], b->elements[i])) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
 const Type *unify_types(const Type *a, const Type *b) {
   while (b && a) {
     const Type *tmp = a;
@@ -496,6 +511,8 @@ Type *get_type(const Value value) {
       return copy_type(TO_POINTER(value)->type);
     case VALUE_TYPE:
       return copy_type(type_type);
+    case VALUE_GEN_FUNC:
+      return copy_type(func_type);
   }
 }
 
@@ -508,8 +525,7 @@ static Hash type_array_hash(const TypeArray *a) {
   return hash;
 }
 
-/* Equality function for type arrays. */
-static int type_array_equals(const TypeArray *a, const TypeArray *b) {
+int type_array_equals(const TypeArray *a, const TypeArray *b) {
   if (a == b) {
     return 1;
   }

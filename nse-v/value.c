@@ -38,6 +38,7 @@ const char *value_type_name(ValueType type) {
     case VALUE_CLOSURE: return "closure";
     case VALUE_POINTER: return "pointer";
     case VALUE_TYPE: return "type";
+    case VALUE_GEN_FUNC: return "gen-func";
     default: return "???";
   }
 }
@@ -258,6 +259,9 @@ void delete_value(Value val) {
         delete_value(s->quoted);
         break;
       }
+      case VALUE_GEN_FUNC:
+        delete_value(SYMBOL(TO_GEN_FUNC(val)->name));
+        break;
       default:
         break;
     }
@@ -539,6 +543,24 @@ Closure *create_closure(ClosureFunc f, Value const env[], size_t env_size) {
     }
   }
   return closure;
+}
+
+/* Generic function allocaton */
+
+GenFunc *create_gen_func(Symbol *name, Module *context, uint8_t min_arity, uint8_t type_parameters, uint8_t const parameter_indices[]) {
+  GenFunc *gf = allocate_object(sizeof(GenFunc) + min_arity);
+  if (!gf) {
+    delete_value(SYMBOL(name));
+    return NULL;
+  }
+  gf->name = name;
+  gf->context = context;
+  gf->min_arity = min_arity;
+  gf->type_parameters = type_parameters;
+  if (gf->min_arity > 0) {
+    memcpy(gf->parameter_indices, parameter_indices, min_arity);
+  }
+  return gf;
 }
 
 /* Pointer allocation */

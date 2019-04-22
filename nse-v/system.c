@@ -151,6 +151,39 @@ static Value type_of(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value string_length(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_STRING) {
+    result = I64(TO_STRING(args.cells[0])->length);
+  } else {
+    raise_error(domain_error, "expected (length STRING)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value vector_length(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_VECTOR) {
+    result = I64(TO_VECTOR(args.cells[0])->length);
+  } else {
+    raise_error(domain_error, "expected (length VECTOR)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value vector_slice_length(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_VECTOR_SLICE) {
+    result = I64(TO_VECTOR_SLICE(args.cells[0])->length);
+  } else {
+    raise_error(domain_error, "expected (length VECTOR-SLICE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 
 Module *get_system_module() {
   Module *system = create_module("system");
@@ -162,6 +195,19 @@ Module *get_system_module() {
 
   module_ext_define(system, "type-of", FUNC(type_of));
 
+  Symbol *length_symbol = module_extern_symbol_c(system, "length");
+  module_define(copy_object(length_symbol),
+      GEN_FUNC(create_gen_func(copy_object(length_symbol), NULL, 1, 1, (uint8_t[]){ 0 })));
+  module_define_method(system, copy_object(length_symbol),
+      create_type_array(1, (Type *[]){get_poly_instance(copy_generic(vector_type))}),
+      FUNC(vector_length));
+  module_define_method(system, copy_object(length_symbol),
+      create_type_array(1, (Type *[]){get_poly_instance(copy_generic(vector_slice_type))}),
+      FUNC(vector_slice_length));
+  module_define_method(system, copy_object(length_symbol),
+      create_type_array(1, (Type *[]){copy_type(string_type)}),
+      FUNC(string_length));
+  delete_value(SYMBOL(length_symbol));
 
   Value stdin_val = POINTER(create_pointer(copy_type(stream_type),
         stdin_stream, void_destructor));

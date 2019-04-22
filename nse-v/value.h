@@ -26,6 +26,7 @@ typedef struct WeakRef WeakRef;
 typedef struct Symbol Symbol;
 typedef struct Data Data;
 typedef struct Closure Closure;
+typedef struct GenFunc GenFunc;
 typedef struct Pointer Pointer;
 typedef struct Syntax Syntax;
 
@@ -77,12 +78,14 @@ typedef enum {
   VALUE_DATA         = VALUE_OBJECT | 0x0C,
   /* Syntax wrapper with positional information */
   VALUE_SYNTAX       = VALUE_OBJECT | 0x0D,
-  /* Function and closure */
+  /* Closure */
   VALUE_CLOSURE      = VALUE_OBJECT | 0x0E,
   /* Pointer to non-NSE object */
   VALUE_POINTER      = VALUE_OBJECT | 0x0F,
   /* A type */
   VALUE_TYPE         = VALUE_OBJECT | 0x10,
+  /* Generic functions */
+  VALUE_GEN_FUNC     = VALUE_OBJECT | 0x11,
 } ValueType;
 
 /* Value structure */
@@ -402,6 +405,27 @@ struct Closure {
 
 /* Create a closure */
 Closure *create_closure(ClosureFunc f, Value const env[], size_t env_size);
+
+
+
+/* Generic functions */
+struct GenFunc {
+  Object header;
+  Symbol *name;
+  Module *context;
+  uint8_t min_arity;
+  uint8_t type_parameters;
+  uint8_t parameter_indices[];
+};
+
+/* Convert GenFunc * to Value */
+#define GEN_FUNC(v) ((Value){ .type = VALUE_GEN_FUNC, .object = (Object *)(v) })
+
+/* Convert Value to GenFunc * */
+#define TO_GEN_FUNC(val) ((GenFunc *)(val).object)
+
+/* Create a generic function */
+GenFunc *create_gen_func(Symbol *name, Module *context, uint8_t min_arity, uint8_t type_parameters, uint8_t const parameter_indices[]);
 
 
 

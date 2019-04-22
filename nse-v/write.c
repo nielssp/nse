@@ -236,6 +236,9 @@ Value nse_write(const Value value, Stream *stream, Module *module) {
       stream_printf(stream, "^");
       write_type(TO_TYPE(value), stream, module);
       break;
+    case VALUE_GEN_FUNC:
+      stream_printf(stream, "#<generic function>");
+      break;
   }
   return unit;
 }

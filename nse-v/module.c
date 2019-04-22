@@ -12,13 +12,14 @@
 
 #include "module.h"
 
-typedef struct Method Method;
+typedef struct MethodKey MethodKey;
+typedef struct MethodList MethodList;
 
 DECLARE_HASH_MAP(namespace, Namespace, Symbol *, Value *)
 DECLARE_HASH_MAP(symmap, SymMap, String *, Symbol *)
 DECLARE_HASH_MAP(module_map, ModuleMap, String *, Module *)
 
-DECLARE_HASH_MAP(method_map, MethodMap, Method *, Value *)
+DECLARE_HASH_MAP(method_map, MethodMap, MethodKey *, MethodList *)
 
 struct Module {
   String *name;
@@ -31,9 +32,15 @@ struct Module {
   MethodMap methods;
 };
 
-struct Method {
+struct MethodKey {
   Symbol *symbol;
+  Type *type;
+};
+
+struct MethodList {
   TypeArray *parameters;
+  Value definition;
+  MethodList *next;
 };
 
 struct Binding {
@@ -258,17 +265,26 @@ Module *create_module(const char *name_c) {
   return module;
 }
 
-static void delete_method(Method *method) {
-  delete_value(SYMBOL(method->symbol));
-  delete_type_array(method->parameters);
-  free(method);
+static void delete_method_key(MethodKey *key) {
+  delete_value(SYMBOL(key->symbol));
+  delete_type(key->type);
+  free(key);
+}
+
+static void delete_method_list(MethodList *methods) {
+  delete_type_array(methods->parameters);
+  delete_value(methods->definition);
+  if (methods->next) {
+    delete_method_list(methods->next);
+  }
+  free(methods);
 }
 
 static void delete_methods(MethodMap methods) {
   MethodMapIterator it = create_method_map_iterator(methods);
   for (MethodMapEntry entry = method_map_next(it); entry.key; entry = method_map_next(it)) {
-    delete_method(entry.key);
-    delete_value(*entry.value);
+    delete_method_key(entry.key);
+    delete_method_list(entry.value);
     free(entry.value);
   }
   delete_method_map_iterator(it);
@@ -328,11 +344,37 @@ Scope *use_module_types(Module *module) {
   return scope;
 }
 
-Value module_find_method(Module *module, Symbol *symbol, const TypeArray *parameters) {
-  Method query = (Method){ .symbol = symbol, .parameters = (TypeArray *)parameters };
-  Value *method = method_map_lookup(module->methods, &query);
-  if (method) {
-    return *method;
+Value module_find_method(Module *module, const Symbol *symbol, const TypeArray *parameters) {
+  Type *key_type = copy_type(parameters->elements[0]);
+  while (key_type) {
+    MethodKey query = (MethodKey){ .symbol = (Symbol *)symbol, .type = key_type };
+    MethodList *methods = method_map_lookup(module->methods, &query);
+    if (methods) {
+      Value method = undefined;
+      const TypeArray *best_types = NULL;
+      while (methods) {
+        if (type_array_equals(parameters, methods->parameters)) {
+          method = methods->definition;
+          break;
+        } else if (are_subtypes_of(parameters, methods->parameters)) {
+          if (!best_types || are_subtypes_of(methods->parameters, best_types)) {
+            method = methods->definition;
+            best_types = methods->parameters;
+          }
+        }
+        methods = methods->next;
+      }
+      delete_type(key_type);
+      return method;
+    }
+    Type *next;
+    if (key_type->type == TYPE_INSTANCE) {
+      next = get_poly_instance(copy_generic(key_type->instance.type));
+    } else {
+      next = key_type->super;
+    }
+    delete_type(key_type);
+    key_type = next;
   }
   return undefined;
 }
@@ -471,26 +513,35 @@ char **get_symbols(Module *module) {
   return symbols;
 }
 
-static int import_method(Module *dest, Symbol *symbol, TypeArray *parameters, Value value) {
-  Method *m = allocate(sizeof(Method));
+static int import_method(Module *dest, Symbol *symbol, TypeArray *parameters, Value definition) {
+  MethodList *m = allocate(sizeof(MethodList));
   if (!m) {
+    delete_value(SYMBOL(symbol));
+    delete_type_array(parameters);
+    delete_value(definition);
     return 0;
   }
-  m->symbol = symbol;
-  Value *value_box = allocate(sizeof(Value));
-  if (!value_box) {
-    free(m);
-    return 0;
-  }
-  *value_box = value;
   m->parameters = parameters;
-  if (method_map_add(dest->methods, m, value_box)) {
-    copy_value(SYMBOL(symbol));
-    copy_type_array(parameters);
-    copy_value(value);
+  m->definition = definition;
+  MethodKey search_key = (MethodKey){ .symbol = symbol, .type = parameters->elements[0] };
+  MethodMapEntry existing = method_map_remove_entry(dest->methods, &search_key);
+  if (existing.key) {
+    delete_value(SYMBOL(symbol));
+    m->next = existing.value;
+    method_map_add(dest->methods, existing.key, m);
   } else {
-    free(value_box);
-    free(m);
+    MethodKey *key = allocate(sizeof(MethodKey));
+    if (!key) {
+      free(m);
+      delete_value(SYMBOL(symbol));
+      delete_type_array(parameters);
+      delete_value(definition);
+      return 0;
+    }
+    copy_type(parameters->elements[0]);
+    *key = search_key;
+    m->next = NULL;
+    method_map_add(dest->methods, key, m);
   }
   return 1;
 }
@@ -498,7 +549,7 @@ static int import_method(Module *dest, Symbol *symbol, TypeArray *parameters, Va
 int import_methods(Module *dest, Module *src) {
   MethodMapIterator it = create_method_map_iterator(src->methods);
   for (MethodMapEntry entry = method_map_next(it); entry.key; entry = method_map_next(it)) {
-    if (!import_method(dest, entry.key->symbol, entry.key->parameters, *entry.value)) {
+    if (!import_method(dest, entry.key->symbol, entry.value->parameters, entry.value->definition)) {
       delete_method_map_iterator(it);
       return 0;
     }
@@ -568,23 +619,7 @@ void module_define_read_macro(Symbol *s, Value value) {
 }
 
 void module_define_method(Module *module, Symbol *symbol, TypeArray *parameters, Value value) {
-  Method query = (Method){ .symbol = symbol, .parameters = parameters };
-  Method *key = NULL;
-  MethodMapEntry existing = method_map_remove_entry(module->methods, &query);
-  if (existing.key) {
-    key = existing.key;
-    delete_value(*existing.value);
-    free(existing.value);
-    delete_value(SYMBOL(symbol));
-    delete_type_array(parameters);
-  } else {
-    key = malloc(sizeof(Method));
-    *key = query;
-    copy_value(SYMBOL(symbol));
-  }
-  Value *copy = malloc(sizeof(Value));
-  memcpy(copy, &value, sizeof(Value));
-  method_map_add(module->methods, key, copy);
+  import_method(module, symbol, parameters, value);
 }
 
 void module_ext_define(Module *module, const char *name, Value value) {
@@ -605,29 +640,15 @@ void module_ext_define_type(Module *module, const char *name, Value value) {
   module_define_type(symbol, value);
 }
 
-static Hash method_hash(const Method *m) {
+static Hash method_key_hash(const MethodKey *m) {
   Hash hash = INIT_HASH;
   hash = HASH_ADD_PTR(m->symbol, hash);
-  for (int i = 0; i < m->parameters->size; i++) {
-    Type *t = m->parameters->elements[i];
-    hash = HASH_ADD_PTR(t, hash);
-  }
+  hash = HASH_ADD_PTR(m->type, hash);
   return 0;
 }
 
-static int method_equals(const Method *a, const Method *b) {
-  if (a->symbol != b->symbol) {
-    return 0;
-  }
-  if (a->parameters->size != b->parameters->size) {
-    return 0;
-  }
-  for (int i = 0; i < a->parameters->size; i++) {
-    if (a->parameters->elements[i] != b->parameters->elements[i]) {
-      return 0;
-    }
-  }
-  return 1;
+static int method_key_equals(const MethodKey *a, const MethodKey *b) {
+  return a->symbol == b->symbol && a->type == b->type;
 }
 
 static Hash nse_string_hash(const String *s) {
@@ -641,4 +662,4 @@ static int nse_string_equals(const String *a, const String *b) {
 DEFINE_HASH_MAP(namespace, Namespace, Symbol *, Value *, pointer_hash, pointer_equals)
 DEFINE_HASH_MAP(symmap, SymMap, String *, Symbol *, nse_string_hash, nse_string_equals)
 DEFINE_HASH_MAP(module_map, ModuleMap, String *, Module *, nse_string_hash, nse_string_equals)
-DEFINE_HASH_MAP(method_map, MethodMap, Method *, Value *, method_hash, method_equals)
+DEFINE_HASH_MAP(method_map, MethodMap, MethodKey *, MethodList *, method_key_hash, method_key_equals)

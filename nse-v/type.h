@@ -143,8 +143,14 @@ extern Type *generic_type_type;
 
 /* Generic result type. */
 extern GType *result_type;
+/* Generic vector type. */
+extern GType *vector_type;
+/* Generic vector slice type. */
+extern GType *vector_slice_type;
 /* Generic list type. */
 extern GType *list_type;
+/* Generic weak reference type. */
+extern GType *weak_ref_type;
 
 /* Initializes all built-in types. */
 void init_types();
@@ -255,9 +261,13 @@ Type *instantiate_type(Type *t, const GType *g, const TypeArray *parameters);
 Type *get_super_type(const Type *t);
 /* Returns 1 if `a` is a subtype of or equal to `b`, 0 otherwise. */
 int is_subtype_of(const Type *a, const Type *b);
+/* Returns 1 if the types of a are subtypes of the types of b. */
+int are_subtypes_of(const TypeArray *a, const TypeArray *b);
 /* Returns a common supertype for types `a` and `b`.
  * `any_type` is returned if no such common supertype can be found. */
 const Type *unify_types(const Type *a, const Type *b);
+/* Equality function for type arrays. */
+int type_array_equals(const TypeArray *a, const TypeArray *b);
 
 /* Get type of value */
 Type *get_type(const Value value);

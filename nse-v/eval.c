@@ -6,8 +6,44 @@
 #include "error.h"
 #include "lang.h"
 #include "special.h"
+#include "type.h"
 
 #include "eval.h"
+
+Value apply_generic(GenFunc *func, Slice args, Scope *dynamic_scope) {
+  if (!func->context) {
+    delete_value(GEN_FUNC(func));
+    delete_slice(args);
+    raise_error(name_error, "generic function has no methods in the current module");
+    return undefined;
+  }
+  if (args.length < func->min_arity) {
+    delete_value(GEN_FUNC(func));
+    delete_slice(args);
+    raise_error(domain_error, "expected at least %d parameters", func->min_arity);
+    return undefined;
+  }
+  TypeArray *types = create_type_array_null(func->type_parameters);
+  for (int i = 0; i < func->min_arity; i++) {
+    int index = func->parameter_indices[i];
+    types->elements[index] = get_type(args.cells[i]);
+  }
+  for (int i = 0; i < types->size; i++) {
+    if (!types->elements[i]) {
+      types->elements[i] = copy_type(any_type);
+    }
+  }
+  Value method = module_find_method(func->context, func->name, types);
+  delete_value(GEN_FUNC(func));
+  if (!RESULT_OK(method)) {
+    delete_slice(args);
+    delete_type_array(types);
+    raise_error(name_error, "no method matching types found");
+    return undefined;
+  }
+  delete_type_array(types);
+  return apply(method, args, dynamic_scope);
+}
 
 Value apply(Value function, Slice args, Scope *dynamic_scope) {
   Value result = undefined;
@@ -26,6 +62,13 @@ Value apply(Value function, Slice args, Scope *dynamic_scope) {
       } else {
         result = TO_CLOSURE(function)->f(args, TO_CLOSURE(function),
             dynamic_scope);
+      }
+      break;
+    case VALUE_GEN_FUNC:
+      if (!stack_trace_push(copy_value(function), copy_slice(args))) {
+        delete_slice(args);
+      } else {
+        result = apply_generic(copy_object(TO_GEN_FUNC(function)), args, dynamic_scope);
       }
       break;
     case VALUE_VECTOR:
@@ -202,8 +245,16 @@ Value eval(Value code, Scope *scope) {
       scope_pop(type_scope);
       return result;
     }
-    case VALUE_SYMBOL:
-      return scope_get(scope, TO_SYMBOL(code));
+    case VALUE_SYMBOL: {
+      Value value = scope_get(scope, TO_SYMBOL(code));
+      if (RESULT_OK(value) && value.type == VALUE_GEN_FUNC && !TO_GEN_FUNC(value)->context) {
+        GenFunc *gf = TO_GEN_FUNC(value);
+        Value gf_copy = check_alloc(GEN_FUNC(create_gen_func(copy_object(gf->name), scope->module, gf->min_arity, gf->type_parameters, gf->parameter_indices)));
+        delete_value(value);
+        return gf_copy;
+      }
+      return value;
+    }
     case VALUE_SYNTAX: {
       Syntax *previous = push_debug_form(copy_value(code));
       Value result = eval(copy_value(TO_SYNTAX(code)->quoted), scope);
