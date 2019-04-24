@@ -144,13 +144,13 @@ Value eval_block(Slice block, Scope *scope) {
   return result;
 }
 
-Value eval_vector(Vector *vector, Scope *scope) {
-  if (vector->length == 0) {
-    delete_value(VECTOR(vector));
+Value eval_slice(Slice slice, Scope *scope) {
+  if (slice.length == 0) {
+    delete_slice(slice);
     return unit;
   }
-  Value operator = copy_value(vector->cells[0]);
-  Slice args = slice(VECTOR(vector), 1, vector->length - 1);
+  Value operator = copy_value(slice.cells[0]);
+  Slice args = slice_slice(slice, 1, slice.length - 1);
   if (syntax_is(operator, VALUE_SYMBOL)) {
     Symbol *s = TO_SYMBOL(syntax_get(operator));
     Value result = undefined;
@@ -175,12 +175,12 @@ Value eval_vector(Vector *vector, Scope *scope) {
       result = eval_def(args, scope);
     } else if (s == def_read_macro_symbol) {
       result = eval_def_read_macro(args, scope);
+    } else if (s == def_macro_symbol) {
+      result = eval_def_macro(args, scope);
     /*} else if (s == def_type_symbol) {
       result = eval_def_type(args, scope);
     } else if (s == def_data_symbol) {
       result = eval_def_data(args, scope);
-    } else if (s == def_macro_symbol) {
-      result = eval_def_macro(args, scope);
     } else if (s == def_generic_symbol) {
       result = eval_def_generic(args, scope);
     } else if (s == def_method_symbol) {
@@ -229,9 +229,11 @@ Value eval(Value code, Scope *scope) {
     case VALUE_F64:
     case VALUE_STRING:
     case VALUE_KEYWORD:
+    case VALUE_UNDEFINED:
       return code;
     case VALUE_VECTOR:
-      return eval_vector(TO_VECTOR(code), scope);
+    case VALUE_VECTOR_SLICE:
+      return eval_slice(to_slice(code), scope);
     case VALUE_QUOTE: {
       Value quoted = copy_value(TO_QUOTE(code)->quoted);
       delete_value(code);

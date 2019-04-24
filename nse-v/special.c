@@ -320,11 +320,56 @@ Value eval_def_type(Slice args, Scope *scope) {
   return undefined;
 }
 
+/* (def-macro (SYMBOL PARAMS) EXPR) */
+Value eval_def_macro(Slice args, Scope *scope) {
+  Value result = undefined;
+  if (args.length >= 1 && syntax_is(args.cells[0], VALUE_VECTOR)) {
+    Slice sig = to_slice(copy_value(syntax_get(args.cells[0])));
+    if (sig.length >= 1 && syntax_is(sig.cells[0], VALUE_SYMBOL)) {
+      Symbol *symbol = TO_SYMBOL(syntax_get(sig.cells[0]));
+      Scope *fn_scope = copy_scope(scope);
+      Value scope_ptr = check_alloc(POINTER(create_pointer(copy_type(scope_type),
+              fn_scope, (Destructor) delete_scope)));
+      if (RESULT_OK(scope_ptr)) {
+        Vector *def = create_vector(args.length);
+        if (def) {
+          def->cells[0] = slice_to_value(
+              slice_slice(copy_slice(sig), 1, sig.length - 1));
+          for (size_t i = 1; i < args.length; i++) {
+            def->cells[i] = copy_value(args.cells[i]);
+          }
+          Value env[] = {
+            VECTOR(def),
+            scope_ptr
+          };
+          result = check_alloc(CLOSURE(create_closure(eval_anon, env, 2)));
+          delete_value(env[0]);
+          delete_value(env[1]);
+          if (RESULT_OK(result)) {
+            // TODO: optimize
+            module_define_macro(copy_object(symbol), copy_value(result));
+          }
+        } else {
+          delete_value(scope_ptr);
+        }
+      } else {
+        delete_scope(fn_scope);
+      }
+    } else {
+      set_debug_form(copy_value(args.cells[0]));
+      raise_error(syntax_error, "expected (SYMBOL ... PARAMS)");
+    }
+    delete_slice(sig);
+  } else {
+    raise_error(syntax_error, "expected (def-macro (SYMBOL ... PARAMS) EXPR)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 /* (def-data SYMBOL {CONSTRUCTOR})
  * (def-data (SYMBOL {SYMBOL}) {CONSTRUCTOR}) */
 Value eval_def_data(Slice args, Scope *scope);
-
-Value eval_def_macro(Slice args, Scope *scope);
 
 Value eval_def_generic(Slice args, Scope *scope);
 
