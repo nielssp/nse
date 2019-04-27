@@ -340,29 +340,14 @@ Syntax *nse_read(Reader *input) {
     }
     return s;
   }
-  if (c == '\'' || c == '^') {
-    Syntax *syntax = start_pos(create_syntax(undefined), input);
-    if (syntax) {
-      pop(input);
-      Value quoted = check_alloc(SYNTAX(nse_read(input)));
-      if (RESULT_OK(quoted)) {
-        if (c == '^') {
-          syntax->quoted = check_alloc(TYPE_QUOTE(create_quote(quoted)));
-        } else {
-          syntax->quoted = check_alloc(QUOTE(create_quote(quoted)));
-        }
-        if (RESULT_OK(syntax->quoted)) {
-          return end_pos(syntax, input);
-        }
-      }
-      delete_syntax(syntax);
-    }
-    return NULL;
-  }
-  if (c == '`' || c == ',') {
+  if (c == '\'' || c == '^' || c == '`' || c == ',') {
     Vector *v = create_vector(2);
     if (v) {
-      if (c == ',') {
+      if (c == '\'') {
+        v->cells[0] = copy_value(SYMBOL(quote_symbol));
+      } else if (c == '^') {
+        v->cells[0] = copy_value(SYMBOL(type_symbol));
+      } else if (c == ',') {
         if (peekn(2, input) == '@') {
           pop(input);
           v->cells[0] = copy_value(SYMBOL(splice_symbol));

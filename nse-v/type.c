@@ -53,9 +53,7 @@ Type *f64_type;
 Type *string_type;
 Type *symbol_type;
 Type *keyword_type;
-Type *quote_type;
 Type *continue_type;
-Type *type_quote_type;
 Type *syntax_type;
 Type *type_type;
 Type *func_type;
@@ -82,9 +80,7 @@ void init_types() {
   string_type = create_simple_type(copy_type(any_type));
   symbol_type = create_simple_type(copy_type(any_type));
   keyword_type = create_simple_type(copy_type(any_type));
-  quote_type = create_simple_type(copy_type(any_type));
   continue_type = create_simple_type(copy_type(any_type));
-  type_quote_type = create_simple_type(copy_type(any_type));
   syntax_type = create_simple_type(copy_type(any_type));
   type_type = create_simple_type(copy_type(any_type));
   func_type = create_simple_type(copy_type(any_type));
@@ -487,10 +483,6 @@ Type *get_type(const Value value) {
       return get_unary_instance(copy_generic(list_type), copy_type(any_type));
     case VALUE_STRING:
       return copy_type(string_type);
-    case VALUE_QUOTE:
-      return copy_type(quote_type);
-    case VALUE_TYPE_QUOTE:
-      return copy_type(type_quote_type);
     case VALUE_WEAK_REF:
       if (!TO_WEAK_REF(value)->type) {
         TO_WEAK_REF(value)->type = get_unary_instance(copy_generic(weak_ref_type),

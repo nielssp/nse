@@ -168,14 +168,6 @@ Value nse_write(const Value value, Stream *stream, Module *module) {
       stream_printf(stream, "\"");
       break;
     }
-    case VALUE_QUOTE:
-      stream_printf(stream, "'");
-      nse_write(TO_QUOTE(value)->quoted, stream, module);
-      break;
-    case VALUE_TYPE_QUOTE:
-      stream_printf(stream, "^");
-      nse_write(TO_QUOTE(value)->quoted, stream, module);
-      break;
     case VALUE_WEAK_REF: {
       stream_printf(stream, "(weak ");
       nse_write(TO_WEAK_REF(value)->value, stream, module);

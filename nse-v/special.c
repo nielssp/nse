@@ -22,6 +22,20 @@ Value eval_quote(Slice args, Scope *scope) {
   return result;
 }
 
+Value eval_type(Slice args, Scope *scope) {
+  Value result = undefined;
+  if (args.length == 1) {
+    Scope *type_scope = use_module_types(scope->module);
+    result = eval(copy_value(args.cells[0]), type_scope);
+    scope_pop(type_scope);
+  } else {
+    raise_error(syntax_error, "expected (type ANY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+
 static Value backquote_to_datum(Value v, Scope *scope);
 
 static Value backquote_vector_to_datum(Vector *v, Scope *scope) {
@@ -114,15 +128,6 @@ static Value backquote_to_datum(Value v, Scope *scope) {
     }
     case VALUE_VECTOR:
       return backquote_vector_to_datum(TO_VECTOR(v), scope);
-    case VALUE_QUOTE: {
-      Value quoted = syntax_to_datum(copy_value(TO_QUOTE(v)->quoted));
-      delete_value(v);
-      if (RESULT_OK(quoted)) {
-        return check_alloc(QUOTE(create_quote(quoted)));
-      }
-      delete_value(quoted);
-      return undefined;
-    }
     default:
       return v;
   }

@@ -28,8 +28,6 @@ const char *value_type_name(ValueType type) {
     case VALUE_ARRAY_SLICE: return "array-slice";
     case VALUE_LIST: return "list";
     case VALUE_STRING: return "string";
-    case VALUE_QUOTE: return "quote";
-    case VALUE_TYPE_QUOTE: return "type-quote";
     case VALUE_WEAK_REF: return "weak-ref";
     case VALUE_SYMBOL: return "symbol";
     case VALUE_KEYWORD: return "keyword";
@@ -115,9 +113,6 @@ Equality equals(const Value a, const Value b) {
       }
       return B_TO_EQ(memcmp(sa->bytes, sb->bytes, sa->length) == 0);
     }
-    case VALUE_QUOTE:
-    case VALUE_TYPE_QUOTE:
-      return equals(TO_QUOTE(a)->quoted, TO_QUOTE(b)->quoted);
     case VALUE_WEAK_REF:
       return equals(TO_WEAK_REF(a)->value, TO_WEAK_REF(b)->value);
     case VALUE_DATA: {
@@ -203,10 +198,6 @@ void delete_value(Value val) {
         }
         break;
       case VALUE_STRING:
-        break;
-      case VALUE_QUOTE:
-      case VALUE_TYPE_QUOTE:
-        delete_value(TO_QUOTE(val)->quoted);
         break;
       case VALUE_WEAK_REF: {
         WeakRef *weak = TO_WEAK_REF(val);
@@ -457,18 +448,6 @@ String *resize_string_buffer(String *s, size_t new_capacity) {
   return realloc(s, sizeof(String) + new_capacity);
 }
 
-/* Quote allocation */
-
-Quote *create_quote(Value quoted) {
-  Quote *quote = allocate_object(sizeof(Quote));
-  if (!quote) {
-    delete_value(quoted);
-    return NULL;
-  }
-  quote->quoted = quoted;
-  return quote;
-}
-
 /* Weak reference allocation */
 
 WeakRef *create_weak_ref(Value object) {
@@ -614,15 +593,6 @@ Value syntax_to_datum(Value v) {
       delete_value(VECTOR(vector));
       return VECTOR(copy);
     }
-    case VALUE_QUOTE: {
-      Value quoted = syntax_to_datum(copy_value(TO_QUOTE(v)->quoted));
-      delete_value(v);
-      if (RESULT_OK(quoted)) {
-        return check_alloc(QUOTE(create_quote(quoted)));
-      }
-      delete_value(quoted);
-      return undefined;
-    }
     default:
       return v;
   }
@@ -645,6 +615,17 @@ int syntax_exact(const Value syntax, void *other) {
       && TO_SYNTAX(syntax)->quoted.object == other;
   }
   return syntax.type & VALUE_OBJECT && syntax.object == other;
+}
+
+int syntax_is_special(const Value syntax, Symbol *symbol, int arity) {
+  if (!syntax_is(syntax, VALUE_VECTOR)) {
+    return 0;
+  }
+  Vector *v = TO_VECTOR(syntax_get(syntax));
+  if (v->length != arity + 1) {
+    return 0;
+  }
+  return syntax_exact(v->cells[0], symbol);
 }
 
 Value syntax_get(const Value syntax) {

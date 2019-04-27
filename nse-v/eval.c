@@ -157,6 +157,8 @@ Value eval_slice(Slice slice, Scope *scope) {
     int is_special = 1;
     if (s == quote_symbol) {
       result = eval_quote(args, scope);
+    } else if (s == type_symbol) {
+      result = eval_type(args, scope);
     } else if (s == backquote_symbol) {
       result = eval_backquote(args, scope);
     } else if (s == if_symbol) {
@@ -238,19 +240,6 @@ Value eval(Value code, Scope *scope) {
     case VALUE_VECTOR:
     case VALUE_VECTOR_SLICE:
       return eval_slice(to_slice(code), scope);
-    case VALUE_QUOTE: {
-      Value quoted = copy_value(TO_QUOTE(code)->quoted);
-      delete_value(code);
-      return syntax_to_datum(quoted);
-    }
-    case VALUE_TYPE_QUOTE: {
-      Value quoted = copy_value(TO_QUOTE(code)->quoted);
-      delete_value(code);
-      Scope *type_scope = use_module_types(scope->module);
-      Value result = eval(quoted, type_scope);
-      scope_pop(type_scope);
-      return result;
-    }
     case VALUE_SYMBOL: {
       Value value = scope_get(scope, TO_SYMBOL(code));
       if (RESULT_OK(value) && value.type == VALUE_GEN_FUNC && !TO_GEN_FUNC(value)->context) {

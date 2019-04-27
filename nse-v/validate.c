@@ -4,6 +4,7 @@
 #include "value.h"
 #include "error.h"
 #include "write.h"
+#include "lang.h"
 #include "../src/util/stream.h"
 
 #include "validate.h"
@@ -128,8 +129,8 @@ int validate(const Value value, Validator validator) {
       raise_error(syntax_error, "expected a symbol");
       break;
     case VALIDATOR_TQUOTE: {
-      if (syntax_is(value, VALUE_TYPE_QUOTE)) {
-        *validator.tquote = TO_QUOTE(syntax_get(value));
+      if (syntax_is_special(value, type_symbol, 1)) {
+        *validator.tquote = TO_VECTOR(syntax_get(value));
         return 1;
       }
       raise_error(syntax_error, "expected a type");

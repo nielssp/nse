@@ -33,7 +33,7 @@ struct Validator {
   union {
     Symbol *exact;
     Symbol **symbol;
-    Quote **tquote;
+    Vector **tquote;
     Value *any;
     Validator *vector;
     Validator *rep;

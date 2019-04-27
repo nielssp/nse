@@ -8,6 +8,7 @@ typedef struct Slice Slice;
 typedef struct Scope Scope;
 
 Value eval_quote(Slice args, Scope *scope);
+Value eval_type(Slice args, Scope *scope);
 Value eval_backquote(Slice args, Scope *scope);
 Value eval_if(Slice args, Scope *scope);
 Value eval_let(Slice args, Scope *scope);

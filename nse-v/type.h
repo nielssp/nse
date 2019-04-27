@@ -122,12 +122,8 @@ extern Type *string_type;
 extern Type *symbol_type;
 /* keyword < any */
 extern Type *keyword_type;
-/* quote < any */
-extern Type *quote_type;
 /* continue < any */
 extern Type *continue_type;
-/* type-quote < any */
-extern Type *type_quote_type;
 /* type < any */
 extern Type *type_type;
 /* syntax < any */

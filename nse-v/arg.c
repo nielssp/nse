@@ -245,21 +245,20 @@ int match_pattern(Scope **scope, Value pattern, Value actual) {
     case VALUE_SYMBOL:
       *scope = scope_push(*scope, TO_SYMBOL(pattern), actual);
       return 1;
-    case VALUE_QUOTE:
-      if (actual.type == VALUE_DATA && syntax_is(TO_QUOTE(pattern)->quoted, VALUE_SYMBOL)) {
-        Symbol *tag = TO_SYMBOL(syntax_get(TO_QUOTE(pattern)->quoted));
-        if (tag != TO_DATA(actual)->tag || TO_DATA(actual)->size != 0) {
+    case VALUE_VECTOR: {
+      Vector *p = TO_VECTOR(pattern);
+      if (p->length == 2 && syntax_exact(p->cells[0], quote_symbol)) {
+        if (actual.type == VALUE_DATA && syntax_is(p->cells[1], VALUE_SYMBOL)) {
+          Symbol *tag = TO_SYMBOL(syntax_get(p->cells[1]));
+          if (tag != TO_DATA(actual)->tag || TO_DATA(actual)->size != 0) {
+            raise_error(pattern_error, "pattern match failed");
+            result = 0;
+          }
+        } else if (equals(p->cells[1], actual) != EQ_EQUAL) {
           raise_error(pattern_error, "pattern match failed");
           result = 0;
         }
-      } else if (equals(TO_QUOTE(pattern)->quoted, actual) != EQ_EQUAL) {
-        raise_error(pattern_error, "pattern match failed");
-        result = 0;
-      }
-      break;
-    case VALUE_VECTOR: {
-      Vector *p = TO_VECTOR(pattern);
-      if (actual.type == VALUE_DATA) {
+      } else if (actual.type == VALUE_DATA) {
         Data *d = TO_DATA(actual);
         if (p->length == d->size + 1 && syntax_equals(p->cells[0], SYMBOL(d->tag))) {
           for (size_t i = 0; i < d->size; i++) {

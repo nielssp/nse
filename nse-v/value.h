@@ -21,7 +21,6 @@ typedef struct Vector Vector;
 typedef struct VectorSlice VectorSlice;
 typedef struct List List;
 typedef struct String String;
-typedef struct Quote Quote;
 typedef struct WeakRef WeakRef;
 typedef struct Symbol Symbol;
 typedef struct Data Data;
@@ -64,10 +63,6 @@ typedef enum {
   VALUE_LIST         = VALUE_OBJECT | 0x05,
   /* Byte array */
   VALUE_STRING       = VALUE_OBJECT | 0x06,
-  /* Quote */
-  VALUE_QUOTE        = VALUE_OBJECT | 0x07,
-  /* Type quote */
-  VALUE_TYPE_QUOTE   = VALUE_OBJECT | 0x08,
   /* Weak reference */
   VALUE_WEAK_REF     = VALUE_OBJECT | 0x09,
   /* Symbol */
@@ -296,27 +291,6 @@ String *resize_string_buffer(String *s, size_t new_capacity);
 
 
 
-/* Quote */
-
-struct Quote {
-  Object header;
-  Value quoted;
-};
-
-/* Convert Quote * to Value */
-#define QUOTE(v) ((Value){ .type = VALUE_QUOTE, .object = (Object *)(v) })
-
-/* Convert Value to Quote * */
-#define TO_QUOTE(val) ((Quote *)(val).object)
-
-/* Convert Quote * to Value of type TYPE_QUOTE */
-#define TYPE_QUOTE(v) ((Value){ .type = VALUE_TYPE_QUOTE, .object = (Object *)(v) })
-
-/* Create quote object */
-Quote *create_quote(Value quoted);
-
-
-
 /* Weak references */
 
 /* Weak reference object
@@ -487,6 +461,8 @@ Equality syntax_equals(const Value syntax, const Value other);
 
 /* Check quoted value for object reference equality */
 int syntax_exact(const Value syntax, void *other);
+
+int syntax_is_special(const Value syntax, Symbol *symbol, int arity);
 
 /* Get quoted value */
 Value syntax_get(const Value syntax);
