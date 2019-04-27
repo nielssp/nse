@@ -14,6 +14,12 @@ extern Module *lang_module;
 
 extern Symbol *out_of_memory_error;
 
+extern Symbol *quote_symbol;
+extern Symbol *type_symbol;
+extern Symbol *backquote_symbol;
+extern Symbol *unquote_symbol;
+extern Symbol *splice_symbol;
+
 extern Symbol *true_symbol;
 extern Symbol *false_symbol;
 extern Symbol *if_symbol;

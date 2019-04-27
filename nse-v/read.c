@@ -359,6 +359,34 @@ Syntax *nse_read(Reader *input) {
     }
     return NULL;
   }
+  if (c == '`' || c == ',') {
+    Vector *v = create_vector(2);
+    if (v) {
+      if (c == ',') {
+        if (peekn(2, input) == '@') {
+          pop(input);
+          v->cells[0] = copy_value(SYMBOL(splice_symbol));
+        } else {
+          v->cells[0] = copy_value(SYMBOL(unquote_symbol));
+        }
+      } else {
+        v->cells[0] = copy_value(SYMBOL(backquote_symbol));
+      }
+      Syntax *syntax = start_pos(create_syntax(VECTOR(v)), input);
+      if (syntax) {
+        pop(input);
+        Value quoted = check_alloc(SYNTAX(nse_read(input)));
+        if (RESULT_OK(quoted)) {
+          v->cells[1] = quoted;
+          return end_pos(syntax, input);
+        }
+        delete_syntax(syntax);
+      } else {
+        delete_value(VECTOR(v));
+      }
+    }
+    return NULL;
+  }
   if (c == '#') {
     int skip = 0;
     Syntax *syntax = start_pos(create_syntax(undefined), input);

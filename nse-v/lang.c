@@ -8,6 +8,12 @@
 
 #include "lang.h"
 
+Symbol *quote_symbol = NULL;
+Symbol *type_symbol = NULL;
+Symbol *backquote_symbol = NULL;
+Symbol *unquote_symbol = NULL;
+Symbol *splice_symbol = NULL;
+
 Symbol *true_symbol = NULL;
 Symbol *false_symbol = NULL;
 Symbol *if_symbol = NULL;
@@ -58,6 +64,12 @@ void init_lang_module() {
   init_error_module();
 
   lang_module = create_module("lang");
+
+  quote_symbol = module_extern_symbol_c(lang_module, "quote");
+  type_symbol = module_extern_symbol_c(lang_module, "type");
+  backquote_symbol = module_extern_symbol_c(lang_module, "backquote");
+  unquote_symbol = module_extern_symbol_c(lang_module, "unquote");
+  splice_symbol = module_extern_symbol_c(lang_module, "splice");
 
   true_symbol = module_extern_symbol_c(lang_module, "true"); 
   false_symbol = module_extern_symbol_c(lang_module, "false");

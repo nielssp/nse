@@ -639,6 +639,14 @@ Equality syntax_equals(const Value syntax, const Value other) {
   return equals(syntax, other);
 }
 
+int syntax_exact(const Value syntax, void *other) {
+  if (syntax.type == VALUE_SYNTAX) {
+    return TO_SYNTAX(syntax)->quoted.type & VALUE_OBJECT
+      && TO_SYNTAX(syntax)->quoted.object == other;
+  }
+  return syntax.type & VALUE_OBJECT && syntax.object == other;
+}
+
 Value syntax_get(const Value syntax) {
   if (syntax.type == VALUE_SYNTAX) {
     return TO_SYNTAX(syntax)->quoted;

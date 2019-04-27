@@ -155,7 +155,11 @@ Value eval_slice(Slice slice, Scope *scope) {
     Symbol *s = TO_SYMBOL(syntax_get(operator));
     Value result = undefined;
     int is_special = 1;
-    if (s == if_symbol) {
+    if (s == quote_symbol) {
+      result = eval_quote(args, scope);
+    } else if (s == backquote_symbol) {
+      result = eval_backquote(args, scope);
+    } else if (s == if_symbol) {
       result = eval_if(args, scope);
     } else if (s == let_symbol) {
       result = eval_let(args, scope);

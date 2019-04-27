@@ -11,6 +11,134 @@
 
 #include "special.h"
 
+Value eval_quote(Slice args, Scope *scope) {
+  Value result = undefined;
+  if (args.length == 1) {
+    result = syntax_to_datum(copy_value(args.cells[0]));
+  } else {
+    raise_error(syntax_error, "expected (quote ANY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value backquote_to_datum(Value v, Scope *scope);
+
+static Value backquote_vector_to_datum(Vector *v, Scope *scope) {
+  if (v->length == 0) {
+    return VECTOR(v);
+  }
+  Value result = undefined;
+  if (syntax_exact(v->cells[0], backquote_symbol)) {
+    return syntax_to_datum(VECTOR(v));
+  } else if (syntax_exact(v->cells[0], unquote_symbol)) {
+    if (v->length == 2) {
+      result = eval(copy_value(v->cells[1]), scope);
+    } else {
+      raise_error(syntax_error, "expected (unquote ANY)");
+    }
+    delete_value(VECTOR(v));
+    return result;
+  }
+  Vector *splices = create_vector(v->length);
+  size_t length = 0;
+  if (splices) {
+    int ok = 1;
+    for (size_t i = 0; i < v->length; i++) {
+      if (syntax_is(v->cells[i], VALUE_VECTOR)) {
+        Vector *spliced = TO_VECTOR(syntax_get(v->cells[i]));
+        if (spliced->length > 0 && syntax_exact(spliced->cells[0], splice_symbol)) {
+          if (spliced->length == 2) {
+            splices->cells[i] = eval(copy_value(spliced->cells[1]), scope);
+            if (!RESULT_OK(splices->cells[i])) {
+              ok = 0;
+              break;
+            } else if (splices->cells[i].type != VALUE_VECTOR) {
+              set_debug_form(copy_value(spliced->cells[1]));
+              raise_error(syntax_error, "expected VECTOR");
+              ok = 0;
+              break;
+            }
+            length += TO_VECTOR(splices->cells[i])->length;
+            continue;
+          } else {
+            set_debug_form(copy_value(v->cells[i]));
+            raise_error(syntax_error, "expected (splice VECTOR)");
+            ok = 0;
+            break;
+          }
+        }
+      }
+      length += 1;
+    }
+    if (ok) {
+      Vector *final = create_vector(length);
+      if (final) {
+        size_t final_i = 0;
+        for (size_t i = 0; i < v->length; i++) {
+          if (RESULT_OK(splices->cells[i])) {
+            Vector *splice = TO_VECTOR(splices->cells[i]);
+            for (size_t j = 0; j < splice->length; j++) {
+              final->cells[final_i++] = copy_value(splice->cells[j]);
+            }
+          } else {
+            Value single = backquote_to_datum(copy_value(v->cells[i]), scope);
+            if (!RESULT_OK(single)) {
+              ok = 0;
+              break;
+            }
+            final->cells[final_i++] = single;
+          }
+        }
+        if (ok) {
+          result = VECTOR(final);
+        } else {
+          delete_value(VECTOR(final));
+        }
+      }
+    }
+    delete_value(VECTOR(splices));
+  }
+  delete_value(VECTOR(v));
+  return result;
+}
+
+static Value backquote_to_datum(Value v, Scope *scope) {
+  Value result;
+  switch (v.type) {
+    case VALUE_SYNTAX: {
+      Syntax *previous = push_debug_form(copy_value(v));
+      result = backquote_to_datum(copy_value(TO_SYNTAX(v)->quoted), scope);
+      delete_value(v);
+      return pop_debug_form(result, previous);
+    }
+    case VALUE_VECTOR:
+      return backquote_vector_to_datum(TO_VECTOR(v), scope);
+    case VALUE_QUOTE: {
+      Value quoted = syntax_to_datum(copy_value(TO_QUOTE(v)->quoted));
+      delete_value(v);
+      if (RESULT_OK(quoted)) {
+        return check_alloc(QUOTE(create_quote(quoted)));
+      }
+      delete_value(quoted);
+      return undefined;
+    }
+    default:
+      return v;
+  }
+}
+
+Value eval_backquote(Slice args, Scope *scope) {
+  Value result = undefined;
+  if (args.length == 1) {
+    result = backquote_to_datum(copy_value(args.cells[0]), scope);
+  } else {
+    raise_error(syntax_error, "expected (backquote ANY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 /* (if COND CONS ALT) */
 Value eval_if(Slice args, Scope *scope) {
   Value result = undefined;
@@ -346,7 +474,6 @@ Value eval_def_macro(Slice args, Scope *scope) {
           delete_value(env[0]);
           delete_value(env[1]);
           if (RESULT_OK(result)) {
-            // TODO: optimize
             module_define_macro(copy_object(symbol), copy_value(result));
           }
         } else {

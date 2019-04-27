@@ -485,6 +485,9 @@ int syntax_is(const Value syntax, ValueType type);
 /* Check quoted value for equality */
 Equality syntax_equals(const Value syntax, const Value other);
 
+/* Check quoted value for object reference equality */
+int syntax_exact(const Value syntax, void *other);
+
 /* Get quoted value */
 Value syntax_get(const Value syntax);
 
