@@ -94,6 +94,8 @@ struct TypeArray {
   Type *elements[];
 };
 
+/* nothing */
+extern Type *nothing_type;
 /* any */
 extern Type *any_type;
 /* bool < any */
@@ -261,7 +263,7 @@ int is_subtype_of(const Type *a, const Type *b);
 int are_subtypes_of(const TypeArray *a, const TypeArray *b);
 /* Returns a common supertype for types `a` and `b`.
  * `any_type` is returned if no such common supertype can be found. */
-const Type *unify_types(const Type *a, const Type *b);
+Type *unify_types(Type *a, Type *b);
 /* Equality function for type arrays. */
 int type_array_equals(const TypeArray *a, const TypeArray *b);
 

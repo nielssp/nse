@@ -388,6 +388,7 @@ struct GenFunc {
   Symbol *name;
   Module *context;
   uint8_t min_arity;
+  uint8_t variadic;
   uint8_t type_parameters;
   uint8_t parameter_indices[];
 };
@@ -399,7 +400,7 @@ struct GenFunc {
 #define TO_GEN_FUNC(val) ((GenFunc *)(val).object)
 
 /* Create a generic function */
-GenFunc *create_gen_func(Symbol *name, Module *context, uint8_t min_arity, uint8_t type_parameters, uint8_t const parameter_indices[]);
+GenFunc *create_gen_func(Symbol *name, Module *context, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, uint8_t const parameter_indices[]);
 
 
 
@@ -460,9 +461,9 @@ int syntax_is(const Value syntax, ValueType type);
 Equality syntax_equals(const Value syntax, const Value other);
 
 /* Check quoted value for object reference equality */
-int syntax_exact(const Value syntax, void *other);
+int syntax_exact(const Value syntax, const void *other);
 
-int syntax_is_special(const Value syntax, Symbol *symbol, int arity);
+int syntax_is_special(const Value syntax, const Symbol *symbol, int arity);
 
 /* Get quoted value */
 Value syntax_get(const Value syntax);

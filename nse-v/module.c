@@ -2,6 +2,7 @@
  * Copyright (c) 2019 Niels Sonnich Poulsen (http://nielssp.dk)
  */
 #include <string.h>
+#include <stdarg.h>
 
 #include "value.h"
 #include "type.h"
@@ -638,6 +639,24 @@ void module_ext_define_type(Module *module, const char *name, Value value) {
     TO_TYPE(value)->name = copy_object(symbol);
   }
   module_define_type(symbol, value);
+}
+
+void module_ext_define_generic(Module *module, const char *name, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, uint8_t *indices) {
+  Symbol *symbol = module_extern_symbol(module, c_string_to_string(name));
+  GenFunc *f = create_gen_func(copy_object(symbol), NULL, min_arity, variadic, type_parameters, indices);
+  module_define(symbol, GEN_FUNC(f));
+}
+
+void module_ext_define_method(Module *module, const char *name, Value func, int type_parameters, ...) {
+  va_list ap;
+  Symbol *symbol = module_extern_symbol(module, c_string_to_string(name));
+  TypeArray *types = create_type_array_null(type_parameters);
+  va_start(ap, type_parameters);
+  for (int i = 0; i < type_parameters; i++) {
+    types->elements[i] = va_arg(ap, Type *);
+  }
+  va_end(ap);
+  module_define_method(module, symbol, types, func);
 }
 
 static Hash method_key_hash(const MethodKey *m) {

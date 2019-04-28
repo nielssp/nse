@@ -57,6 +57,10 @@ void module_ext_define(Module *module, const char *name, Value value);
 void module_ext_define_macro(Module *module, const char *name, Value value);
 void module_ext_define_type(Module *module, const char *name, Value value);
 
+void module_ext_define_generic(Module *module, const char *name, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, uint8_t *indices);
+void module_ext_define_method(Module *module, const char *name, Value value, int type_parameters, ...);
+
+
 Value module_find_method(Module *module, const Symbol *symbol, const TypeArray *parameters);
 
 Module *find_module(const String *s);

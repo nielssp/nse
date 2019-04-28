@@ -526,7 +526,7 @@ Closure *create_closure(ClosureFunc f, Value const env[], size_t env_size) {
 
 /* Generic function allocaton */
 
-GenFunc *create_gen_func(Symbol *name, Module *context, uint8_t min_arity, uint8_t type_parameters, uint8_t const parameter_indices[]) {
+GenFunc *create_gen_func(Symbol *name, Module *context, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, uint8_t const parameter_indices[]) {
   GenFunc *gf = allocate_object(sizeof(GenFunc) + min_arity);
   if (!gf) {
     delete_value(SYMBOL(name));
@@ -535,9 +535,10 @@ GenFunc *create_gen_func(Symbol *name, Module *context, uint8_t min_arity, uint8
   gf->name = name;
   gf->context = context;
   gf->min_arity = min_arity;
+  gf->variadic = !!variadic;
   gf->type_parameters = type_parameters;
-  if (gf->min_arity > 0) {
-    memcpy(gf->parameter_indices, parameter_indices, min_arity);
+  if (gf->min_arity > 0 || gf->variadic) {
+    memcpy(gf->parameter_indices, parameter_indices, min_arity + gf->variadic);
   }
   return gf;
 }
@@ -609,7 +610,7 @@ Equality syntax_equals(const Value syntax, const Value other) {
   return equals(syntax, other);
 }
 
-int syntax_exact(const Value syntax, void *other) {
+int syntax_exact(const Value syntax, const void *other) {
   if (syntax.type == VALUE_SYNTAX) {
     return TO_SYNTAX(syntax)->quoted.type & VALUE_OBJECT
       && TO_SYNTAX(syntax)->quoted.object == other;
@@ -617,7 +618,7 @@ int syntax_exact(const Value syntax, void *other) {
   return syntax.type & VALUE_OBJECT && syntax.object == other;
 }
 
-int syntax_is_special(const Value syntax, Symbol *symbol, int arity) {
+int syntax_is_special(const Value syntax, const Symbol *symbol, int arity) {
   if (!syntax_is(syntax, VALUE_VECTOR)) {
     return 0;
   }

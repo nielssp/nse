@@ -10,17 +10,36 @@
 
 #include "system.h"
 
-static Value sum(Slice args, Scope *dynamic_scope) {
+static Value nothing_sum(Slice args, Scope *dynamic_scope) {
+  delete_slice(args);
+  return I64(0);
+}
+
+static Value i64_sum(Slice args, Scope *dynamic_scope) {
   int64_t acc = 0;
-  double facc = 0.0;
-  int fp = 0;
+  for (size_t i = 0; i < args.length; i++) {
+    Value h = args.cells[i];
+    if (h.type == VALUE_I64) {
+      acc += h.i64;
+    } else {
+      delete_slice(args);
+      set_debug_arg_index(i);
+      raise_error(domain_error, "expected i64");
+      return undefined;
+    }
+  }
+  delete_slice(args);
+  return I64(acc);
+}
+
+static Value num_sum(Slice args, Scope *dynamic_scope) {
+  double acc = 0.0;
   for (size_t i = 0; i < args.length; i++) {
     Value h = args.cells[i];
     if (h.type == VALUE_I64) {
       acc += h.i64;
     } else if (h.type == VALUE_F64) {
-      facc += h.f64;
-      fp = 1;
+      acc += h.f64;
     } else {
       delete_slice(args);
       set_debug_arg_index(i);
@@ -29,57 +48,65 @@ static Value sum(Slice args, Scope *dynamic_scope) {
     }
   }
   delete_slice(args);
-  if (fp) {
-    return F64(acc + facc);
-  }
-  return I64(acc);
+  return F64(acc);
 }
 
-static Value subtract(Slice args, Scope *dynamic_scope) {
+static Value i64_subtract(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 0) {
     raise_error(domain_error, "too few parameters");
-  } else if (args.length == 1) {
-    if (args.cells[0].type == VALUE_I64) {
-      result = I64(-args.cells[0].i64);
-    } else if (args.cells[0].type == VALUE_F64) {
-      result = F64(-args.cells[0].f64);
-    } else {
-      set_debug_arg_index(0);
-      raise_error(domain_error, "expected a number");
-    }
+  } else if (args.cells[0].type != VALUE_I64) {
+    set_debug_arg_index(0);
+    raise_error(domain_error, "expected i64");
   } else {
-    int64_t acc = 0;
-    double facc = 0.0;
-    int fp = 0;
-    for (size_t i = 0; i < args.length; i++) {
-      if (args.cells[i].type == VALUE_I64) {
-        if (fp) {
-          facc -= args.cells[i].i64;
+    int64_t acc = args.cells[0].i64;
+    if (args.length > 1) {
+      for (size_t i = 1; i < args.length; i++) {
+        Value h = args.cells[i];
+        if (h.type == VALUE_I64) {
+          acc -= h.i64;
         } else {
-          acc -= args.cells[i].i64;
+          delete_slice(args);
+          set_debug_arg_index(i);
+          raise_error(domain_error, "expected i64");
+          return undefined;
         }
-      } else if (args.cells[i].type == VALUE_F64) {
-        if (!fp) {
-          facc = acc;
-          fp = 1;
-        }
-        facc -= args.cells[i].f64;
-      } else {
-        fp = -1;
-        set_debug_arg_index(i);
-        raise_error(domain_error, "expected a number");
-        break;
       }
-      if (i == 0) {
-        acc = -acc;
-        facc = -facc;
-      }
-    }
-    if (fp == 1) {
-      result = F64(facc);
-    } else if (fp == 0) {
       result = I64(acc);
+    } else {
+      result = I64(-acc);
+    }
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value num_subtract(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 0) {
+    raise_error(domain_error, "too few parameters");
+  } else if (args.cells[0].type != VALUE_I64 && args.cells[0].type != VALUE_F64) {
+    set_debug_arg_index(0);
+    raise_error(domain_error, "expected number");
+  } else {
+    double acc = args.cells[0].type == VALUE_I64 ? args.cells[0].i64 : args.cells[0].f64;
+    if (args.length > 1) {
+      for (size_t i = 1; i < args.length; i++) {
+        Value h = args.cells[i];
+        if (h.type == VALUE_I64) {
+          acc -= h.i64;
+        } else if (h.type == VALUE_F64) {
+          acc -= h.f64;
+        } else {
+          delete_slice(args);
+          set_debug_arg_index(i);
+          raise_error(domain_error, "expected number");
+          return undefined;
+        }
+      }
+      result = F64(acc);
+    } else {
+      result = F64(-acc);
     }
   }
   delete_slice(args);
@@ -187,27 +214,33 @@ static Value vector_slice_length(Slice args, Scope *dynamic_scope) {
 
 Module *get_system_module() {
   Module *system = create_module("system");
-  module_ext_define(system, "+", FUNC(sum));
-  module_ext_define(system, "-", FUNC(subtract));
 
   module_ext_define(system, "++", FUNC(append));
   module_ext_define(system, "tabulate", FUNC(tabulate));
 
   module_ext_define(system, "type-of", FUNC(type_of));
 
-  Symbol *length_symbol = module_extern_symbol_c(system, "length");
-  module_define(copy_object(length_symbol),
-      GEN_FUNC(create_gen_func(copy_object(length_symbol), NULL, 1, 1, (uint8_t[]){ 0 })));
-  module_define_method(system, copy_object(length_symbol),
-      create_type_array(1, (Type *[]){get_poly_instance(copy_generic(vector_type))}),
-      FUNC(vector_length));
-  module_define_method(system, copy_object(length_symbol),
-      create_type_array(1, (Type *[]){get_poly_instance(copy_generic(vector_slice_type))}),
-      FUNC(vector_slice_length));
-  module_define_method(system, copy_object(length_symbol),
-      create_type_array(1, (Type *[]){copy_type(string_type)}),
-      FUNC(string_length));
-  delete_value(SYMBOL(length_symbol));
+  module_ext_define_generic(system, "+", 0, 1, 1, (uint8_t[]){ 0 });
+  module_ext_define_method(system, "+", FUNC(nothing_sum),
+      1, copy_type(nothing_type));
+  module_ext_define_method(system, "+", FUNC(i64_sum),
+      1, copy_type(i64_type));
+  module_ext_define_method(system, "+", FUNC(num_sum),
+      1, copy_type(num_type));
+
+  module_ext_define_generic(system, "-", 1, 1, 1, (uint8_t[]){ 0, 0 });
+  module_ext_define_method(system, "-", FUNC(i64_subtract),
+      1, copy_type(i64_type));
+  module_ext_define_method(system, "-", FUNC(num_subtract),
+      1, copy_type(num_type));
+
+  module_ext_define_generic(system, "length", 1, 0, 1, (uint8_t[]){ 0 });
+  module_ext_define_method(system, "length", FUNC(vector_length),
+      1, get_poly_instance(copy_generic(vector_type)));
+  module_ext_define_method(system, "length", FUNC(vector_slice_length),
+      1, get_poly_instance(copy_generic(vector_slice_type)));
+  module_ext_define_method(system, "length", FUNC(string_length),
+      1, copy_type(string_type));
 
   Value stdin_val = POINTER(create_pointer(copy_type(stream_type),
         stdin_stream, void_destructor));

@@ -26,11 +26,27 @@ Value apply_generic(GenFunc *func, Slice args, Scope *dynamic_scope) {
   TypeArray *types = create_type_array_null(func->type_parameters);
   for (int i = 0; i < func->min_arity; i++) {
     int index = func->parameter_indices[i];
-    types->elements[index] = get_type(args.cells[i]);
+    if (!types->elements[index]) {
+      types->elements[index] = get_type(args.cells[i]);
+    } else {
+      types->elements[index] = unify_types(types->elements[index],
+          get_type(args.cells[i]));
+    }
+  }
+  if (func->variadic) {
+    int v_index = func->parameter_indices[func->min_arity];
+    for (int i = func->min_arity; i < args.length; i++) {
+      if (!types->elements[v_index]) {
+        types->elements[v_index] = get_type(args.cells[i]);
+      } else {
+        types->elements[v_index] = unify_types(types->elements[v_index],
+            get_type(args.cells[i]));
+      }
+    }
   }
   for (int i = 0; i < types->size; i++) {
     if (!types->elements[i]) {
-      types->elements[i] = copy_type(any_type);
+      types->elements[i] = copy_type(nothing_type);
     }
   }
   Value method = module_find_method(func->context, func->name, types);
@@ -242,9 +258,12 @@ Value eval(Value code, Scope *scope) {
       return eval_slice(to_slice(code), scope);
     case VALUE_SYMBOL: {
       Value value = scope_get(scope, TO_SYMBOL(code));
-      if (RESULT_OK(value) && value.type == VALUE_GEN_FUNC && !TO_GEN_FUNC(value)->context) {
+      if (RESULT_OK(value) && value.type == VALUE_GEN_FUNC
+          && !TO_GEN_FUNC(value)->context) {
         GenFunc *gf = TO_GEN_FUNC(value);
-        Value gf_copy = check_alloc(GEN_FUNC(create_gen_func(copy_object(gf->name), scope->module, gf->min_arity, gf->type_parameters, gf->parameter_indices)));
+        Value gf_copy = check_alloc(GEN_FUNC(create_gen_func(
+                copy_object(gf->name), scope->module, gf->min_arity,
+                gf->variadic, gf->type_parameters, gf->parameter_indices)));
         delete_value(value);
         return gf_copy;
       }

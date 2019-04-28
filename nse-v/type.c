@@ -42,6 +42,7 @@ struct FuncType {
 /* Map of function type instances. */
 FuncTypeMap func_types;
 
+Type *nothing_type;
 Type *any_type;
 Type *unit_type;
 Type *bool_type;
@@ -69,6 +70,7 @@ GType *weak_ref_type;
 
 void init_types() {
   func_types = create_func_type_map();
+  nothing_type = create_simple_type(NULL);
   any_type = create_simple_type(NULL);
   unit_type = create_simple_type(copy_type(any_type));
   bool_type = create_simple_type(copy_type(any_type));
@@ -435,24 +437,37 @@ int are_subtypes_of(const TypeArray *a, const TypeArray *b) {
   return 1;
 }
 
-const Type *unify_types(const Type *a, const Type *b) {
-  while (b && a) {
-    const Type *tmp = a;
-    while (tmp) {
-      if (b == tmp) {
-        return tmp;
-      } else if (tmp->type == TYPE_POLY_INSTANCE && b->type == TYPE_INSTANCE
-          && tmp->poly_instance == b->instance.type) {
-        return b;
-      } else if (b->type == TYPE_POLY_INSTANCE && tmp->type == TYPE_INSTANCE
-          && b->poly_instance == tmp->instance.type) {
-        return tmp;
+Type *unify_types(Type *a, Type *b) {
+  Type *result = NULL;
+  Type *tmp1 = b;
+  while (tmp1) {
+    Type *tmp2 = a;
+    while (tmp2) {
+      if (tmp1 == tmp2) {
+        result = copy_type(tmp2);
+        break;
+      } else if (tmp2->type == TYPE_POLY_INSTANCE && tmp1->type == TYPE_INSTANCE
+          && tmp2->poly_instance == tmp1->instance.type) {
+        result = copy_type(tmp1);
+        break;
+      } else if (tmp1->type == TYPE_POLY_INSTANCE && tmp2->type == TYPE_INSTANCE
+          && tmp1->poly_instance == tmp2->instance.type) {
+        result = copy_type(tmp2);
+        break;
       }
-      tmp = tmp->super;
+      tmp2 = tmp2->super;
     }
-    b = b->super;
+    if (result) {
+      break;
+    }
+    tmp1 = tmp1->super;
   }
-  return any_type;
+  delete_type(a);
+  delete_type(b);
+  if (!result) {
+    return copy_type(any_type);
+  }
+  return result;
 }
 
 Type *get_type(const Value value) {
