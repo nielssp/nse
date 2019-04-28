@@ -57,7 +57,7 @@ void module_ext_define(Module *module, const char *name, Value value);
 void module_ext_define_macro(Module *module, const char *name, Value value);
 void module_ext_define_type(Module *module, const char *name, Value value);
 
-void module_ext_define_generic(Module *module, const char *name, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, uint8_t *indices);
+void module_ext_define_generic(Module *module, const char *name, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, int8_t *indices);
 void module_ext_define_method(Module *module, const char *name, Value value, int type_parameters, ...);
 
 

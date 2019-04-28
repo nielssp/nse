@@ -526,7 +526,7 @@ Closure *create_closure(ClosureFunc f, Value const env[], size_t env_size) {
 
 /* Generic function allocaton */
 
-GenFunc *create_gen_func(Symbol *name, Module *context, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, uint8_t const parameter_indices[]) {
+GenFunc *create_gen_func(Symbol *name, Module *context, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, int8_t const parameter_indices[]) {
   GenFunc *gf = allocate_object(sizeof(GenFunc) + min_arity);
   if (!gf) {
     delete_value(SYMBOL(name));

@@ -26,21 +26,25 @@ Value apply_generic(GenFunc *func, Slice args, Scope *dynamic_scope) {
   TypeArray *types = create_type_array_null(func->type_parameters);
   for (int i = 0; i < func->min_arity; i++) {
     int index = func->parameter_indices[i];
-    if (!types->elements[index]) {
-      types->elements[index] = get_type(args.cells[i]);
-    } else {
-      types->elements[index] = unify_types(types->elements[index],
-          get_type(args.cells[i]));
+    if (index >= 0) {
+      if (!types->elements[index]) {
+        types->elements[index] = get_type(args.cells[i]);
+      } else {
+        types->elements[index] = unify_types(types->elements[index],
+            get_type(args.cells[i]));
+      }
     }
   }
   if (func->variadic) {
     int v_index = func->parameter_indices[func->min_arity];
-    for (int i = func->min_arity; i < args.length; i++) {
-      if (!types->elements[v_index]) {
-        types->elements[v_index] = get_type(args.cells[i]);
-      } else {
-        types->elements[v_index] = unify_types(types->elements[v_index],
-            get_type(args.cells[i]));
+    if (v_index >= 0) {
+      for (int i = func->min_arity; i < args.length; i++) {
+        if (!types->elements[v_index]) {
+          types->elements[v_index] = get_type(args.cells[i]);
+        } else {
+          types->elements[v_index] = unify_types(types->elements[v_index],
+              get_type(args.cells[i]));
+        }
       }
     }
   }

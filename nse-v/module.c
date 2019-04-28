@@ -641,7 +641,7 @@ void module_ext_define_type(Module *module, const char *name, Value value) {
   module_define_type(symbol, value);
 }
 
-void module_ext_define_generic(Module *module, const char *name, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, uint8_t *indices) {
+void module_ext_define_generic(Module *module, const char *name, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, int8_t *indices) {
   Symbol *symbol = module_extern_symbol(module, c_string_to_string(name));
   GenFunc *f = create_gen_func(copy_object(symbol), NULL, min_arity, variadic, type_parameters, indices);
   module_define(symbol, GEN_FUNC(f));

@@ -211,6 +211,60 @@ static Value vector_slice_length(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value string_elem(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_I64
+      && args.cells[1].type == VALUE_STRING) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_STRING(args.cells[1])->length) {
+      result = I64(TO_STRING(args.cells[1])->bytes[args.cells[0].i64]);
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds");
+    }
+  } else {
+    raise_error(domain_error, "expected (elem INT STRING)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value vector_elem(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_I64
+      && args.cells[1].type == VALUE_VECTOR) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_VECTOR(args.cells[1])->length) {
+      result = copy_value(TO_VECTOR(args.cells[1])->cells[args.cells[0].i64]);
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds");
+    }
+  } else {
+    raise_error(domain_error, "expected (elem INT VECTOR)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value vector_slice_elem(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_I64
+      && args.cells[1].type == VALUE_VECTOR_SLICE) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_VECTOR_SLICE(args.cells[1])->length) {
+      result = copy_value(TO_VECTOR_SLICE(args.cells[1])->cells[args.cells[0].i64]);
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds");
+    }
+  } else {
+    raise_error(domain_error, "expected (elem INT VECTOR-SLICE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 
 Module *get_system_module() {
   Module *system = create_module("system");
@@ -220,7 +274,7 @@ Module *get_system_module() {
 
   module_ext_define(system, "type-of", FUNC(type_of));
 
-  module_ext_define_generic(system, "+", 0, 1, 1, (uint8_t[]){ 0 });
+  module_ext_define_generic(system, "+", 0, 1, 1, (int8_t[]){ 0 });
   module_ext_define_method(system, "+", FUNC(nothing_sum),
       1, copy_type(nothing_type));
   module_ext_define_method(system, "+", FUNC(i64_sum),
@@ -228,18 +282,26 @@ Module *get_system_module() {
   module_ext_define_method(system, "+", FUNC(num_sum),
       1, copy_type(num_type));
 
-  module_ext_define_generic(system, "-", 1, 1, 1, (uint8_t[]){ 0, 0 });
+  module_ext_define_generic(system, "-", 1, 1, 1, (int8_t[]){ 0, 0 });
   module_ext_define_method(system, "-", FUNC(i64_subtract),
       1, copy_type(i64_type));
   module_ext_define_method(system, "-", FUNC(num_subtract),
       1, copy_type(num_type));
 
-  module_ext_define_generic(system, "length", 1, 0, 1, (uint8_t[]){ 0 });
+  module_ext_define_generic(system, "length", 1, 0, 1, (int8_t[]){ 0 });
   module_ext_define_method(system, "length", FUNC(vector_length),
       1, get_poly_instance(copy_generic(vector_type)));
   module_ext_define_method(system, "length", FUNC(vector_slice_length),
       1, get_poly_instance(copy_generic(vector_slice_type)));
   module_ext_define_method(system, "length", FUNC(string_length),
+      1, copy_type(string_type));
+
+  module_ext_define_generic(system, "elem", 2, 0, 1, (int8_t[]){ -1, 0 });
+  module_ext_define_method(system, "elem", FUNC(vector_elem),
+      1, get_poly_instance(copy_generic(vector_type)));
+  module_ext_define_method(system, "elem", FUNC(vector_slice_elem),
+      1, get_poly_instance(copy_generic(vector_slice_type)));
+  module_ext_define_method(system, "elem", FUNC(string_elem),
       1, copy_type(string_type));
 
   Value stdin_val = POINTER(create_pointer(copy_type(stream_type),
@@ -253,6 +315,11 @@ Module *get_system_module() {
   module_ext_define(system, "*stderr*", stderr_val);
 
   module_ext_define_type(system, "any", TYPE(copy_type(any_type)));
+  module_ext_define_type(system, "num", TYPE(copy_type(num_type)));
+  module_ext_define_type(system, "int", TYPE(copy_type(int_type)));
+  module_ext_define_type(system, "float", TYPE(copy_type(float_type)));
+  module_ext_define_type(system, "i64", TYPE(copy_type(i64_type)));
+  module_ext_define_type(system, "f64", TYPE(copy_type(f64_type)));
   module_ext_define_type(system, "stream", TYPE(copy_type(stream_type)));
 
   return system;

@@ -390,7 +390,7 @@ struct GenFunc {
   uint8_t min_arity;
   uint8_t variadic;
   uint8_t type_parameters;
-  uint8_t parameter_indices[];
+  int8_t parameter_indices[];
 };
 
 /* Convert GenFunc * to Value */
@@ -400,7 +400,7 @@ struct GenFunc {
 #define TO_GEN_FUNC(val) ((GenFunc *)(val).object)
 
 /* Create a generic function */
-GenFunc *create_gen_func(Symbol *name, Module *context, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, uint8_t const parameter_indices[]);
+GenFunc *create_gen_func(Symbol *name, Module *context, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, int8_t const parameter_indices[]);
 
 
 
