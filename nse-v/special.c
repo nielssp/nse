@@ -675,7 +675,7 @@ static Value apply_constructor(Slice args, const Closure *closure, Scope *dynami
     }
     for (int i = 0; i < types->length; i++) {
       Type *formal = TO_TYPE(types->cells[i]);
-      int check = is_instance_of(get_type(args.cells[i]), copy_type(formal), g, 0, g_arity, &g_params);
+      int check = is_instance_of(get_type(args.cells[i]), formal, g, 0, g_arity, &g_params);
       if (check < 0) {
         ok = 0;
         break;
@@ -684,7 +684,7 @@ static Value apply_constructor(Slice args, const Closure *closure, Scope *dynami
         ok = 0;
         break;
       }
-      record[i] = copy_value(args.cells[i]);
+      record[i] = args.cells[i];
     }
   }
   Value result = undefined;
@@ -745,8 +745,113 @@ static Value eval_def_data_constructor(Slice args, Type *t, Scope *scope) {
   return result;
 }
 
+static Value apply_generic_type(Slice args, const Closure *closure, Scope *dynamic_scope) {
+  GType *g = TO_POINTER(closure->env[0])->pointer;
+  if (args.length != generic_type_arity(g)) {
+    raise_error(domain_error, "wrong number of parameters for generic type, expected %d, got %d", generic_type_arity(g), args.length);
+    delete_slice(args);
+    return undefined;
+  }
+  TypeArray *parameters = create_type_array_null(args.length);
+  for (int i = 0; i < args.length; i++) {
+    if (args.cells[i].type != VALUE_TYPE) {
+      set_debug_arg_index(i);
+      raise_error(domain_error, "generic type parameter must be a type");
+      delete_type_array(parameters);
+      delete_slice(args);
+      return undefined;
+    }
+    parameters->elements[i] = copy_type(TO_TYPE(args.cells[i]));
+  }
+  return check_alloc(TYPE(get_instance(copy_generic(g), parameters)));
+}
+
+static GType *eval_def_generic_type(Vector *sig, Scope **scope) {
+  if (sig->length > 1 && syntax_is(sig->cells[0], VALUE_SYMBOL)) {
+    Symbol *name = TO_SYMBOL(syntax_get(sig->cells[0]));
+    GType *g = create_generic(sig->length - 1, copy_type(any_type));
+    if (g) {
+      set_generic_type_name(g, copy_object(name));
+      int ok = 1;
+      for (int i = 1; i < sig->length; i++) {
+        if (!syntax_is(sig->cells[i], VALUE_SYMBOL)) {
+          set_debug_form(copy_value(sig->cells[i]));
+          ok = 0; break;
+        }
+        Symbol *var_name = TO_SYMBOL(syntax_get(sig->cells[i]));
+        Type *var = create_poly_var(copy_generic(g), i - 1);
+        if (!var) {
+          ok = 0; break;
+        }
+        *scope = scope_push(*scope, copy_object(var_name), TYPE(var));
+      }
+      if (ok) {
+        Value g_ref = check_alloc(POINTER(create_pointer(copy_type(generic_type_type), copy_generic(g), (Destructor) delete_generic)));
+        if (RESULT_OK(g_ref)) {
+          Value env[] = {g_ref};
+          Value func = check_alloc(CLOSURE(create_closure(apply_generic_type, env, 1)));
+          if (RESULT_OK(func)) {
+            module_define_type(copy_object(name), func);
+            delete_value(g_ref);
+            delete_value(VECTOR(sig));
+            return g;
+          }
+          delete_value(g_ref);
+        }
+        delete_generic(g);
+      }
+    }
+  } else {
+    raise_error(syntax_error, "expected (SYMBOL ... PARAMS)");
+  }
+  delete_value(VECTOR(sig));
+  return NULL;
+}
+
 static Value eval_def_data_generic(Vector *sig, Slice args, Scope *scope) {
-  return undefined;
+  Value result = undefined;
+  Scope *type_scope = use_module_types(scope->module);
+  GType *g = eval_def_generic_type(sig, &type_scope);
+  if (g) {
+    Type *t = get_poly_instance(copy_generic(g));
+    if (t) {
+      int ok = 1;
+      for (int i = 0; i < args.length; i++) {
+        Value constructor = args.cells[i];
+        if (syntax_is(constructor, VALUE_VECTOR) && TO_VECTOR(syntax_get(constructor))->length >= 1) {
+          Value constructor_result = eval_def_data_constructor(to_slice(copy_value(syntax_get(constructor))),
+              copy_type(t), type_scope);
+          if (!RESULT_OK(constructor_result)) {
+            ok = 0;
+            break;
+          }
+          delete_value(constructor_result);
+        } else if (syntax_is(constructor, VALUE_SYMBOL)) {
+          Symbol *tag = TO_SYMBOL(syntax_get(constructor));
+          Data *d = create_data(copy_type(t), copy_object(tag), NULL, 0);
+          if (!d) {
+            ok = 0;
+            break;
+          }
+          module_define(tag, DATA(d));
+        } else {
+          ok = 0;
+          set_debug_form(copy_value(constructor));
+          raise_error(syntax_error, "expected SYMBOL or (SYMBOL ... PARAMS)");
+          break;
+        }
+      }
+      if (ok) {
+        result = TYPE(t);
+      } else {
+        delete_type(t);
+      }
+    }
+    delete_generic(g);
+  }
+  delete_scope(type_scope);
+  delete_slice(args);
+  return result;
 }
 
 static Value eval_def_data_nongeneric(Value head, Slice args, Scope *scope) {
