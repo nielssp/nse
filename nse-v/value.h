@@ -468,6 +468,9 @@ int syntax_is_special(const Value syntax, const Symbol *symbol, int arity);
 /* Get quoted value */
 Value syntax_get(const Value syntax);
 
+/* Get element of quoted vector */
+Value syntax_get_elem(int index, const Value syntax);
+
 
 /* Type */
 

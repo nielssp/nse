@@ -8,6 +8,7 @@
 #include "eval.h"
 #include "arg.h"
 #include "type.h"
+#include "write.h"
 
 #include "special.h"
 
@@ -499,13 +500,338 @@ Value eval_def_macro(Slice args, Scope *scope) {
   return result;
 }
 
+static Vector *get_constructor_parameter_types(Slice args, Scope *scope) {
+  Vector *types = create_vector(args.length);
+  int ok = 1;
+  for (int i = 0; i < args.length; i++) {
+    Type *t;
+    if (syntax_is(args.cells[i], VALUE_SYMBOL)) {
+      t = copy_type(any_type);
+    } else if (syntax_is_special(args.cells[i], type_symbol, 1)) {
+      Value type_value = eval(copy_value(syntax_get_elem(1, args.cells[i])), scope);
+      if (type_value.type != VALUE_TYPE) {
+        set_debug_form(copy_value(args.cells[i]));
+        raise_error(syntax_error, "expected a type");
+        ok = 0; break;
+      }
+      t = TO_TYPE(type_value);
+    } else if (syntax_is(args.cells[i], VALUE_VECTOR)) {
+      Vector *arg = TO_VECTOR(syntax_get(args.cells[i]));
+      if (arg->length == 2 && syntax_is(arg->cells[0], VALUE_SYMBOL)
+          && syntax_is_special(arg->cells[1], type_symbol, 1)) {
+        Value type_value = eval(copy_value(syntax_get_elem(1, arg->cells[1])), scope);
+        if (type_value.type != VALUE_TYPE) {
+          set_debug_form(copy_value(arg->cells[1]));
+          raise_error(syntax_error, "expected a type");
+          ok = 0; break;
+        }
+        t = TO_TYPE(type_value);
+      } else {
+        set_debug_form(copy_value(args.cells[i]));
+        raise_error(syntax_error, "expected (SYMBOL ^TYPE)");
+        ok = 0; break;
+      }
+    } else {
+      set_debug_form(copy_value(args.cells[i]));
+      raise_error(syntax_error, "expected SYMBOL or ^TYPE or (SYMBOL ^TYPE)");
+      ok = 0; break;
+    }
+    types->cells[i] = TYPE(t);
+  }
+  delete_slice(args);
+  if (!ok) {
+    delete_value(VECTOR(types));
+    return NULL;
+  }
+  return types;
+}
+
+/* Checks if `actual` is a subtype of `formal` in the context of the generic
+ * type `g`. If type variables are encountered inside `formal`, they are
+ * assigned to the actual type via the `params` array.
+ * Returns 1 if actual is a subtype of formal, 0 if not, -1 on error.
+ * Parameters:
+ *   actual     - The actual type.
+ *   formal     - The formal type.
+ *   g          - The generic type.
+ *   invariant  - 1 if type check is invariant (i.e. actual must be equal to
+ *                formal), 0 if type check is covariant (i.e. actual must be
+ *                a subtype of formal).
+ *   arity      - The arity of `g`.
+ *   parameters - A pointer to an array of type parameters. The
+ *                array must initialized to NULL by the caller. If no type
+ *                parameters are encountered, the array will still be NULL after
+ *                the function returns.
+ */
+static int is_instance_of(Type *actual, const Type *formal, const GType *g, int invariant, int arity, TypeArray **params) {
+  int result;
+  switch (formal->type) {
+    case TYPE_SIMPLE:
+    case TYPE_FUNC:
+    case TYPE_POLY_INSTANCE:
+      if (invariant) {
+        result = actual == formal;
+      } else {
+        result = is_subtype_of(actual, formal);
+      }
+      break;
+    case TYPE_INSTANCE: {
+      if (actual->type == TYPE_POLY_INSTANCE && actual->poly_instance == formal->instance.type) {
+        result = 1;
+      } else if (actual->type != TYPE_INSTANCE
+          || actual->instance.type != formal->instance.type) {
+        if (invariant || !actual->super) {
+          result = 0;
+        } else {
+          result = is_instance_of(copy_type(actual->super), formal, g, invariant, arity, params);
+        }
+      } else {
+        result = 1;
+        TypeArray *a_params = actual->instance.parameters;
+        TypeArray *f_params = formal->instance.parameters;
+        // Should always have the same arity
+        for (int i = 0; i < a_params->size; i++) {
+          result = is_instance_of(copy_type(a_params->elements[i]), f_params->elements[i], g, 1, arity, params);
+          if (result != 1) {
+            break;
+          }
+        }
+      }
+      break;
+    }
+    case TYPE_POLY_VAR: {
+      if (formal->poly_var.type == g) {
+        if (*params) {
+          if ((*params)->elements[formal->poly_var.index]) {
+            result = is_subtype_of(actual, (*params)->elements[formal->poly_var.index]);
+          } else {
+            (*params)->elements[formal->poly_var.index] = move_type(actual);
+            return 1;
+          }
+        } else {
+          *params = create_type_array_null(arity);
+          if (!*params) {
+            result = -1;
+          } else {
+            (*params)->elements[formal->poly_var.index] = move_type(actual);
+            return 1;
+          }
+        }
+      } else {
+        result = actual == formal;
+      }
+    }
+  }
+  delete_type(actual);
+  return result;
+}
+
+static void raise_parameter_type_error(const Symbol *function_name, Type *expected, Type *actual, int index, const GType *g, const TypeArray *params, Scope *scope) {
+  char *function_name_s = nse_write_to_string(SYMBOL(function_name), scope->module);
+  char *expected_s;
+  if (params) {
+    Type *expected_instance = instantiate_type(expected, g, params);
+    expected_s = nse_write_to_string(TYPE(expected_instance), scope->module);
+    delete_type(expected_instance);
+  } else {
+    expected_s = nse_write_to_string(TYPE(expected), scope->module);
+    delete_type(expected);
+  }
+  char *actual_s = nse_write_to_string(TYPE(actual), scope->module);
+  set_debug_arg_index(index);
+  raise_error(domain_error, "%s expected parameter %d to be of type %s, not %s", function_name_s, index + 1, expected_s, actual_s);
+  free(expected_s);
+  free(actual_s);
+  free(function_name_s);
+  delete_type(actual);
+}
+
+static Value apply_constructor(Slice args, const Closure *closure, Scope *dynamic_scope) {
+  Type *t = TO_TYPE(closure->env[0]);
+  Symbol *tag = TO_SYMBOL(closure->env[1]);
+  Vector *types = TO_VECTOR(closure->env[2]);
+  Scope *scope = TO_POINTER(closure->env[3])->pointer;
+  Value *record = NULL;
+  int ok = 1;
+  GType *g = NULL;
+  TypeArray *g_params = NULL;
+  int g_arity = 0;
+  if (args.length != types->length) {
+    delete_slice(args);
+    char *tag_s = nse_write_to_string(SYMBOL(tag), scope->module);
+    raise_error(domain_error, "%s expected %d parameters, but got %d", tag_s, types->length, args.length);
+    free(tag_s);
+    return undefined;
+  }
+  if (t->type == TYPE_POLY_INSTANCE) {
+    g = t->poly_instance;
+    g_arity = generic_type_arity(g);
+  }
+  if (types->length > 0) {
+    record = allocate(sizeof(Value) * types->length);
+    if (!record) {
+      delete_slice(args);
+      return undefined;
+    }
+    for (int i = 0; i < types->length; i++) {
+      Type *formal = TO_TYPE(types->cells[i]);
+      int check = is_instance_of(get_type(args.cells[i]), copy_type(formal), g, 0, g_arity, &g_params);
+      if (check < 0) {
+        ok = 0;
+        break;
+      } else if (!check) {
+        raise_parameter_type_error(tag, copy_type(formal), get_type(args.cells[i]), i, g, g_params, scope);
+        ok = 0;
+        break;
+      }
+      record[i] = copy_value(args.cells[i]);
+    }
+  }
+  Value result = undefined;
+  if (ok) {
+    if (g_params) {
+      t = get_instance(copy_generic(g), g_params);
+      g_params = NULL;
+      if (t) {
+        Data *d = create_data(t, tag, record, types->length);
+        if (d) {
+          result = DATA(d);
+        }
+      }
+    } else {
+      Data *d = create_data(copy_type(t), tag, record, types->length);
+      if (d) {
+        result = DATA(d);
+      }
+    }
+  }
+  if (g_params) {
+    delete_type_array(g_params);
+  }
+  if (record) {
+    free(record);
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value eval_def_data_constructor(Slice args, Type *t, Scope *scope) {
+  Value result = undefined;
+  if (syntax_is(args.cells[0], VALUE_SYMBOL)) {
+    Symbol *tag = TO_SYMBOL(syntax_get(args.cells[0]));
+    Vector *types = get_constructor_parameter_types(slice_slice(copy_slice(args), 1, args.length - 1), scope);
+    if (types) {
+      Scope *fn_scope = copy_scope(scope);
+      Value scope_ptr = check_alloc(POINTER(create_pointer(copy_type(scope_type),
+              fn_scope, (Destructor) delete_scope)));
+      if (RESULT_OK(scope_ptr)) {
+        Value env[] = {TYPE(t), copy_value(SYMBOL(tag)), VECTOR(types), scope_ptr};
+        Value func = check_alloc(CLOSURE(create_closure(apply_constructor, env, 4)));
+        if (RESULT_OK(func)) {
+          module_define(copy_object(tag), copy_value(func));
+          result = func;
+        }
+        delete_value(SYMBOL(tag));
+        delete_value(scope_ptr);
+      }
+      delete_value(VECTOR(types));
+    }
+  } else {
+    set_debug_form(copy_value(args.cells[0]));
+    raise_error(syntax_error, "expected SYMBOL");
+  }
+  delete_slice(args);
+  delete_type(t);
+  return result;
+}
+
+static Value eval_def_data_generic(Vector *sig, Slice args, Scope *scope) {
+  return undefined;
+}
+
+static Value eval_def_data_nongeneric(Value head, Slice args, Scope *scope) {
+  Value result = undefined;
+  if (syntax_is(head, VALUE_SYMBOL)) {
+    Symbol *s = TO_SYMBOL(syntax_get(head));
+    Type *t = create_simple_type(copy_type(any_type));
+    if (t) {
+      t->name = copy_object(s);
+      module_define_type(copy_object(s), copy_value(TYPE(t)));
+      int ok = 1;
+      for (int i = 0; i < args.length; i++) {
+        Value constructor = args.cells[i];
+        if (syntax_is(constructor, VALUE_VECTOR) && TO_VECTOR(syntax_get(constructor))->length >= 1) {
+          Scope *type_scope = use_module_types(scope->module);
+          Value constructor_result = eval_def_data_constructor(to_slice(copy_value(syntax_get(constructor))),
+              copy_type(t), type_scope);
+          delete_scope(type_scope);
+          if (!RESULT_OK(constructor_result)) {
+            ok = 0;
+            break;
+          }
+          delete_value(constructor_result);
+        } else if (syntax_is(constructor, VALUE_SYMBOL)) {
+          Symbol *tag = TO_SYMBOL(syntax_get(constructor));
+          Data *d = create_data(copy_type(t), copy_object(tag), NULL, 0);
+          if (!d) {
+            ok = 0;
+            break;
+          }
+          module_define(tag, DATA(d));
+        } else {
+          ok = 0;
+          set_debug_form(copy_value(constructor));
+          raise_error(syntax_error, "expected SYMBOL or (SYMBOL ... PARAMS)");
+          break;
+        }
+      }
+      if (ok) {
+        result = TYPE(t);
+      } else {
+        delete_type(t);
+      }
+    }
+  } else {
+    set_debug_form(copy_value(head));
+    raise_error(syntax_error, "expected SYMBOL");
+  }
+  delete_value(head);
+  delete_slice(args);
+  return result;
+}
+
 /* (def-data SYMBOL {CONSTRUCTOR})
  * (def-data (SYMBOL {SYMBOL}) {CONSTRUCTOR}) */
-Value eval_def_data(Slice args, Scope *scope);
+Value eval_def_data(Slice args, Scope *scope) {
+  Value result = undefined;
+  if (args.length >= 1) {
+    Value head = args.cells[0];
+    if (syntax_is(head, VALUE_VECTOR)) {
+      Syntax *previous = push_debug_form(copy_value(head));
+      result = eval_def_data_generic(TO_VECTOR(copy_value(syntax_get(head))),
+          slice_slice(copy_slice(args), 1, args.length - 1), scope);
+      pop_debug_form(result, previous);
+    } else {
+      result = eval_def_data_nongeneric(copy_value(head),
+          slice_slice(copy_slice(args), 1, args.length - 1), scope);
+    }
+  } else {
+    raise_error(syntax_error, "expected (def-data SYMBOL ... CONSTRUCTORS)");
+  }
+  delete_slice(args);
+  return result;
+}
 
-Value eval_def_generic(Slice args, Scope *scope);
 
-Value eval_def_method(Slice args, Scope *scope);
+Value eval_def_generic(Slice args, Scope *scope) {
+  return undefined;
+}
 
-Value eval_loop(Slice args, Scope *scope);
+Value eval_def_method(Slice args, Scope *scope) {
+  return undefined;
+}
+
+Value eval_loop(Slice args, Scope *scope) {
+  return undefined;
+}
 

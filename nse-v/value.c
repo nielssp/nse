@@ -635,3 +635,12 @@ Value syntax_get(const Value syntax) {
   }
   return syntax;
 }
+
+Value syntax_get_elem(int index, const Value syntax) {
+  if (syntax.type == VALUE_SYNTAX && TO_SYNTAX(syntax)->quoted.type == VALUE_VECTOR) {
+    return syntax_get(TO_VECTOR(TO_SYNTAX(syntax)->quoted)->cells[index]);
+  } else if (syntax.type == VALUE_VECTOR) {
+    return syntax_get(TO_VECTOR(syntax)->cells[index]);
+  }
+  return undefined;
+}

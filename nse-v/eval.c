@@ -203,7 +203,7 @@ Value eval_slice(Slice slice, Scope *scope) {
       result = eval_def_read_macro(args, scope);
     } else if (s == def_macro_symbol) {
       result = eval_def_macro(args, scope);
-    /*} else if (s == def_type_symbol) {
+    } else if (s == def_type_symbol) {
       result = eval_def_type(args, scope);
     } else if (s == def_data_symbol) {
       result = eval_def_data(args, scope);
@@ -212,7 +212,7 @@ Value eval_slice(Slice slice, Scope *scope) {
     } else if (s == def_method_symbol) {
       result = eval_def_method(args, scope);
     } else if (s == loop_symbol) {
-      result = eval_loop(args, scope);*/
+      result = eval_loop(args, scope);
     } else {
       is_special = 0;
     }
