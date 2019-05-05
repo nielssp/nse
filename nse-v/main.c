@@ -159,8 +159,8 @@ char **symbol_completion(const char *text, int start, int end) {
 }
 
 
-void print_error_line(char *line_history, String *file_name, size_t start_line, size_t start_column, size_t end_line, size_t end_column) {
-  printf("\nIn %s on line %zd column %zd", TO_C_STRING(file_name), start_line, start_column);
+void print_error_line(char *line_history, String *file_name, size_t start_line, size_t start_column, size_t end_line, size_t end_column, Stream *stream) {
+  stream_printf(stream, "\nIn %s on line %zd column %zd", TO_C_STRING(file_name), start_line, start_column);
   if (start_line > 0) {
     char *line = NULL;
     if (strcmp(TO_C_STRING(file_name), "(repl)") == 0 || strcmp(TO_C_STRING(file_name), "(cli)") == 0) {
@@ -173,15 +173,15 @@ void print_error_line(char *line_history, String *file_name, size_t start_line, 
       }
     }
     if (line) {
-      printf("\n%s\n", line);
+      stream_printf(stream, "\n%s\n", line);
       for (size_t i = 1; i < start_column; i++) {
-        printf(" ");
+        stream_printf(stream, " ");
       }
-      printf("^");
+      stream_printf(stream, "^");
       if (start_line == end_line && end_column > start_column) {
         size_t length = end_column - start_column - 1;
         for (size_t i = 0; i < length; i++) {
-          printf("^");
+          stream_printf(stream, "^");
         }
       }
       free(line);
@@ -226,14 +226,15 @@ Value read_and_eval(char *expr, const char *filename, Module *module, char **lin
       String *file_name;
       size_t current_line, current_column;
       get_reader_position(reader, &file_name, &current_line, &current_column);
-      print_error_line(*line_history, file_name, current_line, current_column, current_line, current_column);
+      print_error_line(*line_history, file_name, current_line, current_column, current_line, current_column,
+          error_stream);
     } else if (error_form != NULL) {
       Value datum = syntax_to_datum(copy_value(error_form->quoted));
       stream_printf(error_stream, ": ");
       nse_write(datum, error_stream, module);
       delete_value(datum);
       print_error_line(*line_history, error_form->file, error_form->start_line,
-          error_form->start_column, error_form->end_line, error_form->end_column);
+          error_form->start_column, error_form->end_line, error_form->end_column, error_stream);
     }
     List *trace = get_stack_trace();
     if (trace) {
@@ -319,12 +320,12 @@ int main(int argc, char *argv[]) {
           }
           result = read_and_eval(optarg, "(cli)", user_module, &line_history, &line, stderr_stream);
           if (!RESULT_OK(result)) {
-            puts("\n");
+            puts("");
             ok = 0;
           }
           if (opt == 'p') {
             nse_write(result, stdout_stream, user_module);
-            printf("\n");
+            puts("");
           }
           break;
         }

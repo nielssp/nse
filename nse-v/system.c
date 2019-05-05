@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: MIT
  * Copyright (c) 2019 Niels Sonnich Poulsen (http://nielssp.dk)
  */
+#include <errno.h>
+#include <string.h>
+
 #include "value.h"
 #include "type.h"
 #include "error.h"
@@ -8,8 +11,48 @@
 #include "../src/util/stream.h"
 #include "eval.h"
 #include "lang.h"
+#include "read.h"
 
 #include "system.h"
+
+static Value load(Slice args, Scope *dynamic_scope) {
+  Value return_value = undefined;
+  if (args.length == 1 && syntax_is_string_like(args.cells[0])) {
+    const char *name = syntax_get_string(args.cells[0]);
+    Module *m = dynamic_scope->module;
+    Stream *f = stream_file(name, "r");
+    if (f) {
+      Reader *reader = open_reader(f, name, dynamic_scope->module);
+      return_value = unit;
+      while (1) {
+        set_reader_module(reader, dynamic_scope->module);
+        Syntax *code = nse_read(reader);
+        if (code != NULL) {
+          Value result = eval(SYNTAX(code), dynamic_scope);
+          if (RESULT_OK(result)) {
+            delete_value(result);
+          } else {
+            return_value = undefined;
+            break;
+          }
+        } else {
+          // TODO: check type of error
+          clear_error();
+          break;
+        }
+      }
+      close_reader(reader);
+      dynamic_scope->module = m;
+    } else {
+      raise_error(io_error, "could not open file: %s: %s", name, strerror(errno));
+    }
+  } else {
+    raise_error(domain_error, "expected (load STRING-LIKE)");
+  }
+  delete_slice(args);
+  return return_value;
+}
+
 
 static Value nothing_sum(Slice args, Scope *dynamic_scope) {
   delete_slice(args);
@@ -446,6 +489,8 @@ static Value vector_slice_elem(Slice args, Scope *dynamic_scope) {
 
 Module *get_system_module() {
   Module *system = create_module("system");
+
+  module_ext_define(system, "load", FUNC(load));
 
   module_ext_define(system, "++", FUNC(append));
   module_ext_define(system, "tabulate", FUNC(tabulate));

@@ -465,6 +465,10 @@ int syntax_exact(const Value syntax, const void *other);
 
 int syntax_is_special(const Value syntax, const Symbol *symbol, int arity);
 
+int syntax_is_string_like(const Value syntax);
+
+const char *syntax_get_string(const Value syntax);
+
 /* Get quoted value */
 Value syntax_get(const Value syntax);
 

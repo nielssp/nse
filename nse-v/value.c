@@ -629,6 +629,21 @@ int syntax_is_special(const Value syntax, const Symbol *symbol, int arity) {
   return syntax_exact(v->cells[0], symbol);
 }
 
+int syntax_is_string_like(const Value syntax) {
+  const Value v = syntax.type == VALUE_SYNTAX ? TO_SYNTAX(syntax)->quoted : syntax;
+  return v.type == VALUE_STRING || v.type == VALUE_SYMBOL || v.type == VALUE_KEYWORD;
+}
+
+const char *syntax_get_string(const Value syntax) {
+  const Value v = syntax.type == VALUE_SYNTAX ? TO_SYNTAX(syntax)->quoted : syntax;
+  switch (v.type) {
+    case VALUE_STRING:
+      return TO_C_STRING(TO_STRING(v));
+    default:
+      return TO_C_STRING(TO_SYMBOL(v)->name);
+  }
+}
+
 Value syntax_get(const Value syntax) {
   if (syntax.type == VALUE_SYNTAX) {
     return TO_SYNTAX(syntax)->quoted;
