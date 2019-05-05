@@ -24,13 +24,15 @@
 #define SGR_BOLD_GREEN "\001\033[1;32m\002"
 #define SGR_RED "\001\033[31m\002"
 
-const char *short_options = "hvc:n";
+const char *short_options = "hvc:ne:p:";
 
 const struct option long_options[] = {
   {"help", no_argument, NULL, 'h'},
   {"version", no_argument, NULL, 'v'},
   {"compile", required_argument, NULL, 'c'},
   {"no-std", no_argument, NULL, 'n'},
+  {"eval", required_argument, NULL, 'e'},
+  {"print", required_argument, NULL, 'p'},
   {0, 0, 0, 0}
 };
 
@@ -161,7 +163,7 @@ void print_error_line(char *line_history, String *file_name, size_t start_line, 
   printf("\nIn %s on line %zd column %zd", TO_C_STRING(file_name), start_line, start_column);
   if (start_line > 0) {
     char *line = NULL;
-    if (strcmp(TO_C_STRING(file_name), "(repl)") == 0) {
+    if (strcmp(TO_C_STRING(file_name), "(repl)") == 0 || strcmp(TO_C_STRING(file_name), "(cli)") == 0) {
       line = get_line(start_line, line_history);
     } else {
       FILE *f = fopen(TO_C_STRING(file_name), "r");
@@ -187,11 +189,77 @@ void print_error_line(char *line_history, String *file_name, size_t start_line, 
   }
 }
 
+Value read_and_eval(char *expr, const char *filename, Module *module, char **line_history, size_t *line, Stream *error_stream) {
+  Value result = undefined;
+  size_t input_length = strlen(expr);
+  Stream *input_buffer = stream_buffer(expr, input_length, input_length);
+  Reader *reader = open_reader(input_buffer, filename, current_scope->module);
+  set_reader_position(reader, *line, 1);
+  Value code = check_alloc(SYNTAX(nse_read(reader)));
+  int error = 0;
+  if (RESULT_OK(code)) {
+    result = eval(copy_value(code), current_scope);
+    delete_value(code);
+    if (!RESULT_OK(result)) {
+      error = 1;
+    }
+  } else {
+    error = 1;
+  }
+  get_reader_position(reader, NULL, line, NULL);
+  *line += 1;
+  if (*line_history) {
+    char *new_line_history = string_printf("%s\n%s", *line_history, expr);
+    free(*line_history);
+    *line_history = new_line_history;
+  } else {
+    *line_history = string_printf("%s", expr);
+  }
+  if (error) {
+    if (current_error()) {
+      stream_printf(error_stream, SGR_RED "error(%s):" SGR_RESET " %s",
+          TO_C_STRING(current_error_type()->name), current_error());
+    } else {
+      stream_printf(error_stream, SGR_RED "error:" SGR_RESET " unspecified error");
+    }
+    if (!RESULT_OK(code)) {
+      String *file_name;
+      size_t current_line, current_column;
+      get_reader_position(reader, &file_name, &current_line, &current_column);
+      print_error_line(*line_history, file_name, current_line, current_column, current_line, current_column);
+    } else if (error_form != NULL) {
+      Value datum = syntax_to_datum(copy_value(error_form->quoted));
+      stream_printf(error_stream, ": ");
+      nse_write(datum, error_stream, module);
+      delete_value(datum);
+      print_error_line(*line_history, error_form->file, error_form->start_line,
+          error_form->start_column, error_form->end_line, error_form->end_column);
+    }
+    List *trace = get_stack_trace();
+    if (trace) {
+      stream_printf(error_stream, "\nStack trace:");
+      for (; trace; trace = trace->tail) {
+        Syntax *syntax = TO_SYNTAX(TO_VECTOR(trace->head)->cells[2]);
+        stream_printf(error_stream, "\n  %s:%zd:%zd", TO_C_STRING(syntax->file),
+            syntax->start_line, syntax->start_column);
+        Value datum = syntax_to_datum(copy_value(syntax->quoted));
+        stream_printf(error_stream, ": ");
+        nse_write(datum, error_stream, module);
+        delete_value(datum);
+      }
+    }
+    clear_error();
+    clear_stack_trace();
+  }
+  close_reader(reader);
+  return result;
+}
 
 int main(int argc, char *argv[]) {
   int opt;
   int option_index;
   int std = 1;
+  int eval = 0;
   while ((opt = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
     switch (opt) {
       case 'h':
@@ -200,6 +268,8 @@ int main(int argc, char *argv[]) {
         describe_option("h", "help", "Show help.");
         describe_option("v", "version", "Show version information.");
         describe_option("c <lispfile>", "compile <lispfile>", "Compile file.");
+        describe_option("e <expr>", "eval <expr>", "Evaluate expression.");
+        describe_option("p <expr>", "print <expr>", "Evaluate expression and print result.");
         describe_option("n", "no-std", "Don't load standard library");
         return 0;
       case 'v':
@@ -209,6 +279,10 @@ int main(int argc, char *argv[]) {
         // compile: optarg
         puts("not implemented");
         return 1;
+      case 'e':
+      case 'p':
+        eval = 1;
+        break;
       case 'n':
         std = 0;
         break;
@@ -227,17 +301,50 @@ int main(int argc, char *argv[]) {
     import_module(user_module, system_module);
   }
 
+  size_t line = 1;
+  char *line_history = NULL;
 
   current_scope = use_module(user_module);
+
+  if (eval) {
+    Value result = undefined;
+    optind = 1;
+    int ok = 1;
+    while (ok && (opt = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
+      switch (opt) {
+        case 'e':
+        case 'p': {
+          if (RESULT_OK(result)) {
+            delete_value(result);
+          }
+          result = read_and_eval(optarg, "(cli)", user_module, &line_history, &line, stderr_stream);
+          if (!RESULT_OK(result)) {
+            puts("\n");
+            ok = 0;
+          }
+          if (opt == 'p') {
+            nse_write(result, stdout_stream, user_module);
+            printf("\n");
+          }
+          break;
+        }
+      }
+    }
+    if (RESULT_OK(result)) {
+      delete_value(result);
+    }
+    if (line_history) {
+      free(line_history);
+    }
+    scope_pop(current_scope);
+    return RESULT_OK(result) ? 0 : 1;
+  }
 
   rl_bind_key('\t', rl_complete);
   rl_bind_key('(', paren_start);
   rl_bind_key(')', paren_end);
 
   rl_attempted_completion_function = symbol_completion;
-
-  size_t line = 1;
-  char *line_history = NULL;
 
   while (1) {
     char *prompt = string_printf(SGR_BOLD_GREEN "%s>" SGR_RESET " ", TO_C_STRING(get_module_name(current_scope->module)));
@@ -252,67 +359,11 @@ int main(int argc, char *argv[]) {
       continue;
     }
     add_history(input);
-    size_t input_length = strlen(input);
-    Stream *input_buffer = stream_buffer(input, input_length, input_length);
-    Reader *reader = open_reader(input_buffer, "(repl)", current_scope->module);
-    set_reader_position(reader, line, 1);
-    Value code = check_alloc(SYNTAX(nse_read(reader)));
-    int error = 0;
-    if (RESULT_OK(code)) {
-      Value result = eval(copy_value(code), current_scope);
-      delete_value(code);
-      if (RESULT_OK(result)) {
-        nse_write(result, stdout_stream, user_module);
-        delete_value(result);
-      } else {
-        error = 1;
-      }
-    } else {
-      error = 1;
+    Value result = read_and_eval(input, "(repl)", user_module, &line_history, &line, stdout_stream);
+    if (RESULT_OK(result)) {
+      nse_write(result, stdout_stream, user_module);
+      delete_value(result);
     }
-    get_reader_position(reader, NULL, &line, NULL);
-    line += 1;
-    if (line_history) {
-      char *new_line_history = string_printf("%s\n%s", line_history, input);
-      free(line_history);
-      line_history = new_line_history;
-    } else {
-      line_history = string_printf("%s", input);
-    }
-    if (error) {
-      if (current_error()) {
-        printf(SGR_RED "error(%s):" SGR_RESET " %s", TO_C_STRING(current_error_type()->name), current_error());
-      } else {
-        printf(SGR_RED "error:" SGR_RESET " unspecified error");
-      }
-      if (!RESULT_OK(code)) {
-        String *file_name;
-        size_t current_line, current_column;
-        get_reader_position(reader, &file_name, &current_line, &current_column);
-        print_error_line(line_history, file_name, current_line, current_column, current_line, current_column);
-      } else if (error_form != NULL) {
-        Value datum = syntax_to_datum(copy_value(error_form->quoted));
-        printf(": ");
-        nse_write(datum, stdout_stream, user_module);
-        delete_value(datum);
-        print_error_line(line_history, error_form->file, error_form->start_line, error_form->start_column, error_form->end_line, error_form->end_column);
-      }
-      List *trace = get_stack_trace();
-      if (trace) {
-        printf("\nStack trace:");
-        for (; trace; trace = trace->tail) {
-          Syntax *syntax = TO_SYNTAX(TO_VECTOR(trace->head)->cells[2]);
-          printf("\n  %s:%zd:%zd", TO_C_STRING(syntax->file), syntax->start_line, syntax->start_column);
-          Value datum = syntax_to_datum(copy_value(syntax->quoted));
-          printf(": ");
-          nse_write(datum, stdout_stream, user_module);
-          delete_value(datum);
-        }
-      }
-      clear_error();
-      clear_stack_trace();
-    }
-    close_reader(reader);
     free(input);
     printf("\n");
   }
