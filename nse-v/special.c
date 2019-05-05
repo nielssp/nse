@@ -657,10 +657,10 @@ static Value apply_constructor(Slice args, const Closure *closure, Scope *dynami
   TypeArray *g_params = NULL;
   int g_arity = 0;
   if (args.length != types->length) {
-    delete_slice(args);
     char *tag_s = nse_write_to_string(SYMBOL(tag), scope->module);
     raise_error(domain_error, "%s expected %d parameters, but got %d", tag_s, types->length, args.length);
     free(tag_s);
+    delete_slice(args);
     return undefined;
   }
   if (t->type == TYPE_POLY_INSTANCE) {
@@ -693,13 +693,13 @@ static Value apply_constructor(Slice args, const Closure *closure, Scope *dynami
       t = get_instance(copy_generic(g), g_params);
       g_params = NULL;
       if (t) {
-        Data *d = create_data(t, tag, record, types->length);
+        Data *d = create_data(t, copy_object(tag), record, types->length);
         if (d) {
           result = DATA(d);
         }
       }
     } else {
-      Data *d = create_data(copy_type(t), tag, record, types->length);
+      Data *d = create_data(copy_type(t), copy_object(tag), record, types->length);
       if (d) {
         result = DATA(d);
       }
@@ -763,6 +763,7 @@ static Value apply_generic_type(Slice args, const Closure *closure, Scope *dynam
     }
     parameters->elements[i] = copy_type(TO_TYPE(args.cells[i]));
   }
+  delete_slice(args);
   return check_alloc(TYPE(get_instance(copy_generic(g), parameters)));
 }
 
