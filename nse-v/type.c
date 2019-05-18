@@ -5,15 +5,19 @@
 #include <string.h>
 
 #include "error.h"
-#include "../src/runtime/hashmap.h"
+#include "hashmap.h"
 #include "value.h"
 
 #include "type.h"
 
-typedef struct FuncType FuncType;
+/* Structure used as a key in function type hash maps. */
+typedef struct {
+  int min_arity;
+  int variadic;
+} FuncType;
 
 DECLARE_HASH_MAP(instance_map, InstanceMap, TypeArray *, Type *)
-DECLARE_HASH_MAP(func_type_map, FuncTypeMap, FuncType *, Type *)
+DECLARE_HASH_MAP(func_type_map, FuncTypeMap, FuncType, Type *)
 
 /* A generic type. */
 struct GType {
@@ -31,12 +35,6 @@ struct GType {
    * deleted (i.e. `poly->refs == 0`), the field is automatically set to NULL by
    * `delete_type()`. */
   Type *poly;
-};
-
-/* Structure used as a key in function type hash maps. */
-struct FuncType {
-  int min_arity;
-  int variadic;
 };
 
 /* Map of function type instances. */
@@ -69,7 +67,7 @@ GType *list_type;
 GType *weak_ref_type;
 
 void init_types() {
-  func_types = create_func_type_map();
+  init_func_type_map(&func_types);
   nothing_type = create_simple_type(NULL);
   any_type = create_simple_type(NULL);
   unit_type = create_simple_type(copy_type(any_type));
@@ -118,8 +116,7 @@ GType *create_generic(int arity, Type *super) {
   t->refs = 1;
   t->arity = arity;
   t->super = super;
-  t->instances = create_instance_map();
-  if (!t->instances.map) {
+  if (!init_instance_map(&t->instances)) {
     delete_type(super);
     free(t);
     raise_error(out_of_memory_error, "could not allocate memory");
@@ -165,7 +162,7 @@ void delete_generic(GType *g) {
   delete_type(g->super);
   // weak reference from g to instance (including poly) => no need to delete
   // each instance
-  delete_instance_map(g->instances);
+  delete_instance_map(&g->instances);
   free(g);
 }
 
@@ -191,10 +188,10 @@ void delete_type(Type *t) {
       break;
     case TYPE_FUNC:
       key = (FuncType){ .min_arity = t->func.min_arity, .variadic = t->func.variadic };
-      free(func_type_map_remove_entry(func_types, &key).key);
+      func_type_map_remove_entry(&func_types, key, NULL);
       break;
     case TYPE_INSTANCE:
-      instance_map_remove(t->instance.type->instances, t->instance.parameters);
+      instance_map_remove(&t->instance.type->instances, t->instance.parameters, NULL);
       delete_generic(t->instance.type);
       delete_type_array(t->instance.parameters);
       break;
@@ -278,8 +275,8 @@ int generic_type_arity(const GType *g) {
 }
 
 Type *get_instance(GType *g, TypeArray *parameters) {
-  Type *instance = instance_map_lookup(g->instances, parameters);
-  if (instance) {
+  Type *instance;
+  if (instance_map_get(&g->instances, parameters, &instance)) {
     delete_generic(g);
     delete_type_array(parameters);
     return copy_type(instance);
@@ -301,7 +298,7 @@ Type *get_instance(GType *g, TypeArray *parameters) {
     instance->name = NULL;
     instance->instance.type = g;
     instance->instance.parameters = parameters;
-    instance_map_add(g->instances, parameters, instance);
+    instance_map_add(&g->instances, parameters, instance);
     return instance;
   }
 }
@@ -330,10 +327,10 @@ Type *get_poly_instance(GType *g) {
   }
 }
 
-static Type *get_func_subtype(int min_arity, int variadic, FuncTypeMap map, TypeType type) {
+static Type *get_func_subtype(int min_arity, int variadic, FuncTypeMap *map, TypeType type) {
   FuncType key = (FuncType){ .min_arity = min_arity, .variadic = variadic };
-  Type *t = func_type_map_lookup(map, &key);
-  if (t) {
+  Type *t;
+  if (func_type_map_get(map, key, &t)) {
     return copy_type(t);
   } else {
     t = allocate_object(sizeof(Type));
@@ -349,20 +346,13 @@ static Type *get_func_subtype(int min_arity, int variadic, FuncTypeMap map, Type
     t->type = type;
     t->func.min_arity = min_arity;
     t->func.variadic = variadic;
-    FuncType *key_copy = allocate(sizeof(FuncType));
-    if (!key_copy) {
-      free(t);
-      delete_type(func_type);
-      return NULL;
-    }
-    *key_copy = key;
-    func_type_map_add(map, key_copy, t);
+    func_type_map_add(map, key, t);
     return t;
   }
 }
 
 Type *get_func_type(int min_arity, int variadic) {
-  return get_func_subtype(min_arity, variadic, func_types, TYPE_FUNC);
+  return get_func_subtype(min_arity, variadic, &func_types, TYPE_FUNC);
 }
 
 Type *instantiate_type(Type *t, const GType *g, const TypeArray *parameters) {
@@ -548,16 +538,16 @@ int type_array_equals(const TypeArray *a, const TypeArray *b) {
 }
 
 /* Hash function for FuncType. */
-static Hash func_type_hash(const FuncType *ft) {
-  return (ft->min_arity << 1) | ft->variadic;
+static Hash func_type_hash(const FuncType ft) {
+  return (ft.min_arity << 1) | ft.variadic;
 }
 
 /* Equality function for FuncType. */
-static int func_type_equals(const FuncType *a, const FuncType *b) {
-  return a->min_arity == b->min_arity && a->variadic == b->variadic;
+static int func_type_equals(const FuncType a, const FuncType b) {
+  return a.min_arity == b.min_arity && a.variadic == b.variadic;
 }
 
-DEFINE_HASH_MAP(func_type_map, FuncTypeMap, FuncType *, Type *, func_type_hash, func_type_equals)
+DEFINE_HASH_MAP(func_type_map, FuncTypeMap, FuncType, Type *, func_type_hash, func_type_equals)
 
 DEFINE_HASH_MAP(instance_map, InstanceMap, TypeArray *, Type *, type_array_hash, type_array_equals)
 

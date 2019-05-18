@@ -8,7 +8,7 @@
 #include "type.h"
 #include "error.h"
 #include "lang.h"
-#include "../src/runtime/hashmap.h"
+#include "hashmap.h"
 #include "../src/util/stream.h"
 
 #include "module.h"
@@ -16,11 +16,16 @@
 typedef struct MethodKey MethodKey;
 typedef struct MethodList MethodList;
 
-DECLARE_HASH_MAP(namespace, Namespace, Symbol *, Value *)
-DECLARE_HASH_MAP(symmap, SymMap, String *, Symbol *)
-DECLARE_HASH_MAP(module_map, ModuleMap, String *, Module *)
+DECLARE_HASH_MAP(namespace, Namespace, Symbol *, Value)
+DECLARE_HASH_MAP(symmap, SymMap, const String *, Symbol *)
+DECLARE_HASH_MAP(module_map, ModuleMap, const String *, Module *)
 
-DECLARE_HASH_MAP(method_map, MethodMap, MethodKey *, MethodList *)
+struct MethodKey {
+  Symbol *symbol;
+  Type *type;
+};
+
+DECLARE_HASH_MAP(method_map, MethodMap, MethodKey, MethodList *)
 
 struct Module {
   String *name;
@@ -31,11 +36,6 @@ struct Module {
   Namespace type_defs;
   Namespace read_macro_defs;
   MethodMap methods;
-};
-
-struct MethodKey {
-  Symbol *symbol;
-  Type *type;
 };
 
 struct MethodList {
@@ -54,19 +54,19 @@ static ModuleMap loaded_modules = NULL_HASH_MAP;
 
 Module *keyword_module = NULL;
 
-static void init_modules() {
-  loaded_modules = create_module_map();
+static void init_modules(void) {
+  init_module_map(&loaded_modules);
   init_lang_module();
   keyword_module = create_module("keyword");
 }
 
-void unload_modules() {
-  ModuleMapIterator it = create_module_map_iterator(loaded_modules);
-  for (ModuleMapEntry entry = module_map_next(it); entry.key; entry = module_map_next(it)) {
+void unload_modules(void) {
+  ModuleMapEntry entry;
+  HashMapIterator it = module_map_iterate(&loaded_modules);
+  while (module_map_next_entry(&it, &entry)) {
     delete_module(entry.value);
   }
-  delete_module_map_iterator(it);
-  delete_module_map(loaded_modules);
+  delete_module_map(&loaded_modules);
 }
 
 Binding *create_binding(Value value) {
@@ -194,18 +194,19 @@ Value scope_get(Scope *scope, Symbol *symbol) {
     }
   }
   if (symbol->module) {
-    Value *value;
+    int found = 0;
+    Value value;
     switch (scope->type) {
       case VALUE_SCOPE:
-        value = namespace_lookup(symbol->module->defs, symbol);
+        found = namespace_get(&symbol->module->defs, symbol, &value);
         break;
       case TYPE_SCOPE:
-        value = namespace_lookup(symbol->module->type_defs, symbol);
+        found = namespace_get(&symbol->module->type_defs, symbol, &value);
         break;
     }
-    if (value) {
+    if (found) {
       delete_value(SYMBOL(symbol));
-      return copy_value(*value);
+      return copy_value(value);
     }
   }
   raise_error(name_error, "undefined name: %s", TO_C_STRING(symbol->name));
@@ -215,10 +216,10 @@ Value scope_get(Scope *scope, Symbol *symbol) {
 
 Value scope_get_macro(Scope *scope, Symbol *symbol) {
   if (symbol->module) {
-    Value *value = namespace_lookup(symbol->module->macro_defs, symbol);
-    if (value) {
+    Value value;
+    if (namespace_get(&symbol->module->macro_defs, symbol, &value)) {
       delete_value(SYMBOL(symbol));
-      return copy_value(*value);
+      return copy_value(value);
     }
   }
   raise_error(name_error, "undefined macro: %s", TO_C_STRING(symbol->name));
@@ -228,10 +229,10 @@ Value scope_get_macro(Scope *scope, Symbol *symbol) {
 
 Value get_read_macro(Symbol *symbol) {
   if (symbol->module) {
-    Value *value = namespace_lookup(symbol->module->read_macro_defs, symbol);
-    if (value) {
+    Value value;
+    if (namespace_get(&symbol->module->read_macro_defs, symbol, &value)) {
       delete_value(SYMBOL(symbol));
-      return copy_value(*value);
+      return copy_value(value);
     }
   }
   raise_error(name_error, "undefined read macro: %s", TO_C_STRING(symbol->name));
@@ -244,9 +245,9 @@ Module *create_module(const char *name_c) {
     init_modules();
   }
   String *name = c_string_to_string(name_c);
-  if (module_map_lookup(loaded_modules, name) != NULL) {
+  if (module_map_get(&loaded_modules, name, NULL)) {
     delete_value(STRING(name));
-    raise_error(name_error, "module already defined: %s", name);
+    raise_error(name_error, "module already defined: %s", TO_C_STRING(name));
     return NULL;
   }
   Module *module = malloc(sizeof(Module));
@@ -255,21 +256,20 @@ Module *create_module(const char *name_c) {
     return NULL;
   }
   module->name = name;
-  module->internal = create_symmap();
-  module->external = create_symmap();
-  module->defs = create_namespace();
-  module->macro_defs = create_namespace();
-  module->type_defs = create_namespace();
-  module->read_macro_defs = create_namespace();
-  module->methods = create_method_map();
-  module_map_add(loaded_modules, module->name, module);
+  init_symmap(&module->internal);
+  init_symmap(&module->external);
+  init_namespace(&module->defs);
+  init_namespace(&module->macro_defs);
+  init_namespace(&module->type_defs);
+  init_namespace(&module->read_macro_defs);
+  init_method_map(&module->methods);
+  module_map_add(&loaded_modules, module->name, module);
   return module;
 }
 
-static void delete_method_key(MethodKey *key) {
-  delete_value(SYMBOL(key->symbol));
-  delete_type(key->type);
-  free(key);
+static void delete_method_key(MethodKey key) {
+  delete_value(SYMBOL(key.symbol));
+  delete_type(key.type);
 }
 
 static void delete_method_list(MethodList *methods) {
@@ -281,49 +281,46 @@ static void delete_method_list(MethodList *methods) {
   free(methods);
 }
 
-static void delete_methods(MethodMap methods) {
-  MethodMapIterator it = create_method_map_iterator(methods);
-  for (MethodMapEntry entry = method_map_next(it); entry.key; entry = method_map_next(it)) {
+static void delete_methods(MethodMap *methods) {
+  MethodMapEntry entry;
+  HashMapIterator it = method_map_iterate(methods);
+  while (method_map_next_entry(&it, &entry)) {
     delete_method_key(entry.key);
     delete_method_list(entry.value);
     free(entry.value);
   }
-  delete_method_map_iterator(it);
   delete_method_map(methods);
 }
 
-static void delete_symbols(SymMap symbols) {
-  SymMapIterator it = create_symmap_iterator(symbols);
-  for (SymMapEntry entry = symmap_next(it); entry.key; entry = symmap_next(it)) {
+static void delete_symbols(SymMap *symbols) {
+  SymMapEntry entry;
+  HashMapIterator it = symmap_iterate(symbols);
+  while (symmap_next_entry(&it, &entry)) {
     if (entry.value) {
       delete_value(SYMBOL(entry.value));
     }
   }
-  delete_symmap_iterator(it);
   delete_symmap(symbols);
 }
 
-static void delete_defs(Namespace namespace) {
-  NamespaceIterator it = create_namespace_iterator(namespace);
-  for (NamespaceEntry entry = namespace_next(it); entry.key; entry = namespace_next(it)) {
-    if (entry.value) {
-      delete_value(SYMBOL(entry.key));
-      delete_value(*entry.value);
-      free(entry.value);
-    }
+static void delete_defs(Namespace *namespace) {
+  NamespaceEntry entry;
+  HashMapIterator it = namespace_iterate(namespace);
+  while (namespace_next_entry(&it, &entry)) {
+    delete_value(SYMBOL(entry.key));
+    delete_value(entry.value);
   }
-  delete_namespace_iterator(it);
   delete_namespace(namespace);
 }
 
 void delete_module(Module *module) {
-  delete_defs(module->defs);
-  delete_defs(module->macro_defs);
-  delete_defs(module->type_defs);
-  delete_defs(module->read_macro_defs);
-  delete_symbols(module->internal);
-  delete_symbols(module->external);
-  delete_methods(module->methods);
+  delete_defs(&module->defs);
+  delete_defs(&module->macro_defs);
+  delete_defs(&module->type_defs);
+  delete_defs(&module->read_macro_defs);
+  delete_symbols(&module->internal);
+  delete_symbols(&module->external);
+  delete_methods(&module->methods);
   delete_value(STRING(module->name));
   free(module);
 }
@@ -349,8 +346,8 @@ Value module_find_method(Module *module, const Symbol *symbol, const TypeArray *
   Type *key_type = copy_type(parameters->elements[0]);
   while (key_type) {
     MethodKey query = (MethodKey){ .symbol = (Symbol *)symbol, .type = key_type };
-    MethodList *methods = method_map_lookup(module->methods, &query);
-    if (methods) {
+    MethodList *methods;
+    if (method_map_get(&module->methods, query, &methods)) {
       Value method = undefined;
       const TypeArray *best_types = NULL;
       while (methods) {
@@ -384,8 +381,8 @@ Module *find_module(const String *name) {
   if (!HASH_MAP_INITIALIZED(loaded_modules)) {
     init_modules();
   }
-  Module *module = module_map_lookup(loaded_modules, name);
-  if (!module) {
+  Module *module;
+  if (!module_map_get(&loaded_modules, name, &module)) {
     // TODO: attempt to load somehow
   }
   return module;
@@ -425,8 +422,8 @@ Symbol *find_symbol(const String *s) {
   if (split_symbol_name(s, &module_name, &symbol_name)) {
     Module *module = find_module(module_name);
     if (module) {
-      Symbol *value = symmap_lookup(module->external, symbol_name);
-      if (value) {
+      Symbol *value;
+      if (symmap_get(&module->external, symbol_name, &value)) {
         result = copy_object(value);
       } else {
         raise_error(name_error, "module %s has no external symbol with name: %s", TO_C_STRING(module_name), TO_C_STRING(symbol_name));
@@ -441,8 +438,8 @@ Symbol *find_symbol(const String *s) {
 }
 
 Symbol *module_extern_symbol(Module *module, String *s) {
-  Symbol *value = symmap_lookup(module->external, s);
-  if (value) {
+  Symbol *value;
+  if (symmap_get(&module->external, s, &value)) {
     delete_value(STRING(s));
     return copy_object(value);
   }
@@ -450,7 +447,7 @@ Symbol *module_extern_symbol(Module *module, String *s) {
   if (!value) {
     return NULL;
   }
-  symmap_add(module->external, value->name, copy_object(value));
+  symmap_add(&module->external, value->name, copy_object(value));
   return value;
 }
 
@@ -466,51 +463,51 @@ Symbol *intern_keyword(String *s) {
 }
 
 Symbol *module_find_internal(Module *module, const String *s) {
-  Symbol *value = symmap_lookup(module->internal, s);
-  if (value) {
+  Symbol *value;
+  if (symmap_get(&module->internal, s, &value)) {
     return copy_object(value);
   }
   return NULL;
 }
 
 Symbol *module_intern_symbol(Module *module, String *s) {
-  Symbol *value = symmap_lookup(module->internal, s);
-  if (value) {
+  Symbol *value;
+  if (symmap_get(&module->internal, s, &value)) {
     delete_value(STRING(s));
   } else {
     value = create_symbol(s, module);
     if (!value) {
       return NULL;
     }
-    symmap_add(module->internal, value->name, value);
+    symmap_add(&module->internal, value->name, value);
   }
   return copy_object(value);
 }
 
 Value list_external_symbols(Module *module) {
-  Vector *v = create_vector(get_hash_map_size(module->external.map));
+  Vector *v = create_vector(get_hash_map_size(&module->external));
   if (!v) {
     return undefined;
   }
-  SymMapIterator it = create_symmap_iterator(module->external);
+  Symbol *symbol;
+  HashMapIterator it = symmap_iterate(&module->external);
   size_t i = 0;
-  for (SymMapEntry entry = symmap_next(it); entry.key; entry = symmap_next(it)) {
-    v->cells[i++] = copy_value(SYMBOL(entry.value));
+  while (symmap_next(&it, &symbol)) {
+    v->cells[i++] = copy_value(SYMBOL(symbol));
   }
-  delete_symmap_iterator(it);
   return VECTOR(v);
 }
 
 char **get_symbols(Module *module) {
-  size_t entries = get_hash_map_size(module->internal.map);
+  size_t entries = get_hash_map_size(&module->internal);
   char **symbols = malloc((entries + 1) * sizeof(char *));
   size_t i = 0;
   symbols[entries] = NULL;
-  SymMapIterator it = create_symmap_iterator(module->internal);
-  for (SymMapEntry entry = symmap_next(it); entry.key; entry = symmap_next(it)) {
-    symbols[i++] = string_printf(TO_C_STRING(entry.value->name));
+  Symbol *symbol;
+  HashMapIterator it = symmap_iterate(&module->external);
+  while (symmap_next(&it, &symbol)) {
+    symbols[i++] = string_printf(TO_C_STRING(symbol->name));
   }
-  delete_symmap_iterator(it);
   return symbols;
 }
 
@@ -525,98 +522,76 @@ static int import_method(Module *dest, Symbol *symbol, TypeArray *parameters, Va
   m->parameters = parameters;
   m->definition = definition;
   MethodKey search_key = (MethodKey){ .symbol = symbol, .type = parameters->elements[0] };
-  MethodMapEntry existing = method_map_remove_entry(dest->methods, &search_key);
-  if (existing.key) {
+  MethodMapEntry existing;
+  if (method_map_remove_entry(&dest->methods, search_key, &existing)) {
     delete_value(SYMBOL(symbol));
     m->next = existing.value;
-    method_map_add(dest->methods, existing.key, m);
+    method_map_add(&dest->methods, existing.key, m);
   } else {
-    MethodKey *key = allocate(sizeof(MethodKey));
-    if (!key) {
-      free(m);
-      delete_value(SYMBOL(symbol));
-      delete_type_array(parameters);
-      delete_value(definition);
-      return 0;
-    }
     copy_type(parameters->elements[0]);
-    *key = search_key;
     m->next = NULL;
-    method_map_add(dest->methods, key, m);
+    method_map_add(&dest->methods, search_key, m);
   }
   return 1;
 }
 
 int import_methods(Module *dest, Module *src) {
-  MethodMapIterator it = create_method_map_iterator(src->methods);
-  for (MethodMapEntry entry = method_map_next(it); entry.key; entry = method_map_next(it)) {
-    if (!import_method(dest, entry.key->symbol, entry.value->parameters, entry.value->definition)) {
-      delete_method_map_iterator(it);
+  MethodMapEntry entry;
+  HashMapIterator it = method_map_iterate(&src->methods);
+  while (method_map_next_entry(&it, &entry)) {
+    if (!import_method(dest, entry.key.symbol, entry.value->parameters, entry.value->definition)) {
       return 0;
     }
   }
-  delete_method_map_iterator(it);
   return 1;
 }
 
 void import_module(Module *dest, Module *src) {
-  SymMapIterator it = create_symmap_iterator(src->external);
-  for (SymMapEntry entry = symmap_next(it); entry.key; entry = symmap_next(it)) {
+  Symbol *symbol;
+  HashMapIterator it = symmap_iterate(&src->external);
+  while (symmap_next(&it, &symbol)) {
     // TODO: detect conflict
-    if (symmap_add(dest->internal, entry.value->name, entry.value)) {
-      copy_value(SYMBOL(entry.value));
+    if (symmap_add(&dest->internal, symbol->name, symbol)) {
+      copy_value(SYMBOL(symbol));
     }
   }
-  delete_symmap_iterator(it);
   import_methods(dest, src);
 }
 
 void module_define(Symbol *s, Value value) {
-  Value *existing = namespace_remove(s->module->defs, s);
-  if (existing) {
+  Value existing;
+  if (namespace_remove(&s->module->defs, s, &existing)) {
     delete_value(SYMBOL(s));
-    delete_value(*existing);
-    free(existing);
+    delete_value(existing);
   }
-  Value *copy = malloc(sizeof(Value));
-  memcpy(copy, &value, sizeof(Value));
-  namespace_add(s->module->defs, s, copy);
+  namespace_add(&s->module->defs, s, value);
 }
 
 void module_define_macro(Symbol *s, Value value) {
-  Value *existing = namespace_remove(s->module->macro_defs, s);
-  if (existing) {
+  Value existing;
+  if (namespace_remove(&s->module->macro_defs, s, &existing)) {
     delete_value(SYMBOL(s));
-    delete_value(*existing);
-    free(existing);
+    delete_value(existing);
   }
-  Value *copy = malloc(sizeof(Value));
-  memcpy(copy, &value, sizeof(Value));
-  namespace_add(s->module->macro_defs, s, copy);
+  namespace_add(&s->module->macro_defs, s, value);
 }
 
 void module_define_type(Symbol *s, Value value) {
-  Value *existing = namespace_remove(s->module->type_defs, s);
-  if (existing) {
+  Value existing;
+  if (namespace_remove(&s->module->type_defs, s, &existing)) {
     delete_value(SYMBOL(s));
-    delete_value(*existing);
-    free(existing);
+    delete_value(existing);
   }
-  Value *copy = malloc(sizeof(Value));
-  memcpy(copy, &value, sizeof(Value));
-  namespace_add(s->module->type_defs, s, copy);
+  namespace_add(&s->module->type_defs, s, value);
 }
 
 void module_define_read_macro(Symbol *s, Value value) {
-  Value *existing = namespace_remove(s->module->read_macro_defs, s);
-  if (existing) {
+  Value existing;
+  if (namespace_remove(&s->module->read_macro_defs, s, &existing)) {
     delete_value(SYMBOL(s));
-    delete_value(*existing);
-    free(existing);
+    delete_value(existing);
   }
-  Value *copy = malloc(sizeof(Value));
-  memcpy(copy, &value, sizeof(Value));
-  namespace_add(s->module->read_macro_defs, s, copy);
+  namespace_add(&s->module->read_macro_defs, s, value);
 }
 
 void module_define_method(Module *module, Symbol *symbol, TypeArray *parameters, Value value) {
@@ -659,15 +634,15 @@ void module_ext_define_method(Module *module, const char *name, Value func, int 
   module_define_method(module, symbol, types, func);
 }
 
-static Hash method_key_hash(const MethodKey *m) {
+static Hash method_key_hash(const MethodKey m) {
   Hash hash = INIT_HASH;
-  hash = HASH_ADD_PTR(m->symbol, hash);
-  hash = HASH_ADD_PTR(m->type, hash);
+  hash = HASH_ADD_PTR(m.symbol, hash);
+  hash = HASH_ADD_PTR(m.type, hash);
   return 0;
 }
 
-static int method_key_equals(const MethodKey *a, const MethodKey *b) {
-  return a->symbol == b->symbol && a->type == b->type;
+static int method_key_equals(const MethodKey a, const MethodKey b) {
+  return a.symbol == b.symbol && a.type == b.type;
 }
 
 static Hash nse_string_hash(const String *s) {
@@ -678,7 +653,7 @@ static int nse_string_equals(const String *a, const String *b) {
   return string_equals(TO_C_STRING(a), TO_C_STRING(b));
 }
 
-DEFINE_HASH_MAP(namespace, Namespace, Symbol *, Value *, pointer_hash, pointer_equals)
-DEFINE_HASH_MAP(symmap, SymMap, String *, Symbol *, nse_string_hash, nse_string_equals)
-DEFINE_HASH_MAP(module_map, ModuleMap, String *, Module *, nse_string_hash, nse_string_equals)
-DEFINE_HASH_MAP(method_map, MethodMap, MethodKey *, MethodList *, method_key_hash, method_key_equals)
+DEFINE_HASH_MAP(namespace, Namespace, Symbol *, Value, pointer_hash, pointer_equals)
+DEFINE_HASH_MAP(symmap, SymMap, const String *, Symbol *, nse_string_hash, nse_string_equals)
+DEFINE_HASH_MAP(module_map, ModuleMap, const String *, Module *, nse_string_hash, nse_string_equals)
+DEFINE_HASH_MAP(method_map, MethodMap, MethodKey, MethodList *, method_key_hash, method_key_equals)

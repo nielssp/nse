@@ -3,7 +3,7 @@ GCCARGS = -Wall -pedantic -std=c11 -g
 CC = clang $(GCCARGS)
 LDFLAGS = -lreadline
 
-src = $(wildcard *.c) ../src/util/stream.c ../src/runtime/hashmap.c
+src = $(wildcard *.c) ../src/util/stream.c
 obj = $(src:.c=.o)
 
 $(TARGET): $(obj)
