@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include "hashmap.h"
 
 typedef struct Value Value;
 typedef struct Object Object;
@@ -28,6 +29,7 @@ typedef struct Closure Closure;
 typedef struct GenFunc GenFunc;
 typedef struct Pointer Pointer;
 typedef struct Syntax Syntax;
+typedef struct HashMap HashMap;
 
 enum {
   /* Object type bit */
@@ -81,6 +83,8 @@ typedef enum {
   VALUE_TYPE         = VALUE_OBJECT | 0x10,
   /* Generic functions */
   VALUE_GEN_FUNC     = VALUE_OBJECT | 0x11,
+  /* Hash maps */
+  VALUE_HASH_MAP     = VALUE_OBJECT | 0x12,
 } ValueType;
 
 /* Value structure */
@@ -474,6 +478,39 @@ Value syntax_get(const Value syntax);
 
 /* Get element of quoted vector */
 Value syntax_get_elem(int index, const Value syntax);
+
+
+
+/* Hash maps */
+
+struct HashMap {
+  Object header;
+  Type *type;
+  GenericHashMap map;
+};
+
+typedef struct {
+  Value key;
+  Value value;
+} HashMapEntry;
+
+/* Convert HashMap * to Value */
+#define HASH_MAP(v) ((Value){ .type = VALUE_HASH_MAP, .object = (Object *)(v) })
+
+/* Convert Value to HashMap * */
+#define TO_HASH_MAP(val) ((HashMap *)(val).object)
+
+/* Create hash map object */
+HashMap *create_hash_map(void);
+
+Value hash_map_get(HashMap *map, Value key);
+
+Value hash_map_set(HashMap *map, Value key, Value value);
+
+Value hash_map_unset(HashMap *map, Value key);
+
+int64_t hash(Value value);
+
 
 
 /* Type */

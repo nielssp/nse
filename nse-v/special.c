@@ -318,7 +318,7 @@ Value eval_fn(Slice args, Scope *scope) {
   return result;
 }
 
-static Type *get_result_type() {
+static Type *get_result_type(void) {
   TypeArray *params = create_type_array(2, (Type * const []){ copy_type(any_type), copy_type(any_type) });
   return get_instance(copy_generic(result_type), params);
 }

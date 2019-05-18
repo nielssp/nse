@@ -6,6 +6,6 @@
 
 typedef struct Module Module;
 
-Module *get_system_module();
+Module *get_system_module(void);
 
 #endif

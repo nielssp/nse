@@ -37,6 +37,7 @@ const char *value_type_name(ValueType type) {
     case VALUE_POINTER: return "pointer";
     case VALUE_TYPE: return "type";
     case VALUE_GEN_FUNC: return "gen-func";
+    case VALUE_HASH_MAP: return "hash-map";
     default: return "???";
   }
 }
@@ -135,6 +136,28 @@ Equality equals(const Value a, const Value b) {
     }
     case VALUE_CLOSURE:
       return EQ_NOT_EQUAL;
+    case VALUE_HASH_MAP: {
+      HashMap *map_a = TO_HASH_MAP(a);
+      HashMap *map_b = TO_HASH_MAP(b);
+      HashMapEntry entry_a;
+      HashMapIterator it = generic_hash_map_iterate(&map_a->map);
+      while (generic_hash_map_next(&it, &entry_a)) {
+        HashMapEntry entry_b;
+        if (generic_hash_map_get(&map_b->map, &entry_a, &entry_b)) {
+          Equality e = equals(entry_a.key, entry_b.key);
+          if (e != EQ_EQUAL) {
+            return e;
+          }
+          e = equals(entry_a.value, entry_b.value);
+          if (e != EQ_EQUAL) {
+            return e;
+          }
+        } else {
+          return EQ_NOT_EQUAL;
+        }
+      }
+      return EQ_EQUAL;
+    }
     default:
       return EQ_NOT_EQUAL;
   }
@@ -253,6 +276,16 @@ void delete_value(Value val) {
       case VALUE_GEN_FUNC:
         delete_value(SYMBOL(TO_GEN_FUNC(val)->name));
         break;
+      case VALUE_HASH_MAP: {
+        HashMapEntry entry;
+        HashMapIterator it = generic_hash_map_iterate(&TO_HASH_MAP(val)->map);
+        while (generic_hash_map_next(&it, &entry)) {
+          delete_value(entry.key);
+          delete_value(entry.value);
+        }
+        delete_generic_hash_map(&TO_HASH_MAP(val)->map);
+        break;
+      }
       default:
         break;
     }
@@ -658,4 +691,81 @@ Value syntax_get_elem(int index, const Value syntax) {
     return syntax_get(TO_VECTOR(syntax)->cells[index]);
   }
   return undefined;
+}
+
+/* Hash map allocation */
+
+static Hash hash_map_hash(HashMapEntry *entry) {
+  return (Hash)hash(entry->key);
+}
+
+static int hash_map_equals(HashMapEntry *a, HashMapEntry *b) {
+  return equals(a->key, b->key) == EQ_EQUAL;
+}
+
+HashMap *create_hash_map(void) {
+  HashMap *map = allocate_object(sizeof(HashMap));
+  if (!map) {
+    return NULL;
+  }
+  map->type = NULL;
+  init_generic_hash_map(&map->map, sizeof(HashMapEntry), (HashFunc) hash_map_hash, (EqualityFunc) hash_map_equals);
+  return map;
+}
+
+Value hash_map_get(HashMap *map, Value key) {
+  Value result = undefined;
+  HashMapEntry query = { .key = key };
+  HashMapEntry entry;
+  if (generic_hash_map_get(&map->map, &query, &entry)) {
+    result = copy_value(entry.value);
+  } else {
+    raise_error(domain_error, "key not found");
+  }
+  delete_value(key);
+  delete_value(HASH_MAP(map));
+  return result;
+}
+
+Value hash_map_set(HashMap *map, Value key, Value value) {
+  Value result = undefined;
+  int exists;
+  HashMapEntry existing;
+  HashMapEntry entry = { .key = key, .value = value };
+  if (generic_hash_map_set(&map->map, &entry, &exists, &existing)) {
+    if (exists) {
+      delete_value(existing.key);
+      delete_value(existing.value);
+    }
+    result = unit;
+  } else {
+    delete_value(key);
+    delete_value(value);
+    raise_error(out_of_memory_error, "hash map reallocation failed");
+  }
+  delete_value(HASH_MAP(map));
+  return result;
+}
+
+Value hash_map_unset(HashMap *map, Value key) {
+  Value result = undefined;
+  HashMapEntry existing;
+  HashMapEntry query = { .key = key };
+  if (generic_hash_map_remove(&map->map, &query, &existing)) {
+    delete_value(existing.key);
+    result = existing.value;
+  } else {
+    raise_error(domain_error, "key not found");
+  }
+  delete_value(key);
+  delete_value(HASH_MAP(map));
+  return result;
+}
+
+
+int64_t hash(Value value) {
+  switch (value.type) {
+    default:
+      return 0;
+  }
 }

@@ -63,7 +63,7 @@ extern Symbol *error_symbol;
 extern Value true_value;
 extern Value false_value;
 
-void init_lang_module();
+void init_lang_module(void);
 
 int is_true(const Value value);
 

@@ -231,7 +231,7 @@ Value read_and_eval(char *expr, const char *filename, Module *module, char **lin
     } else if (error_form != NULL) {
       Value datum = syntax_to_datum(copy_value(error_form->quoted));
       stream_printf(error_stream, ": ");
-      nse_write(datum, error_stream, module);
+      nse_write(datum, error_stream, module, 20);
       delete_value(datum);
       print_error_line(*line_history, error_form->file, error_form->start_line,
           error_form->start_column, error_form->end_line, error_form->end_column, error_stream);
@@ -245,7 +245,7 @@ Value read_and_eval(char *expr, const char *filename, Module *module, char **lin
             syntax->start_line, syntax->start_column);
         Value datum = syntax_to_datum(copy_value(syntax->quoted));
         stream_printf(error_stream, ": ");
-        nse_write(datum, error_stream, module);
+        nse_write(datum, error_stream, module, 20);
         delete_value(datum);
       }
     }
@@ -324,7 +324,7 @@ int main(int argc, char *argv[]) {
             ok = 0;
           }
           if (opt == 'p') {
-            nse_write(result, stdout_stream, user_module);
+            nse_write(result, stdout_stream, user_module, 20);
             puts("");
           }
           break;
@@ -362,7 +362,7 @@ int main(int argc, char *argv[]) {
     add_history(input);
     Value result = read_and_eval(input, "(repl)", user_module, &line_history, &line, stdout_stream);
     if (RESULT_OK(result)) {
-      nse_write(result, stdout_stream, user_module);
+      nse_write(result, stdout_stream, user_module, 20);
       delete_value(result);
     }
     free(input);

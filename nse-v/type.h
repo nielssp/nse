@@ -149,9 +149,13 @@ extern GType *vector_slice_type;
 extern GType *list_type;
 /* Generic weak reference type. */
 extern GType *weak_ref_type;
+/* Generic hash map type. */
+extern GType *hash_map_type;
+/* Generic entry type. */
+extern GType *entry_type;
 
 /* Initializes all built-in types. */
-void init_types();
+void init_types(void);
 
 /* Creates a simple type. May raise an error and return NULL if allocation
  * fails.

@@ -46,7 +46,7 @@ int generic_hash_map_next(HashMapIterator *iterator, void *result) {
   while (iterator->next_bucket < iterator->map->capacity) {
     current = (GenericBucket *)(iterator->map->buckets + (iterator->next_bucket << iterator->map->bucket_size_shift));
     iterator->next_bucket++;
-    if (current->defined) {
+    if (current->defined && !current->deleted) {
       memcpy(result, current + 1, iterator->map->entry_size);
       return 1;
     }
@@ -99,6 +99,40 @@ int generic_hash_map_add(GenericHashMap *map, const void *entry) {
   while (bucket->defined && !bucket->deleted) {
     if (map->equals_func(bucket + 1, entry)) {
       return 0;
+    }
+    hash = (hash + 1) & map->mask;
+    bucket = (GenericBucket *)(map->buckets + (hash << map->bucket_size_shift));
+  }
+  bucket->hash = hash_code;
+  bucket->defined = 1;
+  bucket->deleted = 0;
+  memcpy(bucket + 1, entry, map->entry_size);
+  map->size++;
+  return 1;
+}
+
+int generic_hash_map_set(GenericHashMap *map, const void *entry, int *exists, void *existing) {
+  if (exists) {
+    *exists = 0;
+  }
+  if (map->size > map->upper_cap) {
+    if (!generic_hash_map_resize(map, map->capacity << 1)) {
+      return 0;
+    }
+  }
+  Hash hash_code = map->hash_code_func(entry);
+  Hash hash = hash_code & map->mask;
+  GenericBucket *bucket = (GenericBucket *)(map->buckets + (hash << map->bucket_size_shift));
+  while (bucket->defined && !bucket->deleted) {
+    if (map->equals_func(bucket + 1, entry)) {
+      if (exists) {
+        *exists = 1;
+      }
+      if (existing) {
+        memcpy(existing, bucket + 1, map->entry_size);
+      }
+      map->size--;
+      break;
     }
     hash = (hash + 1) & map->mask;
     bucket = (GenericBucket *)(map->buckets + (hash << map->bucket_size_shift));

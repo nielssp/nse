@@ -164,6 +164,8 @@ int generic_hash_map_resize(GenericHashMap *map, size_t new_capacity);
 
 int generic_hash_map_add(GenericHashMap *map, const void *entry);
 
+int generic_hash_map_set(GenericHashMap *map, const void *entry, int *exists, void *existing);
+
 int generic_hash_map_remove(GenericHashMap *map, const void *entry, void *removed);
 
 int generic_hash_map_get(GenericHashMap *map, const void *entry, void *result);

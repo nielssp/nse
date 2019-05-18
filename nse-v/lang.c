@@ -59,7 +59,7 @@ Value false_value;
 
 Module *lang_module = NULL;
 
-void init_lang_module() {
+void init_lang_module(void) {
   init_types();
   init_error_module();
 

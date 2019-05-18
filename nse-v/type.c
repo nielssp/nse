@@ -65,8 +65,10 @@ GType *vector_type;
 GType *vector_slice_type;
 GType *list_type;
 GType *weak_ref_type;
+GType *hash_map_type;
+GType *entry_type;
 
-void init_types() {
+void init_types(void) {
   init_func_type_map(&func_types);
   nothing_type = create_simple_type(NULL);
   any_type = create_simple_type(NULL);
@@ -93,6 +95,8 @@ void init_types() {
   vector_slice_type = create_generic(1, copy_type(any_type));
   list_type = create_generic(1, copy_type(any_type));
   weak_ref_type = create_generic(1, copy_type(any_type));
+  hash_map_type = create_generic(2, copy_type(any_type));
+  entry_type = create_generic(2, copy_type(any_type));
 }
 
 Type *create_simple_type(Type *super) {
@@ -510,6 +514,12 @@ Type *get_type(const Value value) {
       return copy_type(type_type);
     case VALUE_GEN_FUNC:
       return copy_type(func_type);
+    case VALUE_HASH_MAP:
+      if (!TO_HASH_MAP(value)->type) {
+        TypeArray *a = create_type_array(2, (Type *[]){ copy_type(any_type), copy_type(any_type) });
+        TO_HASH_MAP(value)->type = get_instance(copy_generic(hash_map_type), a);
+      }
+      return copy_type(TO_HASH_MAP(value)->type);
   }
 }
 

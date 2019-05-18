@@ -7,7 +7,7 @@
 #include "value.h"
 #include "../src/util/stream.h"
 
-Value nse_write(Value value, Stream *stream, Module *module);
+Value nse_write(Value value, Stream *stream, Module *module, int max_nesting);
 
 char *nse_write_to_string(Value value, Module *module);
 

@@ -388,6 +388,29 @@ static Value tabulate(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value weak(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1) {
+    result = check_alloc(WEAK_REF(create_weak_ref(copy_value(args.cells[0]))));
+  } else {
+    raise_error(domain_error, "expected (weak ANY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value hash_map(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 0) {
+    result = check_alloc(HASH_MAP(create_hash_map()));
+  } else {
+    raise_error(domain_error, "expected (hash-map)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+
 static Value type_of(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 1) {
@@ -486,14 +509,49 @@ static Value vector_slice_elem(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value hash_map_elem(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[1].type == VALUE_HASH_MAP) {
+    result = hash_map_get(copy_object(TO_HASH_MAP(args.cells[1])), copy_value(args.cells[0]));
+  } else {
+    raise_error(domain_error, "expected (elem ANY HASH-MAP)");
+  }
+  delete_slice(args);
+  return result;
+}
 
-Module *get_system_module() {
+static Value hash_map_update(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 3 && args.cells[2].type == VALUE_HASH_MAP) {
+    result = hash_map_set(copy_object(TO_HASH_MAP(args.cells[2])), copy_value(args.cells[0]),
+        copy_value(args.cells[1]));
+  } else {
+    raise_error(domain_error, "expected (update ANY ANY HASH-MAP)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value hash_map_remove(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[1].type == VALUE_HASH_MAP) {
+    result = hash_map_unset(copy_object(TO_HASH_MAP(args.cells[1])), copy_value(args.cells[0]));
+  } else {
+    raise_error(domain_error, "expected (remove ANY ANY HASH-MAP)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+Module *get_system_module(void) {
   Module *system = create_module("system");
 
   module_ext_define(system, "load", FUNC(load));
 
   module_ext_define(system, "++", FUNC(append));
   module_ext_define(system, "tabulate", FUNC(tabulate));
+  module_ext_define(system, "weak", FUNC(weak));
+  module_ext_define(system, "hash-map", FUNC(hash_map));
 
   module_ext_define(system, "type-of", FUNC(type_of));
 
@@ -546,6 +604,16 @@ Module *get_system_module() {
       1, get_poly_instance(copy_generic(vector_slice_type)));
   module_ext_define_method(system, "elem", FUNC(string_elem),
       1, copy_type(string_type));
+  module_ext_define_method(system, "elem", FUNC(hash_map_elem),
+      1, get_poly_instance(copy_generic(hash_map_type)));
+
+  module_ext_define_generic(system, "update", 3, 0, 1, (int8_t[]){ -1, -1, 0 });
+  module_ext_define_method(system, "update", FUNC(hash_map_update),
+      1, get_poly_instance(copy_generic(hash_map_type)));
+
+  module_ext_define_generic(system, "remove", 2, 0, 1, (int8_t[]){ -1, 0 });
+  module_ext_define_method(system, "remove", FUNC(hash_map_remove),
+      1, get_poly_instance(copy_generic(hash_map_type)));
 
   Value stdin_val = POINTER(create_pointer(copy_type(stream_type),
         stdin_stream, void_destructor));

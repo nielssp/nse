@@ -30,7 +30,7 @@ struct Scope {
 extern Module *lang_module;
 extern Module *keyword_module;
 
-void unload_modules();
+void unload_modules(void);
 
 Scope *scope_push(Scope *scope, Symbol *symbol, Value value);
 Scope *scope_pop(Scope *scope);

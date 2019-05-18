@@ -6,7 +6,11 @@
 
 #include "write.h"
 
-static void write_type(const Type *type, Stream *stream, Module *module) {
+static void write_type(const Type *type, Stream *stream, Module *module, int max_nesting) {
+  if (max_nesting < 1) {
+    stream_printf(stream, "#<...>");
+    return;
+  }
   if (!type) {
     stream_printf(stream, "#<undefined>");
     return;
@@ -15,7 +19,7 @@ static void write_type(const Type *type, Stream *stream, Module *module) {
   switch (type->type) {
     case TYPE_SIMPLE:
       if (type->name) {
-        nse_write(SYMBOL(type->name), stream, module);
+        nse_write(SYMBOL(type->name), stream, module, max_nesting - 1);
       } else {
         stream_printf(stream, "#<type>");
       }
@@ -49,7 +53,7 @@ static void write_type(const Type *type, Stream *stream, Module *module) {
       stream_printf(stream, ") (");
       name = generic_type_name(type->poly_instance);
       if (name) {
-        nse_write(SYMBOL(name), stream, module);
+        nse_write(SYMBOL(name), stream, module, max_nesting - 1);
       } else {
         stream_printf(stream, "#<generic-type>");
       }
@@ -66,14 +70,14 @@ static void write_type(const Type *type, Stream *stream, Module *module) {
       stream_printf(stream, "(");
       name = generic_type_name(type->instance.type);
       if (name) {
-        nse_write(SYMBOL(name), stream, module);
+        nse_write(SYMBOL(name), stream, module, max_nesting - 1);
       } else {
         stream_printf(stream, "#<generic-type>");
       }
       TypeArray *params = type->instance.parameters;
       for (int i = 0; i < params->size; i++) {
         stream_printf(stream, " ");
-        write_type(params->elements[i], stream, module);
+        write_type(params->elements[i], stream, module, max_nesting - 1);
       }
       stream_printf(stream, ")");
       break;
@@ -83,7 +87,11 @@ static void write_type(const Type *type, Stream *stream, Module *module) {
   }
 }
 
-Value nse_write(const Value value, Stream *stream, Module *module) {
+Value nse_write(const Value value, Stream *stream, Module *module, int max_nesting) {
+  if (max_nesting < 1) {
+    stream_printf(stream, "#<...>");
+    return unit;
+  }
   switch (value.type) {
     /* Primitives */
 
@@ -111,7 +119,7 @@ Value nse_write(const Value value, Stream *stream, Module *module) {
         if (i != 0) {
           stream_printf(stream, " ");
         }
-        nse_write(v->cells[i], stream, module);
+        nse_write(v->cells[i], stream, module, max_nesting - 1);
       }
       stream_printf(stream, ")");
       break;
@@ -123,7 +131,7 @@ Value nse_write(const Value value, Stream *stream, Module *module) {
         if (i != 0) {
           stream_printf(stream, " ");
         }
-        nse_write(v->cells[i], stream, module);
+        nse_write(v->cells[i], stream, module, max_nesting - 1);
       }
       stream_printf(stream, ")");
       break;
@@ -134,7 +142,7 @@ Value nse_write(const Value value, Stream *stream, Module *module) {
     case VALUE_LIST:
       stream_printf(stream, "(list ");
       for (const List *l = TO_LIST(value); l; l = l->tail) {
-        nse_write(l->head, stream, module);
+        nse_write(l->head, stream, module, max_nesting - 1);
       }
       stream_printf(stream, ")");
       break;
@@ -170,7 +178,7 @@ Value nse_write(const Value value, Stream *stream, Module *module) {
     }
     case VALUE_WEAK_REF: {
       stream_printf(stream, "(weak ");
-      nse_write(TO_WEAK_REF(value)->value, stream, module);
+      nse_write(TO_WEAK_REF(value)->value, stream, module, max_nesting - 1);
       stream_printf(stream, ")");
       break;
     }
@@ -200,20 +208,20 @@ Value nse_write(const Value value, Stream *stream, Module *module) {
       Data *d = TO_DATA(value);
       if (d->size) {
         stream_printf(stream, "(");
-        nse_write(SYMBOL(d->tag), stream, module);
+        nse_write(SYMBOL(d->tag), stream, module, max_nesting - 1);
         for (size_t i = 0; i < d->size; i++) {
           stream_printf(stream, " ");
-          nse_write(d->fields[i], stream, module);
+          nse_write(d->fields[i], stream, module, max_nesting - 1);
         }
         stream_printf(stream, ")");
       } else {
-        nse_write(SYMBOL(d->tag), stream, module);
+        nse_write(SYMBOL(d->tag), stream, module, max_nesting - 1);
       }
       break;
     }
     case VALUE_SYNTAX:
       stream_printf(stream, "#<syntax ");
-      nse_write(TO_SYNTAX(value)->quoted, stream, module);
+      nse_write(TO_SYNTAX(value)->quoted, stream, module, max_nesting - 1);
       stream_printf(stream, ">");
       break;
     case VALUE_CLOSURE:
@@ -221,16 +229,29 @@ Value nse_write(const Value value, Stream *stream, Module *module) {
       break;
     case VALUE_POINTER:
       stream_printf(stream, "#<");
-      write_type(TO_POINTER(value)->type, stream, module);
+      write_type(TO_POINTER(value)->type, stream, module, max_nesting - 1);
       stream_printf(stream, "#%p>", TO_POINTER(value)->pointer);
       break;
     case VALUE_TYPE:
       stream_printf(stream, "^");
-      write_type(TO_TYPE(value), stream, module);
+      write_type(TO_TYPE(value), stream, module, max_nesting - 1);
       break;
     case VALUE_GEN_FUNC:
       stream_printf(stream, "#<generic function>");
       break;
+    case VALUE_HASH_MAP: {
+      stream_printf(stream, "(hash-map");
+      HashMapEntry entry;
+      HashMapIterator it = generic_hash_map_iterate(&TO_HASH_MAP(value)->map);
+      while (generic_hash_map_next(&it, &entry)) {
+        stream_printf(stream, " ");
+        nse_write(entry.key, stream, module, max_nesting - 1);
+        stream_printf(stream, " ");
+        nse_write(entry.value, stream, module, max_nesting - 1);
+      }
+      stream_printf(stream, ")");
+      break;
+    }
   }
   return unit;
 }
@@ -239,7 +260,7 @@ char *nse_write_to_string(Value value, Module *module) {
   size_t size = 32;
   char *buffer = (char *)malloc(size);
   Stream *stream = stream_buffer(buffer, size, 0);
-  nse_write(value, stream, module);
+  nse_write(value, stream, module, 500);
   buffer = stream_get_content(stream);
   stream_close(stream);
   return buffer;

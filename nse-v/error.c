@@ -26,7 +26,7 @@ Syntax *error_form = NULL;
 size_t error_arg_index = -1;
 List *stack_trace = NULL;
 
-void init_error_module() {
+void init_error_module(void) {
   error_module = create_module("error");
 
   out_of_memory_error = module_extern_symbol_c(error_module, "out-of-memory-error");
@@ -74,15 +74,15 @@ void raise_error(Symbol *error_type, const char *format, ...) {
   }
 }
 
-const char *current_error() {
+const char *current_error(void) {
   return error_string;
 }
 
-Symbol *current_error_type() {
+Symbol *current_error_type(void) {
   return error_symbol;
 }
 
-void clear_error() {
+void clear_error(void) {
   if (error_string) {
     if (error_string != alloc_error) {
       free(error_string);
@@ -172,7 +172,7 @@ int stack_trace_push(Value func, Slice args) {
   }
 }
 
-void stack_trace_pop() {
+void stack_trace_pop(void) {
   if (stack_trace) {
     List *old = stack_trace;
     if (old->tail) {
@@ -184,11 +184,11 @@ void stack_trace_pop() {
   }
 }
 
-List *get_stack_trace() {
+List *get_stack_trace(void) {
   return stack_trace;
 }
 
-void clear_stack_trace() {
+void clear_stack_trace(void) {
   if (stack_trace) {
     delete_value(LIST(stack_trace));
     stack_trace = NULL;
