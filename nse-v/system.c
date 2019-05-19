@@ -410,6 +410,17 @@ static Value hash_map(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value hash_of(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1) {
+    result = I64(hash(INIT_HASH, args.cells[0]));
+  } else {
+    raise_error(domain_error, "expected (hash-of ANY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 
 static Value type_of(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
@@ -546,12 +557,15 @@ static Value hash_map_remove(Slice args, Scope *dynamic_scope) {
 Module *get_system_module(void) {
   Module *system = create_module("system");
 
+  module_ext_define(system, "*eval*", HASH_MAP(create_hash_map()));
+
   module_ext_define(system, "load", FUNC(load));
 
   module_ext_define(system, "++", FUNC(append));
   module_ext_define(system, "tabulate", FUNC(tabulate));
   module_ext_define(system, "weak", FUNC(weak));
   module_ext_define(system, "hash-map", FUNC(hash_map));
+  module_ext_define(system, "hash-of", FUNC(hash_of));
 
   module_ext_define(system, "type-of", FUNC(type_of));
 

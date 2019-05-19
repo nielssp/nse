@@ -696,7 +696,7 @@ Value syntax_get_elem(int index, const Value syntax) {
 /* Hash map allocation */
 
 static Hash hash_map_hash(HashMapEntry *entry) {
-  return (Hash)hash(entry->key);
+  return hash(INIT_HASH, entry->key);
 }
 
 static int hash_map_equals(HashMapEntry *a, HashMapEntry *b) {
@@ -763,9 +763,82 @@ Value hash_map_unset(HashMap *map, Value key) {
 }
 
 
-int64_t hash(Value value) {
+Hash hash(Hash h, Value value) {
+  h = HASH_ADD_BYTE(value.type, h);
   switch (value.type) {
-    default:
-      return 0;
+    /* Primitives */
+
+    case VALUE_UNDEFINED:
+    case VALUE_UNIT:
+      return h;
+    case VALUE_I64:
+    case VALUE_F64:
+      for (int i = 0; i < 8; i++) {
+        h = HASH_ADD_BYTE(GET_BYTE(i, value.i64), h);
+      }
+      return h;
+    case VALUE_FUNC:
+      return HASH_ADD_PTR(value.func, h);
+
+    /* Reference types */
+
+    case VALUE_VECTOR: {
+      const Vector *v = TO_VECTOR(value);
+      for (size_t i = 0; i < v->length; i++) {
+        h = hash(h, v->cells[i]);
+      }
+      return h;
+    }
+    case VALUE_VECTOR_SLICE: {
+      const VectorSlice *v = TO_VECTOR_SLICE(value);
+      for (size_t i = 0; i < v->length; i++) {
+        h = hash(h, v->cells[i]);
+      }
+      return h;
+    }
+    case VALUE_ARRAY:
+    case VALUE_ARRAY_SLICE:
+      return h;
+    case VALUE_LIST:
+      for (const List *l = TO_LIST(value); l; l = l->tail) {
+        h = hash(h, l->head);
+      }
+      return h;
+    case VALUE_STRING: {
+      String *string = TO_STRING(value);
+      for (size_t i = 0; i < string->length; i++) {
+        h = HASH_ADD_BYTE(string->bytes[i], h);
+      }
+      return h;
+    }
+    case VALUE_WEAK_REF:
+      return hash(h, TO_WEAK_REF(value)->value);
+    case VALUE_SYMBOL:
+    case VALUE_KEYWORD:
+    case VALUE_CLOSURE:
+    case VALUE_POINTER:
+    case VALUE_TYPE:
+    case VALUE_GEN_FUNC:
+      return HASH_ADD_PTR(value.object, h);
+    case VALUE_DATA: {
+      Data *d = TO_DATA(value);
+      h = hash(h, SYMBOL(d->tag));
+      for (size_t i = 0; i < d->size; i++) {
+        h = hash(h, d->fields[i]);
+      }
+      return h;
+    }
+    case VALUE_SYNTAX:
+      return hash(h, TO_SYNTAX(value)->quoted);
+    case VALUE_HASH_MAP: {
+      HashMapEntry entry;
+      HashMapIterator it = generic_hash_map_iterate(&TO_HASH_MAP(value)->map);
+      while (generic_hash_map_next(&it, &entry)) {
+        h = hash(h, entry.key);
+        h = hash(h, entry.value);
+      }
+      return h;
+    }
   }
+  return h;
 }

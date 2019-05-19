@@ -504,7 +504,7 @@ char **get_symbols(Module *module) {
   size_t i = 0;
   symbols[entries] = NULL;
   Symbol *symbol;
-  HashMapIterator it = symmap_iterate(&module->external);
+  HashMapIterator it = symmap_iterate(&module->internal);
   while (symmap_next(&it, &symbol)) {
     symbols[i++] = string_printf(TO_C_STRING(symbol->name));
   }
@@ -638,7 +638,7 @@ static Hash method_key_hash(const MethodKey m) {
   Hash hash = INIT_HASH;
   hash = HASH_ADD_PTR(m.symbol, hash);
   hash = HASH_ADD_PTR(m.type, hash);
-  return 0;
+  return hash;
 }
 
 static int method_key_equals(const MethodKey a, const MethodKey b) {

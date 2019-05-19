@@ -509,7 +509,7 @@ Value hash_map_set(HashMap *map, Value key, Value value);
 
 Value hash_map_unset(HashMap *map, Value key);
 
-int64_t hash(Value value);
+Hash hash(Hash h, Value value);
 
 
 
