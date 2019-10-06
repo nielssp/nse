@@ -26,7 +26,7 @@ Value eval_quote(Slice args, Scope *scope) {
 Value eval_type(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length == 1) {
-    Scope *type_scope = use_module_types(scope->module);
+    Scope *type_scope = use_namespace(scope, copy_object(types_namespace));
     result = eval(copy_value(args.cells[0]), type_scope);
     scope_pop(type_scope);
   } else {
@@ -811,7 +811,7 @@ static GType *eval_def_generic_type(Vector *sig, Scope **scope) {
 
 static Value eval_def_data_generic(Vector *sig, Slice args, Scope *scope) {
   Value result = undefined;
-  Scope *type_scope = use_module_types(scope->module);
+  Scope *type_scope = use_namespace(scope, copy_object(types_namespace));
   GType *g = eval_def_generic_type(sig, &type_scope);
   if (g) {
     Type *t = get_poly_instance(copy_generic(g));
@@ -867,7 +867,7 @@ static Value eval_def_data_nongeneric(Value head, Slice args, Scope *scope) {
       for (int i = 0; i < args.length; i++) {
         Value constructor = args.cells[i];
         if (syntax_is(constructor, VALUE_VECTOR) && TO_VECTOR(syntax_get(constructor))->length >= 1) {
-          Scope *type_scope = use_module_types(scope->module);
+          Scope *type_scope = use_namespace(scope, copy_object(types_namespace));
           Value constructor_result = eval_def_data_constructor(to_slice(copy_value(syntax_get(constructor))),
               copy_type(t), type_scope);
           delete_scope(type_scope);

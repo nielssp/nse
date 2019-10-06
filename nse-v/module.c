@@ -16,7 +16,7 @@
 typedef struct MethodKey MethodKey;
 typedef struct MethodList MethodList;
 
-DECLARE_HASH_MAP(namespace, Namespace, Symbol *, Value)
+DECLARE_HASH_MAP(def_map, DefMap, Symbol *, Value)
 DECLARE_HASH_MAP(symmap, SymMap, const String *, Symbol *)
 DECLARE_HASH_MAP(module_map, ModuleMap, const String *, Module *)
 
@@ -31,10 +31,7 @@ struct Module {
   String *name;
   SymMap internal;
   SymMap external;
-  Namespace defs;
-  Namespace macro_defs;
-  Namespace type_defs;
-  Namespace read_macro_defs;
+  DefMap defs;
   MethodMap methods;
 };
 
@@ -108,9 +105,13 @@ Scope *scope_push(Scope *next, Symbol *symbol, Value value) {
   scope->symbol = symbol;
   scope->binding = create_binding(value);
   scope->next = next;
-  scope->type = VALUE_SCOPE;
+  scope->namespace = NULL;
+  scope->module = NULL;
   if (next) {
     scope->module = next->module;
+    if (next->namespace) {
+      scope->namespace = copy_object(next->namespace);
+    }
   }
   return scope;
 }
@@ -147,7 +148,6 @@ Scope *copy_scope(Scope *scope) {
   }
   copy->symbol = scope->symbol;
   copy->binding = copy_binding(scope->binding);
-  copy->type = scope->type;
   copy->next = copy_scope(scope->next);
   copy->module = scope->module;
   return copy;
@@ -180,29 +180,31 @@ int scope_set(Scope *scope, Symbol *symbol, Value value, int weak) {
   return 0;
 }
 
-Value scope_get(Scope *scope, Symbol *symbol) {
-  if (scope->symbol) {
-    if (scope->symbol == symbol) {
+Value scope_get_in_namespace(Scope *scope, Symbol *symbol, /*const*/ Symbol *namespace_name) {
+  if (scope) {
+    if (scope->symbol && scope->namespace == namespace_name && scope->symbol == symbol) {
       if (!RESULT_OK(scope->binding->value)) {
         raise_error(name_error, "undefined name: %s", TO_C_STRING(symbol->name));
       }
       delete_value(SYMBOL(symbol));
       return copy_value(scope->binding->value);
     }
-    if (scope->next) {
-      return scope_get(scope->next, symbol);
-    }
+    return scope_get_in_namespace(scope->next, symbol, namespace_name);
   }
   if (symbol->module) {
     int found = 0;
-    Value value;
-    switch (scope->type) {
-      case VALUE_SCOPE:
-        found = namespace_get(&symbol->module->defs, symbol, &value);
-        break;
-      case TYPE_SCOPE:
-        found = namespace_get(&symbol->module->type_defs, symbol, &value);
-        break;
+    Value value, local;
+    if (!namespace_name) {
+      found = def_map_get(&symbol->module->defs, symbol, &value);
+    } else if (def_map_get(&symbol->module->defs, namespace_name, &local)) {
+      if (local.type == VALUE_HASH_MAP) {
+        HashMapEntry query = { .key = SYMBOL(symbol) };
+        HashMapEntry entry;
+        if (generic_hash_map_get(&TO_HASH_MAP(local)->map, &query, &entry)) {
+          found = 1;
+          value = entry.value;
+        }
+      }
     }
     if (found) {
       delete_value(SYMBOL(symbol));
@@ -214,30 +216,16 @@ Value scope_get(Scope *scope, Symbol *symbol) {
   return undefined;
 }
 
+Value scope_get(Scope *scope, Symbol *symbol) {
+  return scope_get_in_namespace(scope, symbol, scope->namespace);
+}
+
 Value scope_get_macro(Scope *scope, Symbol *symbol) {
-  if (symbol->module) {
-    Value value;
-    if (namespace_get(&symbol->module->macro_defs, symbol, &value)) {
-      delete_value(SYMBOL(symbol));
-      return copy_value(value);
-    }
-  }
-  raise_error(name_error, "undefined macro: %s", TO_C_STRING(symbol->name));
-  delete_value(SYMBOL(symbol));
-  return undefined;
+  return scope_get_in_namespace(scope, symbol, copy_object(macros_namespace));
 }
 
 Value get_read_macro(Symbol *symbol) {
-  if (symbol->module) {
-    Value value;
-    if (namespace_get(&symbol->module->read_macro_defs, symbol, &value)) {
-      delete_value(SYMBOL(symbol));
-      return copy_value(value);
-    }
-  }
-  raise_error(name_error, "undefined read macro: %s", TO_C_STRING(symbol->name));
-  delete_value(SYMBOL(symbol));
-  return undefined;
+  return scope_get_in_namespace(NULL, symbol, copy_object(read_macros_namespace));
 }
 
 Module *create_module(const char *name_c) {
@@ -258,10 +246,7 @@ Module *create_module(const char *name_c) {
   module->name = name;
   init_symmap(&module->internal);
   init_symmap(&module->external);
-  init_namespace(&module->defs);
-  init_namespace(&module->macro_defs);
-  init_namespace(&module->type_defs);
-  init_namespace(&module->read_macro_defs);
+  init_def_map(&module->defs);
   init_method_map(&module->methods);
   module_map_add(&loaded_modules, module->name, module);
   return module;
@@ -303,21 +288,18 @@ static void delete_symbols(SymMap *symbols) {
   delete_symmap(symbols);
 }
 
-static void delete_defs(Namespace *namespace) {
-  NamespaceEntry entry;
-  HashMapIterator it = namespace_iterate(namespace);
-  while (namespace_next_entry(&it, &entry)) {
+static void delete_defs(DefMap *defs) {
+  DefMapEntry entry;
+  HashMapIterator it = def_map_iterate(defs);
+  while (def_map_next_entry(&it, &entry)) {
     delete_value(SYMBOL(entry.key));
     delete_value(entry.value);
   }
-  delete_namespace(namespace);
+  delete_def_map(defs);
 }
 
 void delete_module(Module *module) {
   delete_defs(&module->defs);
-  delete_defs(&module->macro_defs);
-  delete_defs(&module->type_defs);
-  delete_defs(&module->read_macro_defs);
   delete_symbols(&module->internal);
   delete_symbols(&module->external);
   delete_methods(&module->methods);
@@ -335,11 +317,30 @@ Scope *use_module(Module *module) {
   return scope;
 }
 
-Scope *use_module_types(Module *module) {
-  Scope *scope = scope_push(NULL, NULL, undefined);
-  scope->module = module;
-  scope->type = TYPE_SCOPE;
+Scope *use_namespace(Scope *next, Symbol *namespace) {
+  Scope *scope = scope_push(next, NULL, undefined);
+  scope->namespace = namespace;
   return scope;
+}
+
+Value namespace_lookup(Symbol *namespace_name, const Symbol *symbol) {
+  Module *module = symbol->module;
+  if (!module) {
+    return undefined;
+  }
+  Value result = undefined;
+  Value local;
+  if (def_map_get(&module->defs, namespace_name, &local)) {
+    if (local.type == VALUE_HASH_MAP) {
+      HashMapEntry query = { .key = SYMBOL(symbol) };
+      HashMapEntry entry;
+      if (generic_hash_map_get(&TO_HASH_MAP(local)->map, &query, &entry)) {
+        result = copy_value(entry.value);
+      }
+    } else {
+    }
+  }
+  return result;
 }
 
 Value module_find_method(Module *module, const Symbol *symbol, const TypeArray *parameters) {
@@ -558,40 +559,47 @@ void import_module(Module *dest, Module *src) {
   import_methods(dest, src);
 }
 
-void module_define(Symbol *s, Value value) {
+Value module_define(Symbol *s, Value value) {
   Value existing;
-  if (namespace_remove(&s->module->defs, s, &existing)) {
+  if (def_map_remove(&s->module->defs, s, &existing)) {
     delete_value(SYMBOL(s));
     delete_value(existing);
   }
-  namespace_add(&s->module->defs, s, value);
+  def_map_add(&s->module->defs, s, value);
+  return unit;
 }
 
-void module_define_macro(Symbol *s, Value value) {
+Value namespace_define(Symbol *s, Value value, Symbol *namespace_name) {
+  Value local;
+  if (!namespace_name) {
+    module_define(s, value);
+  } else if (def_map_get(&s->module->defs, namespace_name, &local) && local.type == VALUE_HASH_MAP) {
+    delete_value(SYMBOL(namespace_name));
+    return hash_map_set(copy_object(TO_HASH_MAP(local)), SYMBOL(s), value);
+  }
+  HashMap *m = create_hash_map();
+  if (!m) {
+    return undefined;
+  }
   Value existing;
-  if (namespace_remove(&s->module->macro_defs, s, &existing)) {
-    delete_value(SYMBOL(s));
+  if (def_map_remove(&s->module->defs, namespace_name, &existing)) {
+    delete_value(SYMBOL(namespace_name));
     delete_value(existing);
   }
-  namespace_add(&s->module->macro_defs, s, value);
+  def_map_add(&s->module->defs, namespace_name, copy_value(HASH_MAP(m)));
+  return hash_map_set(m, SYMBOL(s), value);
 }
 
-void module_define_type(Symbol *s, Value value) {
-  Value existing;
-  if (namespace_remove(&s->module->type_defs, s, &existing)) {
-    delete_value(SYMBOL(s));
-    delete_value(existing);
-  }
-  namespace_add(&s->module->type_defs, s, value);
+Value module_define_macro(Symbol *s, Value value) {
+  return namespace_define(s, value, copy_object(macros_namespace));
 }
 
-void module_define_read_macro(Symbol *s, Value value) {
-  Value existing;
-  if (namespace_remove(&s->module->read_macro_defs, s, &existing)) {
-    delete_value(SYMBOL(s));
-    delete_value(existing);
-  }
-  namespace_add(&s->module->read_macro_defs, s, value);
+Value module_define_type(Symbol *s, Value value) {
+  return namespace_define(s, value, copy_object(types_namespace));
+}
+
+Value module_define_read_macro(Symbol *s, Value value) {
+  return namespace_define(s, value, copy_object(read_macros_namespace));
 }
 
 void module_define_method(Module *module, Symbol *symbol, TypeArray *parameters, Value value) {
@@ -653,7 +661,7 @@ static int nse_string_equals(const String *a, const String *b) {
   return string_equals(TO_C_STRING(a), TO_C_STRING(b));
 }
 
-DEFINE_HASH_MAP(namespace, Namespace, Symbol *, Value, pointer_hash, pointer_equals)
+DEFINE_HASH_MAP(def_map, DefMap, Symbol *, Value, pointer_hash, pointer_equals)
 DEFINE_HASH_MAP(symmap, SymMap, const String *, Symbol *, nse_string_hash, nse_string_equals)
 DEFINE_HASH_MAP(module_map, ModuleMap, const String *, Module *, nse_string_hash, nse_string_equals)
 DEFINE_HASH_MAP(method_map, MethodMap, MethodKey, MethodList *, method_key_hash, method_key_equals)

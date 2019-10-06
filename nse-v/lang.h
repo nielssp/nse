@@ -14,6 +14,11 @@ extern Module *lang_module;
 
 extern Symbol *out_of_memory_error;
 
+extern Symbol *macros_namespace;
+extern Symbol *types_namespace;
+extern Symbol *read_macros_namespace;
+extern Symbol *eval_namespace;
+
 extern Symbol *quote_symbol;
 extern Symbol *type_symbol;
 extern Symbol *backquote_symbol;

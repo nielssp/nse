@@ -8,6 +8,11 @@
 
 #include "lang.h"
 
+Symbol *macros_namespace = NULL;
+Symbol *types_namespace = NULL;
+Symbol *read_macros_namespace = NULL;
+Symbol *eval_namespace = NULL;
+
 Symbol *quote_symbol = NULL;
 Symbol *type_symbol = NULL;
 Symbol *backquote_symbol = NULL;
@@ -64,6 +69,11 @@ void init_lang_module(void) {
   init_error_module();
 
   lang_module = create_module("lang");
+
+  macros_namespace = module_extern_symbol_c(lang_module, "*macros*");
+  types_namespace = module_extern_symbol_c(lang_module, "*types*");
+  read_macros_namespace = module_extern_symbol_c(lang_module, "*read-macros*");
+  eval_namespace = module_extern_symbol_c(lang_module, "*eval*");
 
   quote_symbol = module_extern_symbol_c(lang_module, "quote");
   type_symbol = module_extern_symbol_c(lang_module, "type");

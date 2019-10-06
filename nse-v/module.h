@@ -10,21 +10,16 @@ typedef struct Module Module;
 typedef struct Type Type;
 typedef struct TypeArray TypeArray;
 
-typedef enum {
-  TYPE_SCOPE,
-  VALUE_SCOPE
-} ScopeType;
-
 typedef struct Scope Scope;
 
 typedef struct Binding Binding;
 
 struct Scope {
   Module *module;
+  Symbol *namespace;
   Symbol *symbol;
   Binding *binding;
   Scope *next;
-  ScopeType type;
 };
 
 extern Module *lang_module;
@@ -32,12 +27,14 @@ extern Module *keyword_module;
 
 void unload_modules(void);
 
+Scope *use_namespace(Scope *next, Symbol *namespace);
 Scope *scope_push(Scope *scope, Symbol *symbol, Value value);
 Scope *scope_pop(Scope *scope);
 void scope_pop_until(Scope *start, Scope *end);
 Scope *copy_scope(Scope *scope);
 void delete_scope(Scope *scope);
 int scope_set(Scope *scope, Symbol *symbol, Value value, int weak);
+Value scope_get_in_namespace(Scope *scope, Symbol *symbol, /*const*/ Symbol *namespace_name);
 Value scope_get(Scope *scope, Symbol *symbol);
 Value scope_get_macro(Scope *scope, Symbol *symbol);
 Value get_read_macro(Symbol *symbol);
@@ -46,11 +43,11 @@ Module *create_module(const char *name);
 void delete_module(Module *module);
 String *get_module_name(Module *module);
 Scope *use_module(Module *module);
-Scope *use_module_types(Module *module);
-void module_define(Symbol *s, Value value);
-void module_define_macro(Symbol *s, Value value);
-void module_define_type(Symbol *s, Value value);
-void module_define_read_macro(Symbol *s, Value value);
+Value module_define(Symbol *s, Value value);
+Value namespace_define(Symbol *s, Value value, Symbol *namespace_name);
+Value module_define_macro(Symbol *s, Value value);
+Value module_define_type(Symbol *s, Value value);
+Value module_define_read_macro(Symbol *s, Value value);
 void module_define_method(Module *module, Symbol *symbol, TypeArray *parameters, Value value);
 
 void module_ext_define(Module *module, const char *name, Value value);

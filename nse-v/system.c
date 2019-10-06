@@ -557,8 +557,6 @@ static Value hash_map_remove(Slice args, Scope *dynamic_scope) {
 Module *get_system_module(void) {
   Module *system = create_module("system");
 
-  module_ext_define(system, "*eval*", HASH_MAP(create_hash_map()));
-
   module_ext_define(system, "load", FUNC(load));
 
   module_ext_define(system, "++", FUNC(append));
