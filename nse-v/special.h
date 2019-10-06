@@ -25,5 +25,6 @@ Value eval_def_macro(Slice args, Scope *scope);
 Value eval_def_generic(Slice args, Scope *scope);
 Value eval_def_method(Slice args, Scope *scope);
 Value eval_loop(Slice args, Scope *scope);
+void init_special();
 
 #endif

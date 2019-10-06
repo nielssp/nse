@@ -173,52 +173,10 @@ Value eval_slice(Slice slice, Scope *scope) {
   Slice args = slice_slice(slice, 1, slice.length - 1);
   if (syntax_is(operator, VALUE_SYMBOL)) {
     Symbol *s = TO_SYMBOL(syntax_get(operator));
-    Value result = undefined;
-    int is_special = 1;
-    if (s == quote_symbol) {
-      result = eval_quote(args, scope);
-    } else if (s == type_symbol) {
-      result = eval_type(args, scope);
-    } else if (s == backquote_symbol) {
-      result = eval_backquote(args, scope);
-    } else if (s == if_symbol) {
-      result = eval_if(args, scope);
-    } else if (s == let_symbol) {
-      result = eval_let(args, scope);
-    } else if (s == do_symbol) {
-      result = eval_block(args, scope);
-    } else if (s == match_symbol) {
-      result = eval_match(args, scope);
-    } else if (s == fn_symbol) {
-      result = eval_fn(args, scope);
-    } else if (s == try_symbol) {
-      result = eval_try(args, scope);
-    /*} else if (s == continue_symbol) {
-      result = eval_continue(args, scope);
-    } else if (s == recur_symbol) {
-      result = eval_recur(args, scope);*/
-    } else if (s == def_symbol) {
-      result = eval_def(args, scope);
-    } else if (s == def_read_macro_symbol) {
-      result = eval_def_read_macro(args, scope);
-    } else if (s == def_macro_symbol) {
-      result = eval_def_macro(args, scope);
-    } else if (s == def_type_symbol) {
-      result = eval_def_type(args, scope);
-    } else if (s == def_data_symbol) {
-      result = eval_def_data(args, scope);
-    } else if (s == def_generic_symbol) {
-      result = eval_def_generic(args, scope);
-    } else if (s == def_method_symbol) {
-      result = eval_def_method(args, scope);
-    } else if (s == loop_symbol) {
-      result = eval_loop(args, scope);
-    } else {
-      is_special = 0;
-    }
-    if (is_special) {
+    Value special = scope_get_in_namespace(scope, copy_object(s), eval_namespace);
+    if (RESULT_OK(special)) {
       delete_value(operator);
-      return result;
+      return apply(special, args, scope);
     }
     Value macro = scope_get_macro(scope, copy_object(s));
     if (RESULT_OK(macro)) {

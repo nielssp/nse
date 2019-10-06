@@ -351,9 +351,15 @@ Value eval_try(Slice args, Scope *scope) {
   return result;
 }
 
-Value eval_continue(Slice args, Scope *scope);
+Value eval_continue(Slice args, Scope *scope) {
+  delete_slice(args);
+  return undefined;
+}
 
-Value eval_recur(Slice args, Scope *scope);
+Value eval_recur(Slice args, Scope *scope) {
+  delete_slice(args);
+  return undefined;
+}
 
 /* (def (SYMBOL PARAMS) {EXPR}) */
 static Value eval_def_func(Vector *sig, Slice args, Scope *scope) {
@@ -930,14 +936,37 @@ Value eval_def_data(Slice args, Scope *scope) {
 
 
 Value eval_def_generic(Slice args, Scope *scope) {
+  delete_slice(args);
   return undefined;
 }
 
 Value eval_def_method(Slice args, Scope *scope) {
+  delete_slice(args);
   return undefined;
 }
 
 Value eval_loop(Slice args, Scope *scope) {
+  delete_slice(args);
   return undefined;
 }
 
+void init_special() {
+  namespace_define(copy_object(quote_symbol), FUNC(eval_quote), copy_object(eval_namespace));
+  namespace_define(copy_object(type_symbol), FUNC(eval_type), copy_object(eval_namespace));
+  namespace_define(copy_object(backquote_symbol), FUNC(eval_backquote), copy_object(eval_namespace));
+  namespace_define(copy_object(if_symbol), FUNC(eval_if), copy_object(eval_namespace));
+  namespace_define(copy_object(let_symbol), FUNC(eval_let), copy_object(eval_namespace));
+  namespace_define(copy_object(match_symbol), FUNC(eval_match), copy_object(eval_namespace));
+  namespace_define(copy_object(fn_symbol), FUNC(eval_fn), copy_object(eval_namespace));
+  namespace_define(copy_object(try_symbol), FUNC(eval_try), copy_object(eval_namespace));
+  namespace_define(copy_object(continue_symbol), FUNC(eval_continue), copy_object(eval_namespace));
+  namespace_define(copy_object(recur_symbol), FUNC(eval_recur), copy_object(eval_namespace));
+  namespace_define(copy_object(def_symbol), FUNC(eval_def), copy_object(eval_namespace));
+  namespace_define(copy_object(def_read_macro_symbol), FUNC(eval_def_read_macro), copy_object(eval_namespace));
+  namespace_define(copy_object(def_type_symbol), FUNC(eval_def_type), copy_object(eval_namespace));
+  namespace_define(copy_object(def_data_symbol), FUNC(eval_def_data), copy_object(eval_namespace));
+  namespace_define(copy_object(def_macro_symbol), FUNC(eval_def_macro), copy_object(eval_namespace));
+  namespace_define(copy_object(def_generic_symbol), FUNC(eval_def_generic), copy_object(eval_namespace));
+  namespace_define(copy_object(def_method_symbol), FUNC(eval_def_method), copy_object(eval_namespace));
+  namespace_define(copy_object(loop_symbol), FUNC(eval_loop), copy_object(eval_namespace));
+}

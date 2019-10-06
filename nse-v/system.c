@@ -12,6 +12,7 @@
 #include "eval.h"
 #include "lang.h"
 #include "read.h"
+#include "special.h"
 
 #include "system.h"
 
@@ -644,6 +645,8 @@ Module *get_system_module(void) {
   module_ext_define_type(system, "i64", TYPE(copy_type(i64_type)));
   module_ext_define_type(system, "f64", TYPE(copy_type(f64_type)));
   module_ext_define_type(system, "stream", TYPE(copy_type(stream_type)));
+
+  init_special();
 
   return system;
 }

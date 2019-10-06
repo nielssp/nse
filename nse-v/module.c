@@ -221,11 +221,11 @@ Value scope_get(Scope *scope, Symbol *symbol) {
 }
 
 Value scope_get_macro(Scope *scope, Symbol *symbol) {
-  return scope_get_in_namespace(scope, symbol, copy_object(macros_namespace));
+  return scope_get_in_namespace(scope, symbol, macros_namespace);
 }
 
 Value get_read_macro(Symbol *symbol) {
-  return scope_get_in_namespace(NULL, symbol, copy_object(read_macros_namespace));
+  return scope_get_in_namespace(NULL, symbol, read_macros_namespace);
 }
 
 Module *create_module(const char *name_c) {
