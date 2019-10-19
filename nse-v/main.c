@@ -23,6 +23,7 @@
 
 #define SGR_BOLD_GREEN "\001\033[1;32m\002"
 #define SGR_RED "\001\033[31m\002"
+#define SGR_BOLD "\001\033[1m\002"
 
 const char *short_options = "hvc:ne:p:";
 
@@ -160,7 +161,6 @@ char **symbol_completion(const char *text, int start, int end) {
 
 
 void print_error_line(char *line_history, String *file_name, size_t start_line, size_t start_column, size_t end_line, size_t end_column, Stream *stream) {
-  stream_printf(stream, "\nIn %s on line %zd column %zd", TO_C_STRING(file_name), start_line, start_column);
   if (start_line > 0) {
     char *line = NULL;
     if (strcmp(TO_C_STRING(file_name), "(repl)") == 0 || strcmp(TO_C_STRING(file_name), "(cli)") == 0) {
@@ -216,25 +216,36 @@ Value read_and_eval(char *expr, const char *filename, Module *module, char **lin
     *line_history = string_printf("%s", expr);
   }
   if (error) {
+    String *file_name = NULL;
+    size_t start_line, start_column, end_line, end_column;
+    if (!RESULT_OK(code)) {
+      get_reader_position(reader, &file_name, &start_line, &start_column);
+      end_line = start_line;
+      end_column = start_column;
+    } else if (error_form) {
+      file_name = error_form->file;
+      start_line = error_form->start_line;
+      start_column = error_form->start_column;
+      end_line = error_form->end_line;
+      end_column = error_form->end_column;
+    }
+    if (file_name) {
+      stream_printf(error_stream, SGR_BOLD "%s:%zd:%zd: ", TO_C_STRING(file_name), start_line, start_column);
+    }
     if (current_error()) {
-      stream_printf(error_stream, SGR_RED "error(%s):" SGR_RESET " %s",
+      stream_printf(error_stream, SGR_RED "error(%s):" SGR_RESET SGR_BOLD " %s" SGR_RESET,
           TO_C_STRING(current_error_type()->name), current_error());
     } else {
-      stream_printf(error_stream, SGR_RED "error:" SGR_RESET " unspecified error");
+      stream_printf(error_stream, SGR_RED "error:" SGR_RESET SGR_BOLD " unspecified error" SGR_RESET);
     }
     if (!RESULT_OK(code)) {
-      String *file_name;
-      size_t current_line, current_column;
-      get_reader_position(reader, &file_name, &current_line, &current_column);
-      print_error_line(*line_history, file_name, current_line, current_column, current_line, current_column,
-          error_stream);
-    } else if (error_form != NULL) {
+      print_error_line(*line_history, file_name, start_line, start_column, end_line, end_column, error_stream);
+    } else if (error_form) {
       Value datum = syntax_to_datum(copy_value(error_form->quoted));
       stream_printf(error_stream, ": ");
       nse_write(datum, error_stream, module, 20);
       delete_value(datum);
-      print_error_line(*line_history, error_form->file, error_form->start_line,
-          error_form->start_column, error_form->end_line, error_form->end_column, error_stream);
+      print_error_line(*line_history, file_name, start_line, start_column, end_line, end_column, error_stream);
     }
     List *trace = get_stack_trace();
     if (trace) {
