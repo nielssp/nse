@@ -177,13 +177,15 @@ void print_error_line(char *line_history, String *file_name, size_t start_line, 
       for (size_t i = 1; i < start_column; i++) {
         stream_printf(stream, " ");
       }
+      stream_printf(stream, SGR_RED);
       stream_printf(stream, "^");
       if (start_line == end_line && end_column > start_column) {
         size_t length = end_column - start_column - 1;
         for (size_t i = 0; i < length; i++) {
-          stream_printf(stream, "^");
+          stream_printf(stream, "~");
         }
       }
+      stream_printf(stream, SGR_RESET);
       free(line);
     }
   }
