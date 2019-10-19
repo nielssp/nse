@@ -9,10 +9,11 @@
 #include "arg.h"
 #include "type.h"
 #include "write.h"
+#include "validate.h"
 
 #include "special.h"
 
-Value eval_quote(Slice args, Scope *scope) {
+static Value eval_quote(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length == 1) {
     result = syntax_to_datum(copy_value(args.cells[0]));
@@ -23,7 +24,7 @@ Value eval_quote(Slice args, Scope *scope) {
   return result;
 }
 
-Value eval_type(Slice args, Scope *scope) {
+static Value eval_type(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length == 1) {
     Scope *type_scope = use_namespace(scope, copy_object(types_namespace));
@@ -134,7 +135,7 @@ static Value backquote_to_datum(Value v, Scope *scope) {
   }
 }
 
-Value eval_backquote(Slice args, Scope *scope) {
+static Value eval_backquote(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length == 1) {
     result = backquote_to_datum(copy_value(args.cells[0]), scope);
@@ -146,7 +147,7 @@ Value eval_backquote(Slice args, Scope *scope) {
 }
 
 /* (if COND CONS ALT) */
-Value eval_if(Slice args, Scope *scope) {
+static Value eval_if(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length == 3) {
     Value condition = eval(copy_value(args.cells[0]), scope);
@@ -166,7 +167,7 @@ Value eval_if(Slice args, Scope *scope) {
 }
 
 /* (let ({(PATTERN EXPR)}) {EXPR}) */
-Value eval_let(Slice args, Scope *scope) {
+static Value eval_let(Slice args, Scope *scope) {
   Scope *let_scope = scope;
   Value result = undefined;
   if (args.length >= 1 && syntax_is(args.cells[0], VALUE_VECTOR)) {
@@ -233,7 +234,7 @@ Value eval_let(Slice args, Scope *scope) {
 }
 
 /* (match EXPR {(PATTERN {EXPR})}) */
-Value eval_match(Slice args, Scope *scope) {
+static Value eval_match(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length >= 1) {
     Value value = eval(copy_value(args.cells[0]), scope);
@@ -296,7 +297,7 @@ static Value eval_anon(Slice args, const Closure *closure, Scope *dynamic_scope)
 }
 
 /* (fn (PARAMS) {EXPR}) */
-Value eval_fn(Slice args, Scope *scope) {
+static Value eval_fn(Slice args, Scope *scope) {
   if (args.length < 1 || !syntax_is(args.cells[0], VALUE_VECTOR)) {
     delete_slice(args);
     raise_error(syntax_error, "expected (fn (PARAMS) {EXPR})");
@@ -324,7 +325,7 @@ static Type *get_result_type(void) {
 }
 
 /* (try EXPR) */
-Value eval_try(Slice args, Scope *scope) {
+static Value eval_try(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length == 1) {
     Value ok_result = eval(copy_value(args.cells[0]), scope);
@@ -351,12 +352,14 @@ Value eval_try(Slice args, Scope *scope) {
   return result;
 }
 
-Value eval_continue(Slice args, Scope *scope) {
+static Value eval_continue(Slice args, Scope *scope) {
+  // TODO
   delete_slice(args);
   return undefined;
 }
 
-Value eval_recur(Slice args, Scope *scope) {
+static Value eval_recur(Slice args, Scope *scope) {
+  // TODO
   delete_slice(args);
   return undefined;
 }
@@ -418,7 +421,7 @@ static Value eval_def_var(Value name, Slice args, Scope *scope) {
   return result;
 }
 
-Value eval_def(Slice args, Scope *scope) {
+static Value eval_def(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length >= 1) {
     Value head = args.cells[0];
@@ -439,7 +442,7 @@ Value eval_def(Slice args, Scope *scope) {
 }
 
 /* (def-read-macro SYMBOL EXPR) */
-Value eval_def_read_macro(Slice args, Scope *scope) {
+static Value eval_def_read_macro(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length == 2 && syntax_is(args.cells[0], VALUE_SYMBOL)) {
     Symbol *symbol = TO_SYMBOL(syntax_get(args.cells[0]));
@@ -454,14 +457,14 @@ Value eval_def_read_macro(Slice args, Scope *scope) {
   return result;
 }
 
-Value eval_def_type(Slice args, Scope *scope) {
+static Value eval_def_type(Slice args, Scope *scope) {
   raise_error(syntax_error, "not implemented");
   delete_slice(args);
   return undefined;
 }
 
 /* (def-macro (SYMBOL PARAMS) EXPR) */
-Value eval_def_macro(Slice args, Scope *scope) {
+static Value eval_def_macro(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length >= 1 && syntax_is(args.cells[0], VALUE_VECTOR)) {
     Slice sig = to_slice(copy_value(syntax_get(args.cells[0])));
@@ -856,7 +859,7 @@ static Value eval_def_data_generic(Vector *sig, Slice args, Scope *scope) {
     }
     delete_generic(g);
   }
-  delete_scope(type_scope);
+  scope_pop_until(type_scope, scope);
   delete_slice(args);
   return result;
 }
@@ -876,7 +879,7 @@ static Value eval_def_data_nongeneric(Value head, Slice args, Scope *scope) {
           Scope *type_scope = use_namespace(scope, copy_object(types_namespace));
           Value constructor_result = eval_def_data_constructor(to_slice(copy_value(syntax_get(constructor))),
               copy_type(t), type_scope);
-          delete_scope(type_scope);
+          scope_pop_until(type_scope, scope);
           if (!RESULT_OK(constructor_result)) {
             ok = 0;
             break;
@@ -914,7 +917,7 @@ static Value eval_def_data_nongeneric(Value head, Slice args, Scope *scope) {
 
 /* (def-data SYMBOL {CONSTRUCTOR})
  * (def-data (SYMBOL {SYMBOL}) {CONSTRUCTOR}) */
-Value eval_def_data(Slice args, Scope *scope) {
+static Value eval_def_data(Slice args, Scope *scope) {
   Value result = undefined;
   if (args.length >= 1) {
     Value head = args.cells[0];
@@ -935,17 +938,21 @@ Value eval_def_data(Slice args, Scope *scope) {
 }
 
 
-Value eval_def_generic(Slice args, Scope *scope) {
+/* (def-generic ({SYMBOL}) (SYMBOL {^TYPE} [&rest ^TYPE])) */
+static Value eval_def_generic(Slice args, Scope *scope) {
+  // TODO
   delete_slice(args);
   return undefined;
 }
 
-Value eval_def_method(Slice args, Scope *scope) {
+static Value eval_def_method(Slice args, Scope *scope) {
+  // TODO
   delete_slice(args);
   return undefined;
 }
 
-Value eval_loop(Slice args, Scope *scope) {
+static Value eval_loop(Slice args, Scope *scope) {
+  // TODO
   delete_slice(args);
   return undefined;
 }

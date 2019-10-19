@@ -569,24 +569,30 @@ Value module_define(Symbol *s, Value value) {
   return unit;
 }
 
-Value namespace_define(Symbol *s, Value value, Symbol *namespace_name) {
+HashMap *get_namespace(Module *module, Symbol *namespace_name) {
   Value local;
-  if (!namespace_name) {
-    module_define(s, value);
-  } else if (def_map_get(&s->module->defs, namespace_name, &local) && local.type == VALUE_HASH_MAP) {
+  if (def_map_get(&module->defs, namespace_name, &local) && local.type == VALUE_HASH_MAP) {
     delete_value(SYMBOL(namespace_name));
-    return hash_map_set(copy_object(TO_HASH_MAP(local)), SYMBOL(s), value);
+    return copy_object(TO_HASH_MAP(local));
   }
   HashMap *m = create_hash_map();
   if (!m) {
-    return undefined;
+    return NULL;
   }
   Value existing;
-  if (def_map_remove(&s->module->defs, namespace_name, &existing)) {
+  if (def_map_remove(&module->defs, namespace_name, &existing)) {
     delete_value(SYMBOL(namespace_name));
     delete_value(existing);
   }
-  def_map_add(&s->module->defs, namespace_name, copy_value(HASH_MAP(m)));
+  def_map_add(&module->defs, namespace_name, copy_value(HASH_MAP(m)));
+  return m;
+}
+
+Value namespace_define(Symbol *s, Value value, Symbol *namespace_name) {
+  HashMap *m = get_namespace(s->module, namespace_name);
+  if (!m) {
+    return undefined;
+  }
   return hash_map_set(m, SYMBOL(s), value);
 }
 

@@ -9,45 +9,6 @@
 
 #include "validate.h"
 
-static int validate_vector(Value value, Validator validators[]) {
-  Value *cells;
-  size_t length;
-  if (syntax_is(value, VALUE_VECTOR)) {
-    Vector *v = TO_VECTOR(syntax_get(value));
-    cells = v->cells;
-    length = v->length;
-  } else if (syntax_is(value, VALUE_VECTOR_SLICE)) {
-    VectorSlice *v = TO_VECTOR_SLICE(syntax_get(value));
-    cells = v->cells;
-    length = v->length;
-  } else {
-    set_debug_form(value);
-    raise_error(syntax_error, "expected a vector");
-    return 0;
-  }
-  size_t i = 0;
-  while (validators->type != VALIDATOR_END) {
-    if (validators->type == VALIDATOR_REP) {
-      for ( ; i < length; i++) {
-        if (!validate(cells[i], *validators->rep)) {
-          return 0;
-        }
-      }
-    } else if (i >= length) {
-      return 0;
-    } else if (!validate(cells[i], *validators)) {
-      return 0;
-    }
-    validators++;
-  }
-  if (i < length) {
-    set_debug_form(cells[i]);
-    raise_error(syntax_error, "trailing elements");
-    return 0;
-  }
-  return 1;
-}
-
 static void validator_to_stream(Validator validator, Stream *stream) {
   switch (validator.type) {
     case VALIDATOR_EXACT: {
@@ -113,6 +74,48 @@ static char *validator_to_string(Validator validator) {
   return buffer;
 }
 
+static int validate_vector(Value value, Validator validator) {
+  Value *cells;
+  size_t length;
+  if (syntax_is(value, VALUE_VECTOR)) {
+    Vector *v = TO_VECTOR(syntax_get(value));
+    cells = v->cells;
+    length = v->length;
+  } else if (syntax_is(value, VALUE_VECTOR_SLICE)) {
+    VectorSlice *v = TO_VECTOR_SLICE(syntax_get(value));
+    cells = v->cells;
+    length = v->length;
+  } else {
+    set_debug_form(copy_value(value));
+    char *form = validator_to_string(validator);
+    raise_error(syntax_error, "expected %s", form);
+    free(form);
+    return 0;
+  }
+  size_t i = 0;
+  Validator *validators = validator.vector;
+  while (validators->type != VALIDATOR_END) {
+    if (validators->type == VALIDATOR_REP) {
+      for ( ; i < length; i++) {
+        if (!validate(cells[i], *validators->rep)) {
+          return 0;
+        }
+      }
+    } else if (i >= length) {
+      return 0;
+    } else if (!validate(cells[i], *validators)) {
+      return 0;
+    }
+    validators++;
+  }
+  if (i < length) {
+    set_debug_form(copy_value(cells[i]));
+    raise_error(syntax_error, "trailing elements");
+    return 0;
+  }
+  return 1;
+}
+
 int validate(const Value value, Validator validator) {
   switch (validator.type) {
     case VALIDATOR_EXACT:
@@ -123,29 +126,32 @@ int validate(const Value value, Validator validator) {
       break;
     case VALIDATOR_SYMBOL: 
       if (syntax_is(value, VALUE_SYMBOL)) {
-        *validator.symbol = TO_SYMBOL(syntax_get(value));
+        if (validator.symbol) {
+          *validator.symbol = TO_SYMBOL(syntax_get(value));
+        }
         return 1;
       }
       raise_error(syntax_error, "expected a symbol");
       break;
     case VALIDATOR_TQUOTE: {
       if (syntax_is_special(value, type_symbol, 1)) {
-        *validator.tquote = TO_VECTOR(syntax_get(value));
+        if (validator.tquote) {
+          *validator.tquote = TO_VECTOR(syntax_get(value));
+        }
         return 1;
       }
       raise_error(syntax_error, "expected a type");
       break;
     }
     case VALIDATOR_ANY:
-      *validator.any = syntax_get(value);
+      if (validator.any) {
+        *validator.any = syntax_get(value);
+      }
       return 1;
     case VALIDATOR_VECTOR: {
-      if (validate_vector(value, validator.vector)) {
+      if (validate_vector(value, validator)) {
         return 1;
       }
-      char *form = validator_to_string(validator);
-      raise_error(syntax_error, "expected %s", form);
-      free(form);
       return 0;
     }
     case VALIDATOR_ALT: {
@@ -162,7 +168,7 @@ int validate(const Value value, Validator validator) {
     default:
       return 1;
   }
-  set_debug_form(value);
+  set_debug_form(copy_value(value));
   return 0;
 }
 

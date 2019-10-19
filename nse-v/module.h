@@ -44,6 +44,7 @@ void delete_module(Module *module);
 String *get_module_name(Module *module);
 Scope *use_module(Module *module);
 Value module_define(Symbol *s, Value value);
+HashMap *get_namespace(Module *module, Symbol *namespace_name);
 Value namespace_define(Symbol *s, Value value, Symbol *namespace_name);
 Value module_define_macro(Symbol *s, Value value);
 Value module_define_type(Symbol *s, Value value);

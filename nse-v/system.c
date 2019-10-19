@@ -54,6 +54,18 @@ static Value load(Slice args, Scope *dynamic_scope) {
   return return_value;
 }
 
+static Value namespace(Slice args, Scope *dynamic_scope) {
+  Value return_value = undefined;
+  if (args.length == 1 && syntax_is(args.cells[0], VALUE_SYMBOL)) {
+    Symbol *namespace_name = TO_SYMBOL(syntax_get(args.cells[0]));
+    return_value = check_alloc(HASH_MAP(get_namespace(dynamic_scope->module, namespace_name)));
+  } else {
+    raise_error(domain_error, "expected (namespace SYMBOL)");
+  }
+  delete_slice(args);
+  return return_value;
+}
+
 
 static Value nothing_sum(Slice args, Scope *dynamic_scope) {
   delete_slice(args);
@@ -559,6 +571,7 @@ Module *get_system_module(void) {
   Module *system = create_module("system");
 
   module_ext_define(system, "load", FUNC(load));
+  module_ext_define(system, "namespace", FUNC(namespace));
 
   module_ext_define(system, "++", FUNC(append));
   module_ext_define(system, "tabulate", FUNC(tabulate));
@@ -644,6 +657,7 @@ Module *get_system_module(void) {
   module_ext_define_type(system, "float", TYPE(copy_type(float_type)));
   module_ext_define_type(system, "i64", TYPE(copy_type(i64_type)));
   module_ext_define_type(system, "f64", TYPE(copy_type(f64_type)));
+  module_ext_define_type(system, "string", TYPE(copy_type(string_type)));
   module_ext_define_type(system, "stream", TYPE(copy_type(stream_type)));
 
   init_special();
