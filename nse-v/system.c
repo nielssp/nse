@@ -839,6 +839,34 @@ static Value hash_map_get_(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value slice_(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 3 && args.cells[0].type == VALUE_I64
+      && args.cells[1].type == VALUE_I64
+      && (args.cells[2].type == VALUE_VECTOR
+        || args.cells[2].type == VALUE_VECTOR_SLICE
+        || args.cells[2].type == VALUE_ARRAY
+        || args.cells[2].type == VALUE_ARRAY_SLICE)) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_ARRAY(args.cells[2])->length) {
+      if (args.cells[1].i64 >= 0
+          && args.cells[0].i64 + args.cells[1].i64 <= TO_ARRAY(args.cells[2])->length) {
+        result = check_alloc(slice_to_value(slice(copy_value(args.cells[2]), args.cells[0].i64, args.cells[1].i64)));
+      } else {
+        set_debug_arg_index(1);
+        raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64 + args.cells[1].i64);
+      }
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
+    }
+  } else {
+    raise_error(domain_error, "expected (slice INT INT ARRAY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 static Value array_put(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 3 && args.cells[0].type == VALUE_I64
@@ -1095,6 +1123,16 @@ Module *get_system_module(void) {
       1, copy_type(string_type));
   module_ext_define_method(system, "get", FUNC(hash_map_get_),
       1, get_poly_instance(copy_generic(hash_map_type)));
+
+  module_ext_define_generic(system, "slice", 3, 0, 1, (int8_t[]){ -1, -1, 0 });
+  module_ext_define_method(system, "slice", FUNC(slice_),
+      1, get_poly_instance(copy_generic(vector_type)));
+  module_ext_define_method(system, "slice", FUNC(slice_),
+      1, get_poly_instance(copy_generic(vector_slice_type)));
+  module_ext_define_method(system, "slice", FUNC(slice_),
+      1, get_poly_instance(copy_generic(array_type)));
+  module_ext_define_method(system, "slice", FUNC(slice_),
+      1, get_poly_instance(copy_generic(array_slice_type)));
 
   module_ext_define_generic(system, "put", 3, 0, 1, (int8_t[]){ -1, -1, 0 });
   module_ext_define_method(system, "put", FUNC(array_put),

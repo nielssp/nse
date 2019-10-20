@@ -426,6 +426,13 @@ Value slice_to_value(Slice slice) {
       }
       return ARRAY_SLICE(create_array_slice(v, slice.cells - v->cells, slice.length));
     }
+    case VALUE_ARRAY_SLICE: {
+      ArraySlice *v = TO_ARRAY_SLICE(slice.sequence);
+      if (slice.length == v->length && slice.cells == v->cells) {
+        return ARRAY_SLICE(v);
+      }
+      return ARRAY_SLICE(slice_array_slice(v, slice.cells - v->cells, slice.length));
+    }
     default:
       return slice.sequence;
   }
