@@ -20,6 +20,9 @@ typedef struct Type Type;
 
 typedef struct Vector Vector;
 typedef struct VectorSlice VectorSlice;
+typedef struct Vector Array;
+typedef struct VectorSlice ArraySlice;
+typedef struct ArrayBuffer ArrayBuffer;
 typedef struct List List;
 typedef struct String String;
 typedef struct WeakRef WeakRef;
@@ -61,14 +64,16 @@ typedef enum {
   VALUE_ARRAY        = VALUE_OBJECT | 0x03,
   /* Slice of array */
   VALUE_ARRAY_SLICE  = VALUE_OBJECT | 0x04,
+  /* Growable array buffer */
+  VALUE_ARRAY_BUFFER = VALUE_OBJECT | 0x05,
   /* Immutable linked list */
-  VALUE_LIST         = VALUE_OBJECT | 0x05,
+  VALUE_LIST         = VALUE_OBJECT | 0x06,
   /* Byte array */
-  VALUE_STRING       = VALUE_OBJECT | 0x06,
+  VALUE_STRING       = VALUE_OBJECT | 0x07,
   /* Weak reference */
   VALUE_WEAK_REF     = VALUE_OBJECT | 0x09,
   /* Symbol */
-  VALUE_SYMBOL       = VALUE_OBJECT | 0x0a,
+  VALUE_SYMBOL       = VALUE_OBJECT | 0x0A,
   /* Keyword */
   VALUE_KEYWORD      = VALUE_OBJECT | 0x0B,
   /* Instance of user-defined data type */
@@ -172,6 +177,8 @@ struct Slice {
 /* Convert a sequence to a slice (allocation-free) */
 Slice to_slice(Value sequence);
 
+size_t get_slice_length(const Value sequence);
+
 /* Slice a sequence (allocation-free) */
 Slice slice(Value sequence, size_t offset, size_t length);
 
@@ -232,6 +239,73 @@ VectorSlice *create_vector_slice(Vector *parent, size_t offset, size_t length);
 
 /* Create a vector slice from another slice */
 VectorSlice *slice_vector_slice(VectorSlice *parent, size_t offset, size_t length);
+
+
+
+/* Arrays */
+
+/* Convert Array * to Value */
+#define ARRAY(v) ((Value){ .type = VALUE_ARRAY, .object = (Object *)(v) })
+
+/* Convert Value to Array * */
+#define TO_ARRAY(val) ((Array *)(val).object)
+
+/* Allocate an array of the given size */
+Array *create_array(size_t length);
+
+Value array_set(Array *array, size_t index, Value value);
+
+
+
+/* Array slices */
+
+/* Convert ArraySlice * to Value */
+#define ARRAY_SLICE(v) ((Value){ .type = VALUE_ARRAY_SLICE, .object = (Object *)(v) })
+
+/* Convert Value to ArraySlice * */
+#define TO_ARRAY_SLICE(val) ((ArraySlice *)(val).object)
+
+/* Allocate an array slice */
+ArraySlice *create_array_slice(Array *parent, size_t offset, size_t length);
+
+/* Create an array slice from another slice */
+ArraySlice *slice_array_slice(ArraySlice *parent, size_t offset, size_t length);
+
+Value array_slice_set(ArraySlice *array_slice, size_t index, Value value);
+
+
+
+/* Array buffers */
+
+/* Array buffer object */
+struct ArrayBuffer {
+  Object header;
+  size_t size;
+  /* Number of elements */
+  size_t length;
+  Type *type;
+  Value *cells;
+};
+
+/* Convert ArrayBuffer * to Value */
+#define ARRAY_BUFFER(v) ((Value){ .type = VALUE_ARRAY_BUFFER, .object = (Object *)(v) })
+
+/* Convert Value to ArrayBuffer * */
+#define TO_ARRAY_BUFFER(val) ((ArrayBuffer *)(val).object)
+
+/* Allocate an array buffer of the given size */
+ArrayBuffer *create_array_buffer(size_t initial_size);
+
+Value array_buffer_set(ArrayBuffer *array_buffer, size_t index, Value value);
+
+Value array_buffer_delete(ArrayBuffer *array_buffer, size_t index);
+
+ArrayBuffer *array_buffer_push(ArrayBuffer *array_buffer, Value value);
+
+Value array_buffer_pop(ArrayBuffer *array_buffer);
+
+ArrayBuffer *array_buffer_insert(ArrayBuffer *array_buffer, size_t index, Value value);
+
 
 
 /* Linked lists */

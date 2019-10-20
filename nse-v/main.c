@@ -253,10 +253,9 @@ Value read_and_eval(char *expr, const char *filename, Module *module, char **lin
       stream_printf(error_stream, "\nStack trace:");
       for (; trace; trace = trace->tail) {
         Syntax *syntax = TO_SYNTAX(TO_VECTOR(trace->head)->cells[2]);
-        stream_printf(error_stream, "\n  %s:%zd:%zd", TO_C_STRING(syntax->file),
+        stream_printf(error_stream, "\n  " SGR_BOLD "%s:%zd:%zd: " SGR_RESET, TO_C_STRING(syntax->file),
             syntax->start_line, syntax->start_column);
         Value datum = syntax_to_datum(copy_value(syntax->quoted));
-        stream_printf(error_stream, ": ");
         nse_write(datum, error_stream, module, 20);
         delete_value(datum);
       }
@@ -283,7 +282,7 @@ int main(int argc, char *argv[]) {
         describe_option("c <lispfile>", "compile <lispfile>", "Compile file.");
         describe_option("e <expr>", "eval <expr>", "Evaluate expression.");
         describe_option("p <expr>", "print <expr>", "Evaluate expression and print result.");
-        describe_option("n", "no-std", "Don't load standard library");
+        describe_option("n", "no-std", "Don't import :lang and :system into :user");
         return 0;
       case 'v':
         puts("nse-3");

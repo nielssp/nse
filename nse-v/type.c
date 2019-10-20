@@ -63,6 +63,9 @@ Type *generic_type_type;
 GType *result_type;
 GType *vector_type;
 GType *vector_slice_type;
+GType *array_type;
+GType *array_slice_type;
+GType *array_buffer_type;
 GType *list_type;
 GType *weak_ref_type;
 GType *hash_map_type;
@@ -93,6 +96,9 @@ void init_types(void) {
   result_type = create_generic(2, copy_type(any_type));
   vector_type = create_generic(1, copy_type(any_type));
   vector_slice_type = create_generic(1, copy_type(any_type));
+  array_type = create_generic(1, copy_type(any_type));
+  array_slice_type = create_generic(1, copy_type(any_type));
+  array_buffer_type = create_generic(1, copy_type(any_type));
   list_type = create_generic(1, copy_type(any_type));
   weak_ref_type = create_generic(1, copy_type(any_type));
   hash_map_type = create_generic(2, copy_type(any_type));
@@ -486,8 +492,19 @@ Type *get_type(const Value value) {
     case VALUE_VECTOR_SLICE:
       return get_type(VECTOR(TO_VECTOR_SLICE(value)->vector));
     case VALUE_ARRAY:
+      if (!TO_ARRAY(value)->type) {
+        TO_ARRAY(value)->type = get_unary_instance(copy_generic(array_type),
+            copy_type(any_type));
+      }
+      return copy_type(TO_ARRAY(value)->type);
     case VALUE_ARRAY_SLICE:
-      return NULL;
+      return get_type(ARRAY(TO_ARRAY_SLICE(value)->vector));
+    case VALUE_ARRAY_BUFFER:
+      if (!TO_ARRAY_BUFFER(value)->type) {
+        TO_ARRAY_BUFFER(value)->type = get_unary_instance(copy_generic(array_buffer_type),
+            copy_type(any_type));
+      }
+      return copy_type(TO_ARRAY_BUFFER(value)->type);
     case VALUE_LIST:
       return get_unary_instance(copy_generic(list_type), copy_type(any_type));
     case VALUE_STRING:

@@ -525,21 +525,16 @@ static Value num_less_than(Slice args, Scope *dynamic_scope) {
 static Value append(Slice args, Scope *dynamic_scope) {
   size_t length = 0;
   for (size_t i = 0; i < args.length; i++) {
-    if (args.cells[i].type != VALUE_VECTOR) {
-      delete_slice(args);
-      set_debug_arg_index(i);
-      raise_error(domain_error, "expected vector");
-      return undefined;
-    }
-    length += TO_VECTOR(args.cells[i])->length;
+    length += get_slice_length(args.cells[i]);
   }
   Vector *result = create_vector(length);
   size_t result_i = 0;
   for (size_t i = 0; i < args.length; i++) {
-    Vector *v = TO_VECTOR(args.cells[i]);
-    for (size_t j = 0; j < v->length; j++) {
-      result->cells[result_i++] = copy_value(v->cells[j]);
+    Slice slice = to_slice(copy_value(args.cells[i]));
+    for (size_t j = 0; j < slice.length; j++) {
+      result->cells[result_i++] = copy_value(slice.cells[j]);
     }
+    delete_slice(slice);
   }
   delete_slice(args);
   return VECTOR(result);
@@ -576,6 +571,37 @@ static Value tabulate(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value tabulate_array(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_I64) {
+    Value function = args.cells[1];
+    int64_t length = args.cells[0].i64;
+    Array *array = create_array(length);
+    if (array) {
+      int ok = 1;
+      for (size_t i = 0; i < length; i++) {
+        Value element = apply(copy_value(function), to_slice(I64(i)), dynamic_scope);
+        if (RESULT_OK(element)) {
+          array->cells[i] = element;
+        } else {
+          set_debug_arg_index(1);
+          ok = 0;
+          break;
+        }
+      }
+      if (ok) {
+        result = ARRAY(array);
+      } else {
+        delete_value(ARRAY(array));
+      }
+    }
+  } else {
+    raise_error(domain_error, "expected (tabulate-array INT FUNCTION)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 static Value apply_(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 2) {
@@ -593,6 +619,19 @@ static Value weak(Slice args, Scope *dynamic_scope) {
     result = check_alloc(WEAK_REF(create_weak_ref(copy_value(args.cells[0]))));
   } else {
     raise_error(domain_error, "expected (weak ANY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_buffer(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 0) {
+    result = check_alloc(ARRAY_BUFFER(create_array_buffer(0)));
+  } else if (args.length == 1 && args.cells[0].type == VALUE_I64) {
+    result = check_alloc(ARRAY_BUFFER(create_array_buffer(args.cells[0].i64)));
+  } else {
+    raise_error(domain_error, "expected (array-buffer [INT])");
   }
   delete_slice(args);
   return result;
@@ -693,7 +732,7 @@ static Value string_get(Slice args, Scope *dynamic_scope) {
       raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
     }
   } else {
-    raise_error(domain_error, "expected (elem INT STRING)");
+    raise_error(domain_error, "expected (get INT STRING)");
   }
   delete_slice(args);
   return result;
@@ -711,7 +750,7 @@ static Value vector_get(Slice args, Scope *dynamic_scope) {
       raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
     }
   } else {
-    raise_error(domain_error, "expected (elem INT VECTOR)");
+    raise_error(domain_error, "expected (get INT VECTOR)");
   }
   delete_slice(args);
   return result;
@@ -729,7 +768,61 @@ static Value vector_slice_get(Slice args, Scope *dynamic_scope) {
       raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
     }
   } else {
-    raise_error(domain_error, "expected (elem INT VECTOR-SLICE)");
+    raise_error(domain_error, "expected (get INT VECTOR-SLICE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_get(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_I64
+      && args.cells[1].type == VALUE_ARRAY) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_ARRAY(args.cells[1])->length) {
+      result = copy_value(TO_ARRAY(args.cells[1])->cells[args.cells[0].i64]);
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
+    }
+  } else {
+    raise_error(domain_error, "expected (get INT ARRAY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_slice_get(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_I64
+      && args.cells[1].type == VALUE_ARRAY_SLICE) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_ARRAY_SLICE(args.cells[1])->length) {
+      result = copy_value(TO_ARRAY_SLICE(args.cells[1])->cells[args.cells[0].i64]);
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
+    }
+  } else {
+    raise_error(domain_error, "expected (get INT ARRAY-SLICE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_buffer_get(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_I64
+      && args.cells[1].type == VALUE_ARRAY_BUFFER) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_ARRAY_BUFFER(args.cells[1])->length) {
+      result = copy_value(TO_ARRAY_BUFFER(args.cells[1])->cells[args.cells[0].i64]);
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
+    }
+  } else {
+    raise_error(domain_error, "expected (get INT ARRAY-BUFFER)");
   }
   delete_slice(args);
   return result;
@@ -740,7 +833,61 @@ static Value hash_map_get_(Slice args, Scope *dynamic_scope) {
   if (args.length == 2 && args.cells[1].type == VALUE_HASH_MAP) {
     result = hash_map_get(copy_object(TO_HASH_MAP(args.cells[1])), copy_value(args.cells[0]));
   } else {
-    raise_error(domain_error, "expected (elem ANY HASH-MAP)");
+    raise_error(domain_error, "expected (get ANY HASH-MAP)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_put(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 3 && args.cells[0].type == VALUE_I64
+      && args.cells[2].type == VALUE_ARRAY) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_ARRAY(args.cells[2])->length) {
+      result = array_set(TO_ARRAY(copy_value(args.cells[2])), args.cells[0].i64, copy_value(args.cells[1]));
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
+    }
+  } else {
+    raise_error(domain_error, "expected (put INT ANY ARRAY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_slice_put(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 3 && args.cells[0].type == VALUE_I64
+      && args.cells[2].type == VALUE_ARRAY_SLICE) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_ARRAY_SLICE(args.cells[2])->length) {
+      result = array_slice_set(TO_ARRAY_SLICE(copy_value(args.cells[2])), args.cells[0].i64, copy_value(args.cells[1]));
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
+    }
+  } else {
+    raise_error(domain_error, "expected (put INT ANY ARRAY-SLICE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_buffer_put(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 3 && args.cells[0].type == VALUE_I64
+      && args.cells[2].type == VALUE_ARRAY_BUFFER) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_ARRAY_BUFFER(args.cells[2])->length) {
+      result = array_buffer_set(TO_ARRAY_BUFFER(copy_value(args.cells[2])), args.cells[0].i64, copy_value(args.cells[1]));
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
+    }
+  } else {
+    raise_error(domain_error, "expected (put INT ANY ARRAY-BUFFER)");
   }
   delete_slice(args);
   return result;
@@ -752,7 +899,25 @@ static Value hash_map_put(Slice args, Scope *dynamic_scope) {
     result = hash_map_set(copy_object(TO_HASH_MAP(args.cells[2])), copy_value(args.cells[0]),
         copy_value(args.cells[1]));
   } else {
-    raise_error(domain_error, "expected (update ANY ANY HASH-MAP)");
+    raise_error(domain_error, "expected (put ANY ANY HASH-MAP)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_buffer_delete_(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_I64
+      && args.cells[1].type == VALUE_ARRAY_BUFFER) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_ARRAY_BUFFER(args.cells[1])->length) {
+      result = array_buffer_delete(copy_object(TO_ARRAY_BUFFER(args.cells[1])), args.cells[0].i64);
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
+    }
+  } else {
+    raise_error(domain_error, "expected (delete INT ARRAY-BUFFER)");
   }
   delete_slice(args);
   return result;
@@ -763,7 +928,25 @@ static Value hash_map_delete(Slice args, Scope *dynamic_scope) {
   if (args.length == 2 && args.cells[1].type == VALUE_HASH_MAP) {
     result = hash_map_unset(copy_object(TO_HASH_MAP(args.cells[1])), copy_value(args.cells[0]));
   } else {
-    raise_error(domain_error, "expected (remove ANY ANY HASH-MAP)");
+    raise_error(domain_error, "expected (delete ANY HASH-MAP)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_buffer_insert_(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 3 && args.cells[0].type == VALUE_I64
+      && args.cells[2].type == VALUE_ARRAY_BUFFER) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 <= TO_ARRAY_BUFFER(args.cells[2])->length) {
+      result = check_alloc(ARRAY_BUFFER(array_buffer_insert(copy_object(TO_ARRAY_BUFFER(args.cells[2])), args.cells[0].i64, copy_value(args.cells[1]))));
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
+    }
+  } else {
+    raise_error(domain_error, "expected (insert INT ANY ARRAY-BUFFER)");
   }
   delete_slice(args);
   return result;
@@ -841,8 +1024,10 @@ Module *get_system_module(void) {
 
   module_ext_define(system, "++", FUNC(append));
   module_ext_define(system, "tabulate", FUNC(tabulate));
+  module_ext_define(system, "tabulate-array", FUNC(tabulate_array));
   module_ext_define(system, "apply", FUNC(apply_));
   module_ext_define(system, "weak", FUNC(weak));
+  module_ext_define(system, "array-buffer", FUNC(array_buffer));
   module_ext_define(system, "hash-map", FUNC(hash_map));
   module_ext_define(system, "hash-of", FUNC(hash_of));
 
@@ -900,18 +1085,36 @@ Module *get_system_module(void) {
       1, get_poly_instance(copy_generic(vector_type)));
   module_ext_define_method(system, "get", FUNC(vector_slice_get),
       1, get_poly_instance(copy_generic(vector_slice_type)));
+  module_ext_define_method(system, "get", FUNC(array_get),
+      1, get_poly_instance(copy_generic(array_type)));
+  module_ext_define_method(system, "get", FUNC(array_slice_get),
+      1, get_poly_instance(copy_generic(array_slice_type)));
+  module_ext_define_method(system, "get", FUNC(array_buffer_get),
+      1, get_poly_instance(copy_generic(array_buffer_type)));
   module_ext_define_method(system, "get", FUNC(string_get),
       1, copy_type(string_type));
   module_ext_define_method(system, "get", FUNC(hash_map_get_),
       1, get_poly_instance(copy_generic(hash_map_type)));
 
   module_ext_define_generic(system, "put", 3, 0, 1, (int8_t[]){ -1, -1, 0 });
+  module_ext_define_method(system, "put", FUNC(array_put),
+      1, get_poly_instance(copy_generic(array_type)));
+  module_ext_define_method(system, "put", FUNC(array_slice_put),
+      1, get_poly_instance(copy_generic(array_slice_type)));
+  module_ext_define_method(system, "put", FUNC(array_buffer_put),
+      1, get_poly_instance(copy_generic(array_buffer_type)));
   module_ext_define_method(system, "put", FUNC(hash_map_put),
       1, get_poly_instance(copy_generic(hash_map_type)));
 
   module_ext_define_generic(system, "delete", 2, 0, 1, (int8_t[]){ -1, 0 });
+  module_ext_define_method(system, "delete", FUNC(array_buffer_delete_),
+      1, get_poly_instance(copy_generic(array_buffer_type)));
   module_ext_define_method(system, "delete", FUNC(hash_map_delete),
       1, get_poly_instance(copy_generic(hash_map_type)));
+
+  module_ext_define_generic(system, "insert", 3, 0, 1, (int8_t[]){ -1, -1, 0 });
+  module_ext_define_method(system, "insert", FUNC(array_buffer_insert_),
+      1, get_poly_instance(copy_generic(array_buffer_type)));
 
   module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_));
 
@@ -930,6 +1133,10 @@ Module *get_system_module(void) {
   set_generic_type_name(entry_type, module_ext_define_type(system, "entry", FUNC(get_entry_type)));
 
   init_special();
+
+  Scope *scope = use_module(system);
+  delete_value(load(to_slice(STRING(c_string_to_string("system.lisp"))), scope));
+  scope_pop(scope);
 
   return system_module = system;
 }

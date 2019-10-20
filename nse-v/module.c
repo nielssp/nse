@@ -542,7 +542,7 @@ int import_methods(Module *dest, Module *src) {
   MethodMapEntry entry;
   HashMapIterator it = method_map_iterate(&src->methods);
   while (method_map_next_entry(&it, &entry)) {
-    if (!import_method(dest, entry.key.symbol, entry.value->parameters, entry.value->definition)) {
+    if (!import_method(dest, copy_object(entry.key.symbol), copy_type_array(entry.value->parameters), copy_value(entry.value->definition))) {
       return 0;
     }
   }

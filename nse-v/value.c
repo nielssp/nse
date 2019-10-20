@@ -26,6 +26,7 @@ const char *value_type_name(ValueType type) {
     case VALUE_VECTOR_SLICE: return "vector-slice";
     case VALUE_ARRAY: return "array";
     case VALUE_ARRAY_SLICE: return "array-slice";
+    case VALUE_ARRAY_BUFFER: return "array-buffer";
     case VALUE_LIST: return "list";
     case VALUE_STRING: return "string";
     case VALUE_WEAK_REF: return "weak-ref";
@@ -78,20 +79,23 @@ Equality equals(const Value a, const Value b) {
       return EQ_NOT_EQUAL;
 
 
-    case VALUE_VECTOR: {
+    case VALUE_VECTOR:
+    case VALUE_ARRAY: {
       Vector *va = TO_VECTOR(a);
       Vector *vb = TO_VECTOR(b);
       return cells_equal(va->cells, va->length, vb->cells, vb->length);
     }
-    case VALUE_VECTOR_SLICE: {
+    case VALUE_VECTOR_SLICE:
+    case VALUE_ARRAY_SLICE: {
       VectorSlice *va = TO_VECTOR_SLICE(a);
       VectorSlice *vb = TO_VECTOR_SLICE(b);
       return cells_equal(va->cells, va->length, vb->cells, vb->length);
     }
-    case VALUE_ARRAY:
-      return EQ_ERROR;
-    case VALUE_ARRAY_SLICE:
-      return EQ_ERROR;
+    case VALUE_ARRAY_BUFFER: {
+      ArrayBuffer *aa = TO_ARRAY_BUFFER(a);
+      ArrayBuffer *ab = TO_ARRAY_BUFFER(b);
+      return cells_equal(aa->cells, aa->length, ab->cells, ab->length);
+    }
     case VALUE_LIST: {
       List *la = TO_LIST(a);
       List *lb = TO_LIST(b);
@@ -204,7 +208,8 @@ void delete_value(Value val) {
       }
     }
     switch (val.type) {
-      case VALUE_VECTOR: {
+      case VALUE_VECTOR:
+      case VALUE_ARRAY: {
         Vector *vector = TO_VECTOR(val);
         for (int i = 0; i < vector->length; i++) {
           delete_value(vector->cells[i]);
@@ -212,8 +217,17 @@ void delete_value(Value val) {
         break;
       }
       case VALUE_VECTOR_SLICE:
+      case VALUE_ARRAY_SLICE:
         delete_value(VECTOR(TO_VECTOR_SLICE(val)->vector));
         break;
+      case VALUE_ARRAY_BUFFER: {
+        ArrayBuffer *buffer = TO_ARRAY_BUFFER(val);
+        for (int i = 0; i < buffer->length; i++) {
+          delete_value(buffer->cells[i]);
+        }
+        free(buffer->cells);
+        break;
+      }
       case VALUE_LIST:
         delete_value(TO_LIST(val)->head);
         if (TO_LIST(val)->tail) {
@@ -306,7 +320,8 @@ Slice to_slice(Value sequence) {
   Slice slice;
   slice.sequence = sequence;
   switch (sequence.type) {
-    case VALUE_VECTOR: {
+    case VALUE_VECTOR:
+    case VALUE_ARRAY: {
       Vector *v = TO_VECTOR(sequence);
       slice.length = v->length;
       slice.cells = v->cells;
@@ -320,6 +335,14 @@ Slice to_slice(Value sequence) {
       delete_value(sequence);
       break;
     }
+    case VALUE_ARRAY_SLICE: {
+      ArraySlice *v = TO_ARRAY_SLICE(sequence);
+      slice.sequence = copy_value(ARRAY(v->vector));
+      slice.length = v->length;
+      slice.cells = v->cells;
+      delete_value(sequence);
+      break;
+    }
     default:
       slice.length = 1;
       slice.cells = &slice.sequence;
@@ -328,12 +351,26 @@ Slice to_slice(Value sequence) {
   return slice;
 }
 
+size_t get_slice_length(const Value sequence) {
+  switch (sequence.type) {
+    case VALUE_VECTOR: 
+    case VALUE_ARRAY: 
+      return TO_VECTOR(sequence)->length;
+    case VALUE_VECTOR_SLICE:
+    case VALUE_ARRAY_SLICE:
+      return TO_VECTOR_SLICE(sequence)->length;
+    default:
+      return 1;
+  }
+}
+
 Slice slice(Value sequence, size_t offset, size_t length) {
   Slice slice;
   slice.sequence = sequence;
   slice.length = length;
   switch (sequence.type) {
-    case VALUE_VECTOR: {
+    case VALUE_VECTOR:
+    case VALUE_ARRAY: {
       Vector *v = TO_VECTOR(sequence);
       slice.cells = v->cells + offset;
       break;
@@ -341,6 +378,13 @@ Slice slice(Value sequence, size_t offset, size_t length) {
     case VALUE_VECTOR_SLICE: {
       VectorSlice *v = TO_VECTOR_SLICE(sequence);
       slice.sequence = copy_value(VECTOR(v->vector));
+      slice.cells = v->cells + offset;
+      delete_value(sequence);
+      break;
+    }
+    case VALUE_ARRAY_SLICE: {
+      ArraySlice *v = TO_ARRAY_SLICE(sequence);
+      slice.sequence = copy_value(ARRAY(v->vector));
       slice.cells = v->cells + offset;
       delete_value(sequence);
       break;
@@ -374,6 +418,13 @@ Value slice_to_value(Slice slice) {
         return VECTOR_SLICE(v);
       }
       return VECTOR_SLICE(slice_vector_slice(v, slice.cells - v->cells, slice.length));
+    }
+    case VALUE_ARRAY: {
+      Array *v = TO_ARRAY(slice.sequence);
+      if (slice.length == v->length && slice.cells == v->cells) {
+        return ARRAY(v);
+      }
+      return ARRAY_SLICE(create_array_slice(v, slice.cells - v->cells, slice.length));
     }
     default:
       return slice.sequence;
@@ -431,6 +482,122 @@ VectorSlice *slice_vector_slice(VectorSlice *parent, size_t offset, size_t lengt
   }
   delete_value(VECTOR_SLICE(parent));
   return vector_slice;
+}
+
+/* Array allocation */
+
+Array *create_array(size_t length) {
+  return create_vector(length);
+}
+
+Value array_set(Array *array, size_t index, Value value) {
+  Value previous = array->cells[index];
+  array->cells[index] = value;
+  delete_value(ARRAY(array));
+  return previous;
+}
+
+/* Array slice allocation */
+
+ArraySlice *create_array_slice(Array *parent, size_t offset, size_t length) {
+  return create_vector_slice(parent, offset, length);
+}
+
+ArraySlice *slice_array_slice(ArraySlice *parent, size_t offset, size_t length) {
+  return slice_vector_slice(parent, offset, length);
+}
+
+Value array_slice_set(ArraySlice *array_slice, size_t index, Value value) {
+  Value previous = array_slice->cells[index];
+  array_slice->cells[index] = value;
+  delete_value(ARRAY_SLICE(array_slice));
+  return previous;
+}
+
+/* Array buffer allocation */
+
+ArrayBuffer *create_array_buffer(size_t initial_size) {
+  ArrayBuffer *buffer = allocate_object(sizeof(ArrayBuffer));
+  if (!buffer) {
+    return NULL;
+  }
+  buffer->size = initial_size;
+  buffer->length = 0;
+  buffer->type = NULL;
+  if (buffer->size) {
+    buffer->cells = allocate(sizeof(Value) * buffer->size);
+    if (!buffer->cells) {
+      free(buffer);
+      return NULL;
+    }
+  } else {
+    buffer->cells = NULL;
+  }
+  return buffer;
+}
+
+Value array_buffer_set(ArrayBuffer *buffer, size_t index, Value value) {
+  Value previous = buffer->cells[index];
+  buffer->cells[index] = value;
+  delete_value(ARRAY_BUFFER(buffer));
+  return previous;
+}
+
+Value array_buffer_delete(ArrayBuffer *buffer, size_t index) {
+  Value previous = buffer->cells[index];
+  size_t n = buffer->length - index - 1;
+  if (n > 0) {
+    memcpy(buffer->cells + index, buffer->cells + index + 1, sizeof(Value) * n);
+  }
+  buffer->length--;
+  delete_value(ARRAY_BUFFER(buffer));
+  return previous;
+}
+
+static int resize_array_buffer(ArrayBuffer *buffer) {
+  if (buffer->length >= buffer->size) {
+    size_t new_size = (buffer->size + 1) * 2;
+    Value *new_cells = realloc(buffer->cells, sizeof(Value) * new_size);
+    if (!new_cells) {
+      return 0;
+    }
+    buffer->size = new_size;
+    buffer->cells = new_cells;
+  }
+  return 1;
+}
+
+ArrayBuffer *array_buffer_push(ArrayBuffer *buffer, Value value) {
+  if (!resize_array_buffer(buffer)) {
+    delete_value(ARRAY_BUFFER(buffer));
+    delete_value(value);
+    return NULL;
+  }
+  buffer->cells[buffer->length] = value;
+  buffer->length++;
+  return buffer;
+}
+
+Value array_buffer_pop(ArrayBuffer *buffer) {
+  buffer->length--;
+  Value value = buffer->cells[buffer->length];
+  delete_value(ARRAY_BUFFER(buffer));
+  return value;
+}
+
+ArrayBuffer *array_buffer_insert(ArrayBuffer *buffer, size_t index, Value value) {
+  if (!resize_array_buffer(buffer)) {
+    delete_value(ARRAY_BUFFER(buffer));
+    delete_value(value);
+    return NULL;
+  }
+  size_t n = buffer->length - index;
+  if (n > 0) {
+    memcpy(buffer->cells + index + 1, buffer->cells + index, sizeof(Value) * n);
+  }
+  buffer->cells[index] = value;
+  buffer->length++;
+  return buffer;
 }
 
 /* List allocation */
@@ -782,23 +949,29 @@ Hash hash(Hash h, Value value) {
 
     /* Reference types */
 
-    case VALUE_VECTOR: {
+    case VALUE_VECTOR:
+    case VALUE_ARRAY: {
       const Vector *v = TO_VECTOR(value);
       for (size_t i = 0; i < v->length; i++) {
         h = hash(h, v->cells[i]);
       }
       return h;
     }
-    case VALUE_VECTOR_SLICE: {
+    case VALUE_VECTOR_SLICE:
+    case VALUE_ARRAY_SLICE: {
       const VectorSlice *v = TO_VECTOR_SLICE(value);
       for (size_t i = 0; i < v->length; i++) {
         h = hash(h, v->cells[i]);
       }
       return h;
     }
-    case VALUE_ARRAY:
-    case VALUE_ARRAY_SLICE:
+    case VALUE_ARRAY_BUFFER: {
+      const ArrayBuffer *a = TO_ARRAY_BUFFER(value);
+      for (size_t i = 0; i < a->length; i++) {
+        h = hash(h, a->cells[i]);
+      }
       return h;
+    }
     case VALUE_LIST:
       for (const List *l = TO_LIST(value); l; l = l->tail) {
         h = hash(h, l->head);

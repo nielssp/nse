@@ -139,6 +139,12 @@ extern GType *result_type;
 extern GType *vector_type;
 /* Generic vector slice type. */
 extern GType *vector_slice_type;
+/* Generic array type. */
+extern GType *array_type;
+/* Generic array slice type. */
+extern GType *array_slice_type;
+/* Generic array buffer type. */
+extern GType *array_buffer_type;
 /* Generic list type. */
 extern GType *list_type;
 /* Generic weak reference type. */

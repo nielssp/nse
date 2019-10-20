@@ -112,7 +112,8 @@ Value nse_write(const Value value, Stream *stream, Module *module, int max_nesti
 
     /* Reference types */
 
-    case VALUE_VECTOR: {
+    case VALUE_VECTOR:
+    case VALUE_ARRAY: {
       const Vector *v = TO_VECTOR(value);
       stream_printf(stream, "(");
       for (size_t i = 0; i < v->length; i++) {
@@ -124,7 +125,8 @@ Value nse_write(const Value value, Stream *stream, Module *module, int max_nesti
       stream_printf(stream, ")");
       break;
     }
-    case VALUE_VECTOR_SLICE: {
+    case VALUE_VECTOR_SLICE:
+    case VALUE_ARRAY_SLICE: {
       const VectorSlice *v = TO_VECTOR_SLICE(value);
       stream_printf(stream, "(");
       for (size_t i = 0; i < v->length; i++) {
@@ -136,9 +138,18 @@ Value nse_write(const Value value, Stream *stream, Module *module, int max_nesti
       stream_printf(stream, ")");
       break;
     }
-    case VALUE_ARRAY:
-    case VALUE_ARRAY_SLICE:
-      return undefined;
+    case VALUE_ARRAY_BUFFER: {
+      const ArrayBuffer *a = TO_ARRAY_BUFFER(value);
+      stream_printf(stream, "(");
+      for (size_t i = 0; i < a->length; i++) {
+        if (i != 0) {
+          stream_printf(stream, " ");
+        }
+        nse_write(a->cells[i], stream, module, max_nesting - 1);
+      }
+      stream_printf(stream, ")");
+      break;
+    }
     case VALUE_LIST:
       stream_printf(stream, "(list ");
       for (const List *l = TO_LIST(value); l; l = l->tail) {

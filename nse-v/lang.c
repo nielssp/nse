@@ -100,6 +100,39 @@ static Value get_vector_slice_type(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value get_array_type(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_TYPE) {
+    result = TYPE(get_unary_instance(copy_generic(array_type), copy_type(TO_TYPE(args.cells[0]))));
+  } else {
+    raise_error(domain_error, "expected (array TYPE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value get_array_slice_type(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_TYPE) {
+    result = TYPE(get_unary_instance(copy_generic(array_slice_type), copy_type(TO_TYPE(args.cells[0]))));
+  } else {
+    raise_error(domain_error, "expected (array-slice TYPE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value get_array_buffer_type(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_TYPE) {
+    result = TYPE(get_unary_instance(copy_generic(array_buffer_type), copy_type(TO_TYPE(args.cells[0]))));
+  } else {
+    raise_error(domain_error, "expected (array-buffer TYPE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 static Value get_list_type(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 1 && args.cells[0].type == VALUE_TYPE) {
@@ -195,6 +228,9 @@ void init_lang_module(void) {
   set_generic_type_name(result_type, module_ext_define_type(lang_module, "result", FUNC(get_result_type)));
   set_generic_type_name(vector_type, module_ext_define_type(lang_module, "vector", FUNC(get_vector_type)));
   set_generic_type_name(vector_slice_type, module_ext_define_type(lang_module, "vector-slice", FUNC(get_vector_slice_type)));
+  set_generic_type_name(array_type, module_ext_define_type(lang_module, "array", FUNC(get_array_type)));
+  set_generic_type_name(array_slice_type, module_ext_define_type(lang_module, "array-slice", FUNC(get_array_slice_type)));
+  set_generic_type_name(array_buffer_type, module_ext_define_type(lang_module, "array-buffer", FUNC(get_array_buffer_type)));
   set_generic_type_name(list_type, module_ext_define_type(lang_module, "list", FUNC(get_list_type)));
 }
 
