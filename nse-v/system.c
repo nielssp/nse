@@ -771,6 +771,17 @@ static Value string_get(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value hash_map_length(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_HASH_MAP) {
+    result = I64(TO_HASH_MAP(args.cells[0])->map.size);
+  } else {
+    raise_error(domain_error, "expected (length HASH-MAP)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 static Value vector_get(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 2 && args.cells[0].type == VALUE_I64
@@ -920,6 +931,31 @@ static Value array_buffer_slice(Slice args, Scope *dynamic_scope) {
     }
   } else {
     raise_error(domain_error, "expected (slice INT INT ARRAY-BUFFER)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value string_slice(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 3 && args.cells[0].type == VALUE_I64
+      && args.cells[1].type == VALUE_I64
+      && args.cells[2].type == VALUE_STRING) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_STRING(args.cells[2])->length) {
+      if (args.cells[1].i64 >= 0
+          && args.cells[0].i64 + args.cells[1].i64 <= TO_STRING(args.cells[2])->length) {
+        result = check_alloc(STRING(slice_string(copy_object(TO_STRING(args.cells[2])), args.cells[0].i64, args.cells[1].i64)));
+      } else {
+        set_debug_arg_index(1);
+        raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64 + args.cells[1].i64);
+      }
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
+    }
+  } else {
+    raise_error(domain_error, "expected (slice INT INT STRING)");
   }
   delete_slice(args);
   return result;
@@ -1171,6 +1207,8 @@ Module *get_system_module(void) {
       1, get_poly_instance(copy_generic(array_buffer_type)));
   module_ext_define_method(system, "length", FUNC(string_length),
       1, copy_type(string_type));
+  module_ext_define_method(system, "length", FUNC(hash_map_length),
+      1, get_poly_instance(copy_generic(hash_map_type)));
 
   module_ext_define_generic(system, "get", 2, 0, 1, (int8_t[]){ -1, 0 });
   module_ext_define_method(system, "get", FUNC(vector_get),
@@ -1199,6 +1237,8 @@ Module *get_system_module(void) {
       1, get_poly_instance(copy_generic(array_slice_type)));
   module_ext_define_method(system, "slice", FUNC(array_buffer_slice),
       1, get_poly_instance(copy_generic(array_buffer_type)));
+  module_ext_define_method(system, "slice", FUNC(string_slice),
+      1, copy_type(string_type));
 
   module_ext_define_generic(system, "put", 3, 0, 1, (int8_t[]){ -1, -1, 0 });
   module_ext_define_method(system, "put", FUNC(array_put),

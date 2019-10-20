@@ -673,6 +673,19 @@ String *resize_string_buffer(String *s, size_t new_capacity) {
   return realloc(s, sizeof(String) + new_capacity);
 }
 
+String *slice_string(String *string, size_t offset, size_t length) {
+  String *slice = allocate_object(sizeof(String) + length + 1);
+  if (!slice) {
+    delete_value(STRING(string));
+    return NULL;
+  }
+  slice->length = length;
+  memcpy(slice->bytes, string->bytes + offset, length);
+  slice->bytes[length] = 0;
+  delete_value(STRING(string));
+  return slice;
+}
+
 /* Weak reference allocation */
 
 WeakRef *create_weak_ref(Value object) {

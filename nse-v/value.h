@@ -369,6 +369,8 @@ String *create_string_buffer(size_t capacity);
 /* Resize string buffer */
 String *resize_string_buffer(String *s, size_t new_capacity);
 
+String *slice_string(String *string, size_t offset, size_t length);
+
 
 
 /* Weak references */
