@@ -37,7 +37,6 @@ const struct option long_options[] = {
   {0, 0, 0, 0}
 };
 
-Module *system_module = NULL;
 Scope *current_scope = NULL;
 
 void describe_option(const char *short_option, const char *long_option, const char *description) {
@@ -311,8 +310,7 @@ int main(int argc, char *argv[]) {
   Module *user_module = create_module("user");
   if (std) {
     import_module(user_module, lang_module);
-    system_module = get_system_module();
-    import_module(user_module, system_module);
+    import_module(user_module, get_system_module());
   }
 
   size_t line = 1;

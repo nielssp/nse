@@ -98,16 +98,10 @@ struct TypeArray {
 extern Type *nothing_type;
 /* any */
 extern Type *any_type;
+/* unit < any */
+extern Type *unit_type;
 /* bool < any */
 extern Type *bool_type;
-/* improper-list < any */
-extern Type *improper_list_type;
-/* proper-list < improper-list < any */
-extern Type *proper_list_type;
-/* nil < (forall (t) (list t)) < proper-list < improper-list < any */
-extern Type *nil_type;
-/* list-builder < any */
-extern Type *list_builder_type;
 /* num < any */
 extern Type *num_type;
 /* int < num < any */

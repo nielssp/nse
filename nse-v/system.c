@@ -12,14 +12,17 @@
 #include "eval.h"
 #include "lang.h"
 #include "read.h"
+#include "write.h"
 #include "special.h"
 
 #include "system.h"
 
+static Module *system_module = NULL;
+
 static Value load(Slice args, Scope *dynamic_scope) {
   Value return_value = undefined;
-  if (args.length == 1 && syntax_is_string_like(args.cells[0])) {
-    const char *name = syntax_get_string(args.cells[0]);
+  if (args.length == 1 && args.cells[0].type == VALUE_STRING) {
+    const char *name = TO_C_STRING(TO_STRING(args.cells[0]));
     Module *m = dynamic_scope->module;
     Stream *f = stream_file(name, "r");
     if (f) {
@@ -48,7 +51,138 @@ static Value load(Slice args, Scope *dynamic_scope) {
       raise_error(io_error, "could not open file: %s: %s", name, strerror(errno));
     }
   } else {
-    raise_error(domain_error, "expected (load STRING-LIKE)");
+    raise_error(domain_error, "expected (load STRING)");
+  }
+  delete_slice(args);
+  return return_value;
+}
+
+static Value read(Slice args, Scope *dynamic_scope) {
+  Value return_value = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_STRING) {
+    String *string = TO_STRING(args.cells[0]);
+    Stream *input = stream_buffer((char *)string->bytes, string->length, string->length);
+    Reader *reader = open_reader(input, "(read)", dynamic_scope->module);
+    return_value = check_alloc(SYNTAX(nse_read(reader)));
+    close_reader(reader);
+  } else {
+    raise_error(domain_error, "expected (read STRING)");
+  }
+  delete_slice(args);
+  return return_value;
+}
+
+static Value eval_(Slice args, Scope *dynamic_scope) {
+  Value return_value = undefined;
+  if (args.length == 1) {
+    return_value = eval(copy_value(args.cells[0]), dynamic_scope);
+  } else {
+    raise_error(domain_error, "expected (eval ANY)");
+  }
+  delete_slice(args);
+  return return_value;
+}
+
+static Value write(Slice args, Scope *dynamic_scope) {
+  Value return_value = undefined;
+  if (args.length == 1) {
+    char *buffer = allocate(32);
+    if (buffer) {
+      Stream *output = stream_buffer(buffer, 32, 0);
+      Value result = nse_write(args.cells[0], output, dynamic_scope->module, 500);
+      buffer = stream_get_content(output);
+      if (RESULT_OK(result)) {
+        return_value = check_alloc(STRING(create_string((uint8_t *)buffer, stream_get_size(output))));
+      }
+      stream_close(output);
+      free(buffer);
+    }
+  } else {
+    raise_error(domain_error, "expected (write ANY)");
+  }
+  delete_slice(args);
+  return return_value;
+}
+
+static Value def_module(Slice args, Scope *dynamic_scope) {
+  Value return_value = undefined;
+  if (args.length == 1 && syntax_is_string_like(args.cells[0])) {
+    String *name = syntax_get_string(args.cells[0]);
+    Module *m = find_module(name);
+    if (!m) {
+      m = create_module(TO_C_STRING(name));
+      if (m) {
+        import_module(m, lang_module);
+        import_module(m, system_module);
+        dynamic_scope->module = m;
+        return_value = TRUE;
+      }
+    } else {
+      dynamic_scope->module = m;
+      return_value = FALSE;
+    }
+    delete_value(STRING(name));
+  } else {
+    raise_error(domain_error, "expected (def-module STRING-LIKE)");
+  }
+  delete_slice(args);
+  return return_value;
+}
+
+static Value in_module(Slice args, Scope *dynamic_scope) {
+  Value return_value = undefined;
+  if (args.length == 1 && syntax_is_string_like(args.cells[0])) {
+    String *name = syntax_get_string(args.cells[0]);
+    Module *m = find_module(name);
+    if (m) {
+      dynamic_scope->module = m;
+      return_value = unit;
+    } else {
+      raise_error(name_error, "could not find module: %s", TO_C_STRING(name));
+    }
+    delete_value(STRING(name));
+  } else {
+    raise_error(domain_error, "expected (in-module STRING-LIKE)");
+  }
+  delete_slice(args);
+  return return_value;
+}
+
+static Value export(Slice args, Scope *dynamic_scope) {
+  Value return_value = unit;
+  for (int i = 0; i < args.length; i++) {
+    if (args.cells[i].type == VALUE_SYMBOL) {
+      Symbol *symbol = TO_SYMBOL(args.cells[i]);
+      Value result = check_alloc(SYMBOL(module_extern_symbol(dynamic_scope->module, copy_object(symbol->name))));
+      if (!RESULT_OK(result)) {
+        return_value = result;
+        break;
+      }
+    } else {
+      set_debug_arg_index(i);
+      raise_error(domain_error, "expected SYMBOL");
+      return_value = undefined;
+      break;
+    }
+  }
+  delete_slice(args);
+  return return_value;
+}
+
+static Value import(Slice args, Scope *dynamic_scope) {
+  Value return_value = undefined;
+  if (args.length == 1 && syntax_is_string_like(args.cells[0])) {
+    String *name = syntax_get_string(args.cells[0]);
+    Module *m = find_module(name);
+    if (m) {
+      import_module(dynamic_scope->module, m);
+      return_value = unit;
+    } else {
+      raise_error(name_error, "could not find module: %s", TO_C_STRING(name));
+    }
+    delete_value(STRING(name));
+  } else {
+    raise_error(domain_error, "expected (import STRING-LIKE)");
   }
   delete_slice(args);
   return return_value;
@@ -56,11 +190,33 @@ static Value load(Slice args, Scope *dynamic_scope) {
 
 static Value namespace(Slice args, Scope *dynamic_scope) {
   Value return_value = undefined;
-  if (args.length == 1 && syntax_is(args.cells[0], VALUE_SYMBOL)) {
-    Symbol *namespace_name = TO_SYMBOL(syntax_get(args.cells[0]));
+  if (args.length == 1 && args.cells[0].type == VALUE_SYMBOL) {
+    Symbol *namespace_name = TO_SYMBOL(args.cells[0]);
     return_value = check_alloc(HASH_MAP(get_namespace(dynamic_scope->module, namespace_name)));
   } else {
     raise_error(domain_error, "expected (namespace SYMBOL)");
+  }
+  delete_slice(args);
+  return return_value;
+}
+
+static Value symbol_name(Slice args, Scope *dynamic_scope) {
+  Value return_value = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_SYMBOL) {
+    return_value = copy_value(STRING(TO_SYMBOL(args.cells[0])->name));
+  } else {
+    raise_error(domain_error, "expected (symbol-name SYMBOL)");
+  }
+  delete_slice(args);
+  return return_value;
+}
+
+static Value symbol_module(Slice args, Scope *dynamic_scope) {
+  Value return_value = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_SYMBOL) {
+    return_value = copy_value(STRING(get_module_name(TO_SYMBOL(args.cells[0])->module)));
+  } else {
+    raise_error(domain_error, "expected (symbol-module SYMBOL)");
   }
   delete_slice(args);
   return return_value;
@@ -273,6 +429,27 @@ static Value num_divide(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value any_equals(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 0) {
+    raise_error(domain_error, "too few parameters");
+  } else {
+    for (size_t i = 1; i < args.length; i++) {
+      Equality eq = equals(args.cells[0], args.cells[i]);
+      if (eq == EQ_NOT_EQUAL) {
+        delete_slice(args);
+        return FALSE;
+      } else if (eq == EQ_ERROR) {
+        delete_slice(args);
+        return undefined;
+      }
+    }
+    result = TRUE;
+  }
+  delete_slice(args);
+  return result;
+}
+
 static Value i64_less_than(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 0) {
@@ -282,22 +459,20 @@ static Value i64_less_than(Slice args, Scope *dynamic_scope) {
     raise_error(domain_error, "expected i64");
   } else {
     int64_t previous = args.cells[0].i64;
-    if (args.length > 1) {
-      for (size_t i = 1; i < args.length; i++) {
-        Value h = args.cells[i];
-        if (h.type == VALUE_I64) {
-          if (h.i64 > previous) {
-            previous = h.i64;
-          } else {
-            delete_slice(args);
-            return FALSE;
-          }
+    for (size_t i = 1; i < args.length; i++) {
+      Value h = args.cells[i];
+      if (h.type == VALUE_I64) {
+        if (h.i64 > previous) {
+          previous = h.i64;
         } else {
           delete_slice(args);
-          set_debug_arg_index(i);
-          raise_error(domain_error, "expected i64");
-          return undefined;
+          return FALSE;
         }
+      } else {
+        delete_slice(args);
+        set_debug_arg_index(i);
+        raise_error(domain_error, "expected i64");
+        return undefined;
       }
     }
     result = TRUE;
@@ -446,6 +621,22 @@ static Value type_of(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value is_a(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[1].type == VALUE_TYPE) {
+    Type *type_a = get_type(args.cells[0]);
+    Type *type_b = TO_TYPE(args.cells[1]);
+    if (type_a) {
+      result = is_subtype_of(type_a, type_b) ? TRUE : FALSE;
+      delete_type(type_a);
+    }
+  } else {
+    raise_error(domain_error, "expected (is-a ANY TYPE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 static Value string_length(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 1 && args.cells[0].type == VALUE_STRING) {
@@ -479,7 +670,7 @@ static Value vector_slice_length(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
-static Value string_elem(Slice args, Scope *dynamic_scope) {
+static Value string_get(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 2 && args.cells[0].type == VALUE_I64
       && args.cells[1].type == VALUE_STRING) {
@@ -497,7 +688,7 @@ static Value string_elem(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
-static Value vector_elem(Slice args, Scope *dynamic_scope) {
+static Value vector_get(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 2 && args.cells[0].type == VALUE_I64
       && args.cells[1].type == VALUE_VECTOR) {
@@ -515,7 +706,7 @@ static Value vector_elem(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
-static Value vector_slice_elem(Slice args, Scope *dynamic_scope) {
+static Value vector_slice_get(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 2 && args.cells[0].type == VALUE_I64
       && args.cells[1].type == VALUE_VECTOR_SLICE) {
@@ -533,7 +724,7 @@ static Value vector_slice_elem(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
-static Value hash_map_elem(Slice args, Scope *dynamic_scope) {
+static Value hash_map_get_(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 2 && args.cells[1].type == VALUE_HASH_MAP) {
     result = hash_map_get(copy_object(TO_HASH_MAP(args.cells[1])), copy_value(args.cells[0]));
@@ -544,7 +735,7 @@ static Value hash_map_elem(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
-static Value hash_map_update(Slice args, Scope *dynamic_scope) {
+static Value hash_map_put(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 3 && args.cells[2].type == VALUE_HASH_MAP) {
     result = hash_map_set(copy_object(TO_HASH_MAP(args.cells[2])), copy_value(args.cells[0]),
@@ -556,7 +747,7 @@ static Value hash_map_update(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
-static Value hash_map_remove(Slice args, Scope *dynamic_scope) {
+static Value hash_map_delete(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 2 && args.cells[1].type == VALUE_HASH_MAP) {
     result = hash_map_unset(copy_object(TO_HASH_MAP(args.cells[1])), copy_value(args.cells[0]));
@@ -567,11 +758,74 @@ static Value hash_map_remove(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value syntax_to_datum_(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1) {
+    result = syntax_to_datum(copy_value(args.cells[0]));
+  } else {
+    raise_error(domain_error, "expected (syntax->datum ANY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value get_weak_type(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_TYPE) {
+    result = TYPE(get_unary_instance(copy_generic(weak_ref_type), copy_type(TO_TYPE(args.cells[0]))));
+  } else {
+    raise_error(domain_error, "expected (weak TYPE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value get_hash_map_type(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_TYPE && args.cells[1].type == VALUE_TYPE) {
+    TypeArray *a = create_type_array(2, (Type *[]){ TO_TYPE(args.cells[0]), TO_TYPE(args.cells[1]) });
+    if (a) {
+      result = TYPE(get_instance(copy_generic(hash_map_type), a));
+    }
+  } else {
+    raise_error(domain_error, "expected (hash-map TYPE TYPE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value get_entry_type(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_TYPE && args.cells[1].type == VALUE_TYPE) {
+    TypeArray *a = create_type_array(2, (Type *[]){ TO_TYPE(args.cells[0]), TO_TYPE(args.cells[1]) });
+    if (a) {
+      result = TYPE(get_instance(copy_generic(entry_type), a));
+    }
+  } else {
+    raise_error(domain_error, "expected (entry TYPE TYPE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 Module *get_system_module(void) {
+  if (system_module) {
+    return system_module;
+  }
   Module *system = create_module("system");
 
   module_ext_define(system, "load", FUNC(load));
+  module_ext_define(system, "read", FUNC(read));
+  module_ext_define(system, "eval", FUNC(eval_));
+  module_ext_define(system, "write", FUNC(write));
+  module_ext_define(system, "def-module", FUNC(def_module));
+  module_ext_define(system, "in-module", FUNC(in_module));
+  module_ext_define(system, "export", FUNC(export));
+  module_ext_define(system, "import", FUNC(import));
   module_ext_define(system, "namespace", FUNC(namespace));
+
+  module_ext_define(system, "symbol-name", FUNC(symbol_name));
+  module_ext_define(system, "symbol-module", FUNC(symbol_module));
 
   module_ext_define(system, "++", FUNC(append));
   module_ext_define(system, "tabulate", FUNC(tabulate));
@@ -580,6 +834,7 @@ Module *get_system_module(void) {
   module_ext_define(system, "hash-of", FUNC(hash_of));
 
   module_ext_define(system, "type-of", FUNC(type_of));
+  module_ext_define(system, "is-a", FUNC(is_a));
 
   module_ext_define_generic(system, "+", 0, 1, 1, (int8_t[]){ 0 });
   module_ext_define_method(system, "+", FUNC(nothing_sum),
@@ -609,6 +864,10 @@ Module *get_system_module(void) {
   module_ext_define_method(system, "/", FUNC(num_divide),
       1, copy_type(num_type));
 
+  module_ext_define_generic(system, "=", 1, 1, 1, (int8_t[]){ 0, 0 });
+  module_ext_define_method(system, "=", FUNC(any_equals),
+      1, copy_type(any_type));
+
   module_ext_define_generic(system, "<", 1, 1, 1, (int8_t[]){ 0, 0 });
   module_ext_define_method(system, "<", FUNC(i64_less_than),
       1, copy_type(i64_type));
@@ -623,23 +882,25 @@ Module *get_system_module(void) {
   module_ext_define_method(system, "length", FUNC(string_length),
       1, copy_type(string_type));
 
-  module_ext_define_generic(system, "elem", 2, 0, 1, (int8_t[]){ -1, 0 });
-  module_ext_define_method(system, "elem", FUNC(vector_elem),
+  module_ext_define_generic(system, "get", 2, 0, 1, (int8_t[]){ -1, 0 });
+  module_ext_define_method(system, "get", FUNC(vector_get),
       1, get_poly_instance(copy_generic(vector_type)));
-  module_ext_define_method(system, "elem", FUNC(vector_slice_elem),
+  module_ext_define_method(system, "get", FUNC(vector_slice_get),
       1, get_poly_instance(copy_generic(vector_slice_type)));
-  module_ext_define_method(system, "elem", FUNC(string_elem),
+  module_ext_define_method(system, "get", FUNC(string_get),
       1, copy_type(string_type));
-  module_ext_define_method(system, "elem", FUNC(hash_map_elem),
+  module_ext_define_method(system, "get", FUNC(hash_map_get_),
       1, get_poly_instance(copy_generic(hash_map_type)));
 
-  module_ext_define_generic(system, "update", 3, 0, 1, (int8_t[]){ -1, -1, 0 });
-  module_ext_define_method(system, "update", FUNC(hash_map_update),
+  module_ext_define_generic(system, "put", 3, 0, 1, (int8_t[]){ -1, -1, 0 });
+  module_ext_define_method(system, "put", FUNC(hash_map_put),
       1, get_poly_instance(copy_generic(hash_map_type)));
 
-  module_ext_define_generic(system, "remove", 2, 0, 1, (int8_t[]){ -1, 0 });
-  module_ext_define_method(system, "remove", FUNC(hash_map_remove),
+  module_ext_define_generic(system, "delete", 2, 0, 1, (int8_t[]){ -1, 0 });
+  module_ext_define_method(system, "delete", FUNC(hash_map_delete),
       1, get_poly_instance(copy_generic(hash_map_type)));
+
+  module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_));
 
   Value stdin_val = POINTER(create_pointer(copy_type(stream_type),
         stdin_stream, void_destructor));
@@ -651,16 +912,11 @@ Module *get_system_module(void) {
   module_ext_define(system, "*stdout*", stdout_val);
   module_ext_define(system, "*stderr*", stderr_val);
 
-  module_ext_define_type(system, "any", TYPE(copy_type(any_type)));
-  module_ext_define_type(system, "num", TYPE(copy_type(num_type)));
-  module_ext_define_type(system, "int", TYPE(copy_type(int_type)));
-  module_ext_define_type(system, "float", TYPE(copy_type(float_type)));
-  module_ext_define_type(system, "i64", TYPE(copy_type(i64_type)));
-  module_ext_define_type(system, "f64", TYPE(copy_type(f64_type)));
-  module_ext_define_type(system, "string", TYPE(copy_type(string_type)));
-  module_ext_define_type(system, "stream", TYPE(copy_type(stream_type)));
+  set_generic_type_name(weak_ref_type, module_ext_define_type(system, "weak", FUNC(get_weak_type)));
+  set_generic_type_name(hash_map_type, module_ext_define_type(system, "hash-map", FUNC(get_hash_map_type)));
+  set_generic_type_name(entry_type, module_ext_define_type(system, "entry", FUNC(get_entry_type)));
 
   init_special();
 
-  return system;
+  return system_module = system;
 }

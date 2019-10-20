@@ -64,6 +64,53 @@ Value false_value;
 
 Module *lang_module = NULL;
 
+static Value get_result_type(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_TYPE && args.cells[1].type == VALUE_TYPE) {
+    TypeArray *a = create_type_array(2, (Type *[]){ TO_TYPE(args.cells[0]), TO_TYPE(args.cells[1]) });
+    if (a) {
+      result = TYPE(get_instance(copy_generic(result_type), a));
+    }
+  } else {
+    raise_error(domain_error, "expected (result TYPE TYPE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value get_vector_type(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_TYPE) {
+    result = TYPE(get_unary_instance(copy_generic(vector_type), copy_type(TO_TYPE(args.cells[0]))));
+  } else {
+    raise_error(domain_error, "expected (vector TYPE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value get_vector_slice_type(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_TYPE) {
+    result = TYPE(get_unary_instance(copy_generic(vector_slice_type), copy_type(TO_TYPE(args.cells[0]))));
+  } else {
+    raise_error(domain_error, "expected (vector-slice TYPE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value get_list_type(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_TYPE) {
+    result = TYPE(get_unary_instance(copy_generic(list_type), copy_type(TO_TYPE(args.cells[0]))));
+  } else {
+    raise_error(domain_error, "expected (list TYPE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 void init_lang_module(void) {
   init_types();
   init_error_module();
@@ -125,6 +172,30 @@ void init_lang_module(void) {
   module_define(copy_object(true_symbol), true_value);
   false_value = DATA(create_data(copy_type(bool_type), copy_object(false_symbol), NULL, 0));
   module_define(copy_object(false_symbol), false_value);
+
+  module_ext_define_type(lang_module, "nothing", TYPE(copy_type(nothing_type)));
+  module_ext_define_type(lang_module, "any", TYPE(copy_type(any_type)));
+  module_ext_define_type(lang_module, "unit", TYPE(copy_type(unit_type)));
+  module_ext_define_type(lang_module, "bool", TYPE(copy_type(bool_type)));
+  module_ext_define_type(lang_module, "num", TYPE(copy_type(num_type)));
+  module_ext_define_type(lang_module, "int", TYPE(copy_type(int_type)));
+  module_ext_define_type(lang_module, "float", TYPE(copy_type(float_type)));
+  module_ext_define_type(lang_module, "i64", TYPE(copy_type(i64_type)));
+  module_ext_define_type(lang_module, "f64", TYPE(copy_type(f64_type)));
+  module_ext_define_type(lang_module, "string", TYPE(copy_type(string_type)));
+  module_ext_define_type(lang_module, "symbol", TYPE(copy_type(symbol_type)));
+  module_ext_define_type(lang_module, "keyword", TYPE(copy_type(keyword_type)));
+  module_ext_define_type(lang_module, "type", TYPE(copy_type(type_type)));
+  module_ext_define_type(lang_module, "syntax", TYPE(copy_type(syntax_type)));
+  module_ext_define_type(lang_module, "func", TYPE(copy_type(func_type)));
+  module_ext_define_type(lang_module, "scope", TYPE(copy_type(scope_type)));
+  module_ext_define_type(lang_module, "stream", TYPE(copy_type(stream_type)));
+  module_ext_define_type(lang_module, "generic-type", TYPE(copy_type(generic_type_type)));
+
+  set_generic_type_name(result_type, module_ext_define_type(lang_module, "result", FUNC(get_result_type)));
+  set_generic_type_name(vector_type, module_ext_define_type(lang_module, "vector", FUNC(get_vector_type)));
+  set_generic_type_name(vector_slice_type, module_ext_define_type(lang_module, "vector-slice", FUNC(get_vector_slice_type)));
+  set_generic_type_name(list_type, module_ext_define_type(lang_module, "list", FUNC(get_list_type)));
 }
 
 int is_true(const Value value) {

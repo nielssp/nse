@@ -150,6 +150,7 @@ Scope *copy_scope(Scope *scope) {
   copy->binding = copy_binding(scope->binding);
   copy->next = copy_scope(scope->next);
   copy->module = scope->module;
+  copy->namespace = scope->namespace;
   return copy;
 }
 
@@ -385,6 +386,7 @@ Module *find_module(const String *name) {
   Module *module;
   if (!module_map_get(&loaded_modules, name, &module)) {
     // TODO: attempt to load somehow
+    module = NULL;
   }
   return module;
 }
@@ -622,12 +624,13 @@ void module_ext_define_macro(Module *module, const char *name, Value value) {
   module_define_macro(symbol, value);
 }
 
-void module_ext_define_type(Module *module, const char *name, Value value) {
+Symbol *module_ext_define_type(Module *module, const char *name, Value value) {
   Symbol *symbol = module_extern_symbol(module, c_string_to_string(name));
   if (value.type == VALUE_TYPE && TO_TYPE(value)->name == NULL) {
     TO_TYPE(value)->name = copy_object(symbol);
   }
   module_define_type(symbol, value);
+  return symbol;
 }
 
 void module_ext_define_generic(Module *module, const char *name, uint8_t min_arity, uint8_t variadic, uint8_t type_parameters, int8_t *indices) {

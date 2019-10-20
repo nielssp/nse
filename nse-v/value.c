@@ -667,13 +667,13 @@ int syntax_is_string_like(const Value syntax) {
   return v.type == VALUE_STRING || v.type == VALUE_SYMBOL || v.type == VALUE_KEYWORD;
 }
 
-const char *syntax_get_string(const Value syntax) {
+String *syntax_get_string(const Value syntax) {
   const Value v = syntax.type == VALUE_SYNTAX ? TO_SYNTAX(syntax)->quoted : syntax;
   switch (v.type) {
     case VALUE_STRING:
-      return TO_C_STRING(TO_STRING(v));
+      return copy_object(TO_STRING(v));
     default:
-      return TO_C_STRING(TO_SYMBOL(v)->name);
+      return copy_object(TO_SYMBOL(v)->name);
   }
 }
 
