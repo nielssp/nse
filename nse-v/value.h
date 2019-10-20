@@ -296,6 +296,8 @@ struct ArrayBuffer {
 /* Allocate an array buffer of the given size */
 ArrayBuffer *create_array_buffer(size_t initial_size);
 
+ArrayBuffer *slice_array_buffer(ArrayBuffer *buffer, size_t offset, size_t length);
+
 Value array_buffer_set(ArrayBuffer *array_buffer, size_t index, Value value);
 
 Value array_buffer_delete(ArrayBuffer *array_buffer, size_t index);

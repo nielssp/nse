@@ -720,6 +720,39 @@ static Value vector_slice_length(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value array_length(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_ARRAY) {
+    result = I64(TO_ARRAY(args.cells[0])->length);
+  } else {
+    raise_error(domain_error, "expected (length ARRAY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_slice_length(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_ARRAY_SLICE) {
+    result = I64(TO_ARRAY_SLICE(args.cells[0])->length);
+  } else {
+    raise_error(domain_error, "expected (length ARRAY-SLICE)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_buffer_length(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1 && args.cells[0].type == VALUE_ARRAY_BUFFER) {
+    result = I64(TO_ARRAY_BUFFER(args.cells[0])->length);
+  } else {
+    raise_error(domain_error, "expected (length ARRAY-BUFFER)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 static Value string_get(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 2 && args.cells[0].type == VALUE_I64
@@ -862,6 +895,31 @@ static Value slice_(Slice args, Scope *dynamic_scope) {
     }
   } else {
     raise_error(domain_error, "expected (slice INT INT ARRAY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_buffer_slice(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 3 && args.cells[0].type == VALUE_I64
+      && args.cells[1].type == VALUE_I64
+      && args.cells[2].type == VALUE_ARRAY_BUFFER) {
+    if (args.cells[0].i64 >= 0
+        && args.cells[0].i64 < TO_ARRAY_BUFFER(args.cells[2])->length) {
+      if (args.cells[1].i64 >= 0
+          && args.cells[0].i64 + args.cells[1].i64 <= TO_ARRAY_BUFFER(args.cells[2])->length) {
+        result = check_alloc(ARRAY_BUFFER(slice_array_buffer(copy_object(TO_ARRAY_BUFFER(args.cells[2])), args.cells[0].i64, args.cells[1].i64)));
+      } else {
+        set_debug_arg_index(1);
+        raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64 + args.cells[1].i64);
+      }
+    } else {
+      set_debug_arg_index(0);
+      raise_error(domain_error, "index out of bounds: %ld", args.cells[0].i64);
+    }
+  } else {
+    raise_error(domain_error, "expected (slice INT INT ARRAY-BUFFER)");
   }
   delete_slice(args);
   return result;
@@ -1105,6 +1163,12 @@ Module *get_system_module(void) {
       1, get_poly_instance(copy_generic(vector_type)));
   module_ext_define_method(system, "length", FUNC(vector_slice_length),
       1, get_poly_instance(copy_generic(vector_slice_type)));
+  module_ext_define_method(system, "length", FUNC(array_length),
+      1, get_poly_instance(copy_generic(array_type)));
+  module_ext_define_method(system, "length", FUNC(array_slice_length),
+      1, get_poly_instance(copy_generic(array_slice_type)));
+  module_ext_define_method(system, "length", FUNC(array_buffer_length),
+      1, get_poly_instance(copy_generic(array_buffer_type)));
   module_ext_define_method(system, "length", FUNC(string_length),
       1, copy_type(string_type));
 
@@ -1133,6 +1197,8 @@ Module *get_system_module(void) {
       1, get_poly_instance(copy_generic(array_type)));
   module_ext_define_method(system, "slice", FUNC(slice_),
       1, get_poly_instance(copy_generic(array_slice_type)));
+  module_ext_define_method(system, "slice", FUNC(array_buffer_slice),
+      1, get_poly_instance(copy_generic(array_buffer_type)));
 
   module_ext_define_generic(system, "put", 3, 0, 1, (int8_t[]){ -1, -1, 0 });
   module_ext_define_method(system, "put", FUNC(array_put),

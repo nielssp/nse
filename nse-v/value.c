@@ -543,6 +543,24 @@ ArrayBuffer *create_array_buffer(size_t initial_size) {
   return buffer;
 }
 
+ArrayBuffer *slice_array_buffer(ArrayBuffer *buffer, size_t offset, size_t length) {
+  ArrayBuffer *slice = create_array_buffer(length);
+  if (!slice) {
+    delete_value(ARRAY_BUFFER(buffer));
+    return NULL;
+  }
+  slice->length = length;
+  slice->type = buffer->type;
+  if (slice->size) {
+    memcpy(slice->cells, buffer->cells + offset, sizeof(Value) * length);
+    for (int i = 0; i < length; i++) {
+      copy_value(slice->cells[i]);
+    }
+  }
+  delete_value(ARRAY_BUFFER(buffer));
+  return slice;
+}
+
 Value array_buffer_set(ArrayBuffer *buffer, size_t index, Value value) {
   Value previous = buffer->cells[index];
   buffer->cells[index] = value;
