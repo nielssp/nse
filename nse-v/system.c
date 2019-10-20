@@ -576,6 +576,17 @@ static Value tabulate(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value apply_(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2) {
+    result = apply(copy_value(args.cells[0]), to_slice(copy_value(args.cells[1])), dynamic_scope);
+  } else {
+    raise_error(domain_error, "expected (apply ANY ANY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
 static Value weak(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 1) {
@@ -813,6 +824,7 @@ Module *get_system_module(void) {
     return system_module;
   }
   Module *system = create_module("system");
+  import_module(system, lang_module);
 
   module_ext_define(system, "load", FUNC(load));
   module_ext_define(system, "read", FUNC(read));
@@ -829,6 +841,7 @@ Module *get_system_module(void) {
 
   module_ext_define(system, "++", FUNC(append));
   module_ext_define(system, "tabulate", FUNC(tabulate));
+  module_ext_define(system, "apply", FUNC(apply_));
   module_ext_define(system, "weak", FUNC(weak));
   module_ext_define(system, "hash-map", FUNC(hash_map));
   module_ext_define(system, "hash-of", FUNC(hash_of));
