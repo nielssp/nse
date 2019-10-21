@@ -224,6 +224,7 @@ Vector *create_vector(size_t length);
 struct VectorSlice {
   Object header;
   size_t length;
+  Type *type;
   Vector *vector;
   Value *cells;
 };

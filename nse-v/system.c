@@ -892,7 +892,7 @@ static Value slice_(Slice args, Scope *dynamic_scope) {
         || args.cells[2].type == VALUE_ARRAY
         || args.cells[2].type == VALUE_ARRAY_SLICE)) {
     if (args.cells[0].i64 >= 0
-        && args.cells[0].i64 < TO_ARRAY(args.cells[2])->length) {
+        && args.cells[0].i64 <= TO_ARRAY(args.cells[2])->length) {
       if (args.cells[1].i64 >= 0
           && args.cells[0].i64 + args.cells[1].i64 <= TO_ARRAY(args.cells[2])->length) {
         result = check_alloc(slice_to_value(slice(copy_value(args.cells[2]), args.cells[0].i64, args.cells[1].i64)));
@@ -917,7 +917,7 @@ static Value array_buffer_slice(Slice args, Scope *dynamic_scope) {
       && args.cells[1].type == VALUE_I64
       && args.cells[2].type == VALUE_ARRAY_BUFFER) {
     if (args.cells[0].i64 >= 0
-        && args.cells[0].i64 < TO_ARRAY_BUFFER(args.cells[2])->length) {
+        && args.cells[0].i64 <= TO_ARRAY_BUFFER(args.cells[2])->length) {
       if (args.cells[1].i64 >= 0
           && args.cells[0].i64 + args.cells[1].i64 <= TO_ARRAY_BUFFER(args.cells[2])->length) {
         result = check_alloc(ARRAY_BUFFER(slice_array_buffer(copy_object(TO_ARRAY_BUFFER(args.cells[2])), args.cells[0].i64, args.cells[1].i64)));
@@ -942,7 +942,7 @@ static Value string_slice(Slice args, Scope *dynamic_scope) {
       && args.cells[1].type == VALUE_I64
       && args.cells[2].type == VALUE_STRING) {
     if (args.cells[0].i64 >= 0
-        && args.cells[0].i64 < TO_STRING(args.cells[2])->length) {
+        && args.cells[0].i64 <= TO_STRING(args.cells[2])->length) {
       if (args.cells[1].i64 >= 0
           && args.cells[0].i64 + args.cells[1].i64 <= TO_STRING(args.cells[2])->length) {
         result = check_alloc(STRING(slice_string(copy_object(TO_STRING(args.cells[2])), args.cells[0].i64, args.cells[1].i64)));
@@ -1069,6 +1069,17 @@ static Value array_buffer_insert_(Slice args, Scope *dynamic_scope) {
     }
   } else {
     raise_error(domain_error, "expected (insert INT ANY ARRAY-BUFFER)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value vector_build(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_VECTOR) {
+
+  } else {
+    raise_error(domain_error, "expected (build VECTOR FUNCTION)");
   }
   delete_slice(args);
   return result;
@@ -1259,6 +1270,10 @@ Module *get_system_module(void) {
   module_ext_define_generic(system, "insert", 3, 0, 1, (int8_t[]){ -1, -1, 0 });
   module_ext_define_method(system, "insert", FUNC(array_buffer_insert_),
       1, get_poly_instance(copy_generic(array_buffer_type)));
+
+  module_ext_define_generic(system, "build", 2, 0, 1, (int8_t[]){ 0, -1 });
+  module_ext_define_method(system, "build", FUNC(vector_build),
+      1, get_poly_instance(copy_generic(vector_type)));
 
   module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_));
 

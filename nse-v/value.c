@@ -214,17 +214,20 @@ void delete_value(Value val) {
         for (int i = 0; i < vector->length; i++) {
           delete_value(vector->cells[i]);
         }
+        delete_type(vector->type);
         break;
       }
       case VALUE_VECTOR_SLICE:
       case VALUE_ARRAY_SLICE:
         delete_value(VECTOR(TO_VECTOR_SLICE(val)->vector));
+        delete_type(TO_VECTOR_SLICE(val)->type);
         break;
       case VALUE_ARRAY_BUFFER: {
         ArrayBuffer *buffer = TO_ARRAY_BUFFER(val);
         for (int i = 0; i < buffer->length; i++) {
           delete_value(buffer->cells[i]);
         }
+        delete_type(TO_ARRAY_BUFFER(val)->type);
         free(buffer->cells);
         break;
       }
@@ -472,6 +475,7 @@ VectorSlice *create_vector_slice(Vector *parent, size_t offset, size_t length) {
     return NULL;
   }
   vector_slice->length = length;
+  vector_slice->type = NULL;
   vector_slice->vector = parent;
   vector_slice->cells = parent->cells + offset;;
   return vector_slice;

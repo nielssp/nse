@@ -371,7 +371,7 @@ Value module_find_method(Module *module, const Symbol *symbol, const TypeArray *
     if (key_type->type == TYPE_INSTANCE) {
       next = get_poly_instance(copy_generic(key_type->instance.type));
     } else {
-      next = key_type->super;
+      next = copy_type(key_type->super);
     }
     delete_type(key_type);
     key_type = next;

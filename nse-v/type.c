@@ -490,7 +490,11 @@ Type *get_type(const Value value) {
       }
       return copy_type(TO_VECTOR(value)->type);
     case VALUE_VECTOR_SLICE:
-      return get_type(VECTOR(TO_VECTOR_SLICE(value)->vector));
+      if (!TO_VECTOR_SLICE(value)->type) {
+        TO_VECTOR_SLICE(value)->type = get_unary_instance(copy_generic(vector_slice_type),
+            copy_type(any_type));
+      }
+      return copy_type(TO_VECTOR_SLICE(value)->type);
     case VALUE_ARRAY:
       if (!TO_ARRAY(value)->type) {
         TO_ARRAY(value)->type = get_unary_instance(copy_generic(array_type),
@@ -498,7 +502,11 @@ Type *get_type(const Value value) {
       }
       return copy_type(TO_ARRAY(value)->type);
     case VALUE_ARRAY_SLICE:
-      return get_type(ARRAY(TO_ARRAY_SLICE(value)->vector));
+      if (!TO_ARRAY_SLICE(value)->type) {
+        TO_ARRAY_SLICE(value)->type = get_unary_instance(copy_generic(array_slice_type),
+            copy_type(any_type));
+      }
+      return copy_type(TO_ARRAY_SLICE(value)->type);
     case VALUE_ARRAY_BUFFER:
       if (!TO_ARRAY_BUFFER(value)->type) {
         TO_ARRAY_BUFFER(value)->type = get_unary_instance(copy_generic(array_buffer_type),

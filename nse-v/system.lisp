@@ -4,15 +4,16 @@
 (def-module :system)
 
 ;;; function composition
-(export 'compose, 'curry 'flip)
+(export 'id 'compose 'curry 'flip 'negate)
 
+(def (id x) x)
 (def (compose f g) (fn (x) (f (g x))))
 (def (curry f &rest curried) (fn (&rest args) (apply f (++ curried args))))
 (def (flip f) (fn (&rest args) (apply f (reverse args))))
 (def (negate f) (fn (&rest args) (not (apply f args))))
 
 ;;; boolean operations
-(export 'or 'and 'not '!= 'cond)
+(export 'or 'and 'not '!=)
 
 (def-macro (or a b) `(if ,a true ,b))
 (def-macro (and a b) `(if ,a ,b false))
@@ -22,9 +23,15 @@
 (def != (negate =))
 
 ;;; vector operations
-(export 'vector 'fill 'reverse 'map 'range 'iota 'flatten)
+(export 'vector 'empty? 'head 'tail 'fill 'reverse 'map 'range 'iota 'flatten)
 
 (def (vector &rest xs) xs)
+
+(def (empty? xs) (= (length xs) 0))
+
+(def (head xs) (get 0 xs))
+
+(def (tail xs) (slice 1 (- (length xs) 1) xs))
 
 (def (fill n x) (tabulate n (fn (i) x)))
 
