@@ -1079,9 +1079,13 @@ static Value vector_builder_push_closure(Slice args, const Closure *closure, Sco
   if (args.length == 1) {
     Pointer *builder_ptr = TO_POINTER(closure->env[0]);
     VectorBuilder *builder = builder_ptr->pointer;
-    *builder = vector_builder_push(*builder, copy_value(args.cells[0]));
-    if (builder->vector) {
-      result = unit;
+    if (builder) {
+      *builder = vector_builder_push(*builder, copy_value(args.cells[0]));
+      if (builder->vector) {
+        result = unit;
+      }
+    } else {
+      raise_error(domain_error, "builder no longer valid");
     }
   } else {
     raise_error(domain_error, "expected 1 parameter");
@@ -1108,6 +1112,7 @@ static Value vector_build(Slice args, Scope *dynamic_scope) {
         } else {
           delete_value(VECTOR(builder.vector));
         }
+        TO_POINTER(builder_ptr)->pointer = NULL;
         delete_value(builder_ptr);
       } else {
         delete_value(VECTOR(builder.vector));
@@ -1138,6 +1143,7 @@ static Value array_build(Slice args, Scope *dynamic_scope) {
         } else {
           delete_value(VECTOR(builder.vector));
         }
+        TO_POINTER(builder_ptr)->pointer = NULL;
         delete_value(builder_ptr);
       } else {
         delete_value(VECTOR(builder.vector));
