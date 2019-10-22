@@ -466,6 +466,30 @@ Vector *create_vector(size_t length) {
   return vector;
 }
 
+VectorBuilder create_vector_builder() {
+  return (VectorBuilder){.size = 0, .vector = create_vector(0)};
+}
+
+VectorBuilder vector_builder_push(VectorBuilder builder, Value value) {
+  if (builder.vector->length >= builder.size) {
+    size_t new_size = (builder.size + 1) * 2;
+    Vector *new_vector = realloc(builder.vector, sizeof(Vector) + sizeof(Value) * new_size);
+    if (!new_vector) {
+      raise_error(out_of_memory_error, "vector reallocation failed");
+      delete_value(VECTOR(builder.vector));
+      delete_value(value);
+      builder.size = 0;
+      builder.vector = NULL;
+      return builder;
+    }
+    builder.size = new_size;
+    builder.vector = new_vector;
+  }
+  builder.vector->cells[builder.vector->length] = value;
+  builder.vector->length++;
+  return builder;
+}
+
 /* Vector slice allocation */
 
 VectorSlice *create_vector_slice(Vector *parent, size_t offset, size_t length) {
@@ -588,6 +612,7 @@ static int resize_array_buffer(ArrayBuffer *buffer) {
     size_t new_size = (buffer->size + 1) * 2;
     Value *new_cells = realloc(buffer->cells, sizeof(Value) * new_size);
     if (!new_cells) {
+      raise_error(out_of_memory_error, "array buffer reallocation failed");
       return 0;
     }
     buffer->size = new_size;

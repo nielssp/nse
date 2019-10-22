@@ -965,6 +965,7 @@ void init_special() {
   namespace_define(copy_object(let_symbol), FUNC(eval_let), copy_object(eval_namespace));
   namespace_define(copy_object(match_symbol), FUNC(eval_match), copy_object(eval_namespace));
   namespace_define(copy_object(fn_symbol), FUNC(eval_fn), copy_object(eval_namespace));
+  namespace_define(copy_object(do_symbol), FUNC(eval_block), copy_object(eval_namespace));
   namespace_define(copy_object(try_symbol), FUNC(eval_try), copy_object(eval_namespace));
   namespace_define(copy_object(continue_symbol), FUNC(eval_continue), copy_object(eval_namespace));
   namespace_define(copy_object(recur_symbol), FUNC(eval_recur), copy_object(eval_namespace));

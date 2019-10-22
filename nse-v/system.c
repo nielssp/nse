@@ -1074,12 +1074,77 @@ static Value array_buffer_insert_(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value vector_builder_push_closure(Slice args, const Closure *closure, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1) {
+    Pointer *builder_ptr = TO_POINTER(closure->env[0]);
+    VectorBuilder *builder = builder_ptr->pointer;
+    *builder = vector_builder_push(*builder, copy_value(args.cells[0]));
+    if (builder->vector) {
+      result = unit;
+    }
+  } else {
+    raise_error(domain_error, "expected 1 parameter");
+  }
+  delete_slice(args);
+  return result;
+}
+
 static Value vector_build(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 2 && args.cells[0].type == VALUE_VECTOR) {
-
+    VectorBuilder builder = create_vector_builder();
+    if (builder.vector) {
+      Value builder_ptr = check_alloc(POINTER(create_pointer(copy_type(any_type), &builder, void_destructor)));
+      if (RESULT_OK(builder_ptr)) {
+        Value env[] = {builder_ptr};
+        Closure *push = create_closure(vector_builder_push_closure, env, 1);
+        if (push) {
+          Value ok = apply(copy_value(args.cells[1]), to_slice(CLOSURE(push)), dynamic_scope);
+          if (RESULT_OK(ok)) {
+            delete_value(ok);
+            result = VECTOR(builder.vector);
+          }
+        } else {
+          delete_value(VECTOR(builder.vector));
+        }
+        delete_value(builder_ptr);
+      } else {
+        delete_value(VECTOR(builder.vector));
+      }
+    }
   } else {
     raise_error(domain_error, "expected (build VECTOR FUNCTION)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value array_build(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_ARRAY) {
+    VectorBuilder builder = create_vector_builder();
+    if (builder.vector) {
+      Value builder_ptr = check_alloc(POINTER(create_pointer(copy_type(any_type), &builder, void_destructor)));
+      if (RESULT_OK(builder_ptr)) {
+        Value env[] = {builder_ptr};
+        Closure *push = create_closure(vector_builder_push_closure, env, 1);
+        if (push) {
+          Value ok = apply(copy_value(args.cells[1]), to_slice(CLOSURE(push)), dynamic_scope);
+          if (RESULT_OK(ok)) {
+            delete_value(ok);
+            result = ARRAY(builder.vector);
+          }
+        } else {
+          delete_value(VECTOR(builder.vector));
+        }
+        delete_value(builder_ptr);
+      } else {
+        delete_value(VECTOR(builder.vector));
+      }
+    }
+  } else {
+    raise_error(domain_error, "expected (build ARRAY FUNCTION)");
   }
   delete_slice(args);
   return result;
@@ -1274,6 +1339,8 @@ Module *get_system_module(void) {
   module_ext_define_generic(system, "build", 2, 0, 1, (int8_t[]){ 0, -1 });
   module_ext_define_method(system, "build", FUNC(vector_build),
       1, get_poly_instance(copy_generic(vector_type)));
+  module_ext_define_method(system, "build", FUNC(array_build),
+      1, get_poly_instance(copy_generic(array_type)));
 
   module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_));
 

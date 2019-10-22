@@ -34,6 +34,9 @@ typedef struct Pointer Pointer;
 typedef struct Syntax Syntax;
 typedef struct HashMap HashMap;
 
+typedef struct VectorBuilder VectorBuilder;
+typedef struct ListBuilder ListBuilder;
+
 enum {
   /* Object type bit */
   VALUE_OBJECT = 0x20
@@ -215,6 +218,15 @@ struct Vector {
 
 /* Allocate a vector of the given size */
 Vector *create_vector(size_t length);
+
+struct VectorBuilder {
+  size_t size;
+  Vector *vector;
+};
+
+VectorBuilder create_vector_builder();
+
+VectorBuilder vector_builder_push(VectorBuilder builder, Value value);
 
 
 
