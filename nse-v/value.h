@@ -341,6 +341,14 @@ struct List {
 /* Allocate a list node */
 List *create_list(Value head, List *tail);
 
+struct ListBuilder {
+  List *first;
+  List *last;
+};
+
+ListBuilder create_list_builder();
+
+ListBuilder list_builder_push(ListBuilder builder, Value value);
 
 
 /* Strings

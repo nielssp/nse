@@ -1156,6 +1156,52 @@ static Value array_build(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
+static Value list_builder_push_closure(Slice args, const Closure *closure, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1) {
+    Pointer *builder_ptr = TO_POINTER(closure->env[0]);
+    ListBuilder *builder = builder_ptr->pointer;
+    if (builder) {
+      *builder = list_builder_push(*builder, copy_value(args.cells[0]));
+      if (builder->first) {
+        result = unit;
+      }
+    } else {
+      raise_error(domain_error, "builder no longer valid");
+    }
+  } else {
+    raise_error(domain_error, "expected 1 parameter");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value list_build(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 2 && args.cells[0].type == VALUE_LIST) {
+    ListBuilder builder = create_list_builder();
+    Value builder_ptr = check_alloc(POINTER(create_pointer(copy_type(any_type), &builder, void_destructor)));
+    if (RESULT_OK(builder_ptr)) {
+      Value env[] = {builder_ptr};
+      Closure *push = create_closure(list_builder_push_closure, env, 1);
+      if (push) {
+        Value ok = apply(copy_value(args.cells[1]), to_slice(CLOSURE(push)), dynamic_scope);
+        if (RESULT_OK(ok)) {
+          delete_value(ok);
+          result = LIST(builder.first);
+        }
+      }
+      TO_POINTER(builder_ptr)->pointer = NULL;
+      delete_value(builder_ptr);
+    }
+  } else {
+    raise_error(domain_error, "expected (build LIST FUNCTION)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+
 static Value syntax_to_datum_(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 1) {
@@ -1347,6 +1393,8 @@ Module *get_system_module(void) {
       1, get_poly_instance(copy_generic(vector_type)));
   module_ext_define_method(system, "build", FUNC(array_build),
       1, get_poly_instance(copy_generic(array_type)));
+  module_ext_define_method(system, "build", FUNC(list_build),
+      1, get_poly_instance(copy_generic(list_type)));
 
   module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_));
 

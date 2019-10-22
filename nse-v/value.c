@@ -668,6 +668,26 @@ List *create_list(Value head, List *tail) {
   return list;
 }
 
+ListBuilder create_list_builder() {
+  return (ListBuilder){.first = NULL, .last = NULL};
+}
+
+ListBuilder list_builder_push(ListBuilder builder, Value value) {
+  List *next = create_list(value, NULL);
+  if (!next) {
+    delete_value(LIST(builder.first));
+    builder.first = builder.last = NULL;
+    return builder;
+  }
+  if (builder.last) {
+    builder.last->tail = next;
+    builder.last = next;
+  } else {
+    builder.first = builder.last = next;
+  }
+  return builder;
+}
+
 /* String allocation */
 
 String *create_string(const uint8_t *bytes, size_t length) {
