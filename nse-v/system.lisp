@@ -23,7 +23,7 @@
 (def != (negate =))
 
 ;;; vector operations
-(export 'vector 'empty? 'head 'tail 'fill 'reverse 'map 'range 'iota 'flatten)
+(export 'vector 'empty? 'head 'tail 'fill 'reverse 'map 'foldl 'foldr 'range 'iota 'flatten)
 
 (def (vector &rest xs) xs)
 
@@ -41,6 +41,12 @@
 
 (def (map f xs)
      (tabulate (length xs) (fn (i) (f (get i xs)))))
+
+(def (foldl f init xs)
+  (if (empty? xs) init (foldl f (f (head xs) init) (tail xs))))
+
+(def (foldr f init xs)
+  (if (empty? xs) init (f (head xs) (foldr f init (tail xs)))))
 
 (def (range start end)
      (if (< end start)
