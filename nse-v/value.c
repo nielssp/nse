@@ -578,7 +578,7 @@ ArrayBuffer *slice_array_buffer(ArrayBuffer *buffer, size_t offset, size_t lengt
     return NULL;
   }
   slice->length = length;
-  slice->type = buffer->type;
+  slice->type = copy_type(buffer->type);
   if (slice->size) {
     memcpy(slice->cells, buffer->cells + offset, sizeof(Value) * length);
     for (int i = 0; i < length; i++) {

@@ -309,7 +309,7 @@ Type *get_instance(GType *g, TypeArray *parameters) {
     instance->instance.type = g;
     instance->instance.parameters = parameters;
     instance_map_add(&g->instances, parameters, instance);
-    return copy_type(instance);
+    return instance;
   }
 }
 
