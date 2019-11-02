@@ -554,6 +554,9 @@ struct Syntax {
 /* Create syntax object */
 Syntax *create_syntax(Value value);
 
+/* Create syntax object copying location information from another syntax object */
+Syntax *copy_syntax(Value new_value, Syntax *syntax);
+
 /* Recursively remove syntax annotations */
 Value syntax_to_datum(Value v);
 

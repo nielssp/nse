@@ -13,7 +13,7 @@
 (def (negate f) (fn (&rest args) (not (apply f args))))
 
 ;;; boolean operations
-(export 'or 'and 'not '!=)
+(export 'or 'and 'not '!= 'cond)
 
 (def-macro (or a b) `(if ,a true ,b))
 (def-macro (and a b) `(if ,a ,b false))
@@ -21,6 +21,10 @@
 (def (and a b) (if a b false))
 (def (not a) (if a false true))
 (def != (negate =))
+
+(def-macro (cond &rest cases)
+           (foldl (fn (case rest) `(if ,(head (syntax->datum case)) ,(get 1 (syntax->datum case)) ,rest))
+                  '() cases))
 
 ;;; vector operations
 (export 'vector 'empty? 'head 'tail 'fill 'reverse 'map 'foldl 'foldr 'range 'iota 'flatten)

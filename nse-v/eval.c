@@ -7,6 +7,7 @@
 #include "lang.h"
 #include "special.h"
 #include "type.h"
+#include "write.h"
 
 #include "eval.h"
 
@@ -56,9 +57,11 @@ Value apply_generic(GenFunc *func, Slice args, Scope *dynamic_scope) {
   Value method = module_find_method(func->context, func->name, types);
   delete_value(GEN_FUNC(func));
   if (!RESULT_OK(method)) {
+    char *s = write_type_array_to_string(types, NULL);
+    raise_error(name_error, "no method matching types (%s) found", s);
+    free(s);
     delete_slice(args);
     delete_type_array(types);
-    raise_error(name_error, "no method matching types found");
     return undefined;
   }
   delete_type_array(types);
@@ -173,16 +176,16 @@ Value eval_slice(Slice slice, Scope *scope) {
   Slice args = slice_slice(slice, 1, slice.length - 1);
   if (syntax_is(operator, VALUE_SYMBOL)) {
     Symbol *s = TO_SYMBOL(syntax_get(operator));
-    Value special = scope_get_in_namespace(scope, copy_object(s), eval_namespace);
-    if (RESULT_OK(special)) {
-      delete_value(operator);
-      return apply(special, args, scope);
-    }
     Value macro = scope_get_macro(scope, copy_object(s));
     if (RESULT_OK(macro)) {
       delete_value(operator);
       Value expanded = apply(macro, args, scope);
       return THEN(expanded, eval(expanded, scope));
+    }
+    Value special = scope_get_in_namespace(scope, copy_object(s), eval_namespace);
+    if (RESULT_OK(special)) {
+      delete_value(operator);
+      return apply(special, args, scope);
     }
   }
   Value result = undefined;
@@ -241,5 +244,53 @@ Value eval(Value code, Scope *scope) {
       raise_error(domain_error, "unexpected %s", value_type_name(code.type));
       delete_value(code);
       return undefined;
+  }
+}
+
+static Value macro_expand_slice(Slice slice, Scope *scope) {
+  if (slice.length == 0) {
+    return slice_to_value(slice);
+  }
+  if (syntax_is(slice.cells[0], VALUE_SYMBOL)) {
+    Symbol *s = TO_SYMBOL(syntax_get(slice.cells[0]));
+    Value macro = scope_get_macro(scope, copy_object(s));
+    if (RESULT_OK(macro)) {
+      Slice args = slice_slice(slice, 1, slice.length - 1);
+      Value expanded = apply(macro, args, scope);
+      return THEN(expanded, macro_expand(expanded, scope));
+    }
+  }
+  Vector *expanded = create_vector(slice.length);
+  if (!expanded) {
+    delete_slice(slice);
+    return undefined;
+  }
+  for (int i = 0; i < slice.length; i++) {
+    expanded->cells[i] = macro_expand(copy_value(slice.cells[i]), scope);
+    if (!RESULT_OK(expanded->cells[i])) {
+      delete_slice(slice);
+      delete_value(VECTOR(expanded));
+      return undefined;
+    }
+  }
+  delete_slice(slice);
+  return VECTOR(expanded);
+}
+
+
+Value macro_expand(Value code, Scope *scope) {
+  switch (code.type) {
+    case VALUE_VECTOR:
+    case VALUE_VECTOR_SLICE:
+      return macro_expand_slice(to_slice(code), scope);
+    case VALUE_SYNTAX: {
+      Syntax *previous = push_debug_form(copy_value(code));
+      Value result = macro_expand(copy_value(TO_SYNTAX(code)->quoted), scope);
+      delete_value(code);
+      result = check_alloc(SYNTAX(copy_syntax(result, copy_object(previous))));
+      return pop_debug_form(result, previous);
+    }
+    default:
+      return code;
   }
 }

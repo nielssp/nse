@@ -276,3 +276,18 @@ char *nse_write_to_string(Value value, Module *module) {
   stream_close(stream);
   return buffer;
 }
+
+char *write_type_array_to_string(const TypeArray *types, Module *module) {
+  size_t size = 32;
+  char *buffer = (char *)malloc(size);
+  Stream *stream = stream_buffer(buffer, size, 0);
+  for (int i = 0; i < types->size; i++) {
+    if (i) {
+      stream_printf(stream, " ");
+    }
+    nse_write(TYPE(types->elements[i]), stream, module, 10);
+  }
+  buffer = stream_get_content(stream);
+  stream_close(stream);
+  return buffer;
+}

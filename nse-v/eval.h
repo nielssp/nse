@@ -11,3 +11,5 @@ Value apply(Value function, Slice args, Scope *dynamic_scope);
 Value eval_block(Slice block, Scope *scope);
 
 Value eval(Value code, Scope *scope);
+
+Value macro_expand(Value code, Scope *scope);

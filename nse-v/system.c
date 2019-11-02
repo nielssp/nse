@@ -1201,13 +1201,23 @@ static Value list_build(Slice args, Scope *dynamic_scope) {
   return result;
 }
 
-
 static Value syntax_to_datum_(Slice args, Scope *dynamic_scope) {
   Value result = undefined;
   if (args.length == 1) {
     result = syntax_to_datum(copy_value(args.cells[0]));
   } else {
     raise_error(domain_error, "expected (syntax->datum ANY)");
+  }
+  delete_slice(args);
+  return result;
+}
+
+static Value macro_expand_(Slice args, Scope *dynamic_scope) {
+  Value result = undefined;
+  if (args.length == 1) {
+    result = macro_expand(copy_value(args.cells[0]), dynamic_scope);
+  } else {
+    raise_error(domain_error, "expected (macro_expand ANY)");
   }
   delete_slice(args);
   return result;
@@ -1397,6 +1407,7 @@ Module *get_system_module(void) {
       1, get_poly_instance(copy_generic(list_type)));
 
   module_ext_define(system, "syntax->datum", FUNC(syntax_to_datum_));
+  module_ext_define(system, "macro-expand", FUNC(macro_expand_));
 
   Value stdin_val = POINTER(create_pointer(copy_type(stream_type),
         stdin_stream, void_destructor));

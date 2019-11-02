@@ -865,6 +865,27 @@ Syntax *create_syntax(Value quoted) {
   return syntax;
 }
 
+Syntax *copy_syntax(Value quoted, Syntax *old) {
+  Syntax *syntax = allocate_object(sizeof(Syntax));
+  if (!syntax) {
+    delete_value(quoted);
+    delete_value(SYNTAX(old));
+    return NULL;
+  }
+  syntax->start_line = old->start_line;
+  syntax->start_column = old->start_column;
+  syntax->end_line = old->end_line;
+  syntax->end_column = old->end_column;
+  if (old->file) {
+    syntax->file = copy_object(old->file);
+  } else {
+    syntax->file = NULL;
+  }
+  syntax->quoted = quoted;
+  delete_value(SYNTAX(old));
+  return syntax;
+}
+
 Value syntax_to_datum(Value v) {
   Value result;
   switch (v.type) {
